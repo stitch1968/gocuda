@@ -58,6 +58,7 @@ go build ./...
 ### For Real CUDA Support
 ```bash
 # Install NVIDIA CUDA Toolkit first
+# Download from: https://developer.nvidia.com/cuda-downloads
 go mod init your-project
 go get github.com/stitch1968/gocuda
 
