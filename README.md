@@ -65,6 +65,27 @@ go get github.com/stitch1968/gocuda
 go build -tags cuda ./...
 ```
 
+### Quick Verification
+Test that everything works correctly:
+
+**Windows:**
+```cmd
+# Verify all build scripts work
+.\verify_build.bat
+
+# Run comprehensive demo
+.\build.bat nocuda demo
+```
+
+**Linux/macOS:**
+```bash
+# Verify all build scripts work
+chmod +x verify_build.sh && ./verify_build.sh
+
+# Run comprehensive demo
+./build.sh nocuda demo
+```
+
 ## Build Instructions
 
 Use the provided build scripts for easy compilation:
@@ -76,6 +97,9 @@ Use the provided build scripts for easy compilation:
 
 # With real CUDA support
 ./build.sh cuda
+
+# Build and run comprehensive demo
+./build.sh nocuda demo
 ```
 
 **Windows:**
@@ -85,6 +109,9 @@ build.bat nocuda
 
 # With real CUDA support  
 build.bat cuda
+
+# Build and run comprehensive demo
+build.bat nocuda demo
 ```
 
 ## Quick Start

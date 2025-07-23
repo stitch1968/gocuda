@@ -1,11 +1,13 @@
 @echo off
 REM Build script for gocuda library on Windows
-REM Usage: build.bat [cuda|nocuda]
+REM Usage: build.bat [cuda|nocuda] [demo]
 
 setlocal
 
 set MODE=%1
 if "%MODE%"=="" set MODE=nocuda
+
+set RUN_DEMO=%2
 
 echo Building gocuda library...
 
@@ -59,17 +61,26 @@ if "%MODE%"=="cuda" (
     go test -v ./...
     
 ) else (
-    echo Usage: %0 [cuda^|nocuda]
+    echo Usage: %0 [cuda^|nocuda] [demo]
     echo.
     echo Options:
     echo   cuda    - Build with real CUDA support ^(requires CUDA toolkit^)
     echo   nocuda  - Build with CPU simulation only ^(default^)
+    echo   demo    - Run comprehensive demo after successful build
     exit /b 1
 )
 
 echo.
 echo Build completed successfully!
 echo.
+
+REM Run demo if requested
+if "%RUN_DEMO%"=="demo" (
+    echo Running comprehensive demo...
+    echo.
+    cd demos\missing_features && go run main.go
+    echo.
+)
 
 REM Show build info
 echo === Build Information ===

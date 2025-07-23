@@ -1,11 +1,12 @@
 #!/bin/bash
 
 # Build script for gocuda library
-# Usage: ./build.sh [cuda|nocuda]
+# Usage: ./build.sh [cuda|nocuda] [demo]
 
 set -e
 
 MODE=${1:-nocuda}
+RUN_DEMO=${2:-false}
 
 echo "Building gocuda library..."
 
@@ -50,11 +51,12 @@ case $MODE in
         ;;
         
     *)
-        echo "Usage: $0 [cuda|nocuda]"
+        echo "Usage: $0 [cuda|nocuda] [demo]"
         echo ""
         echo "Options:"
         echo "  cuda    - Build with real CUDA support (requires CUDA toolkit)"
         echo "  nocuda  - Build with CPU simulation only (default)"
+        echo "  demo    - Run comprehensive demo after successful build"
         exit 1
         ;;
 esac
@@ -62,6 +64,14 @@ esac
 echo ""
 echo "Build completed successfully!"
 echo ""
+
+# Run demo if requested
+if [[ $RUN_DEMO == "demo" ]] || [[ $2 == "demo" ]]; then
+    echo "Running comprehensive demo..."
+    echo ""
+    cd demos/missing_features && go run main.go
+    echo ""
+fi
 
 # Show build info
 echo "=== Build Information ==="

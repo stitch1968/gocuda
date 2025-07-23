@@ -22,8 +22,25 @@ benchmark:
 
 # Run examples
 examples: build
-	@echo "Running examples..."
-	cd examples && go run main.go
+	@echo "Running basic demo..."
+	cd demos && go run basic_demo.go
+
+# Run comprehensive demo
+demo-missing-features: build
+	@echo "Running missing features demo..."
+	cd demos/missing_features && go run main.go
+
+# Run advanced features demo
+demo-advanced: build
+	@echo "Running advanced features demo..."
+	cd demos/advanced_features && go run main.go
+
+# Run all demos
+demos: build
+	@echo "Running all demos..."
+	cd demos && go run basic_demo.go
+	cd demos/missing_features && go run main.go
+	cd demos/advanced_features && go run main.go
 
 # Install dependencies
 deps:
@@ -46,7 +63,8 @@ format:
 clean:
 	@echo "Cleaning..."
 	go clean ./...
-	rm -f examples/examples.exe
+	rm -f demos/demos.exe
+	rm -f demos/*/*.exe
 	rm -f *.exe
 
 # Development setup
@@ -65,17 +83,17 @@ test-coverage:
 # Build for Windows
 build-windows:
 	@echo "Building for Windows..."
-	GOOS=windows GOARCH=amd64 go build -o gocuda-windows.exe ./examples
+	GOOS=windows GOARCH=amd64 go build -o gocuda-windows.exe ./demos/missing_features
 
 # Build for Linux
 build-linux:
 	@echo "Building for Linux..."
-	GOOS=linux GOARCH=amd64 go build -o gocuda-linux ./examples
+	GOOS=linux GOARCH=amd64 go build -o gocuda-linux ./demos/missing_features
 
 # Build for macOS
 build-darwin:
 	@echo "Building for macOS..."
-	GOOS=darwin GOARCH=amd64 go build -o gocuda-darwin ./examples
+	GOOS=darwin GOARCH=amd64 go build -o gocuda-darwin ./demos/missing_features
 
 # Build all platforms
 build-all: build-windows build-linux build-darwin
@@ -87,9 +105,17 @@ docs:
 	@echo "Documentation server running at http://localhost:6060"
 
 # Run example programs
-example-vector:
-	@echo "Running vector addition example..."
-	cd examples && go run main.go
+demo-basic:
+	@echo "Running basic demo..."
+	cd demos && go run basic_demo.go
+
+demo-memory:
+	@echo "Running memory demo..."
+	cd demos && go run memory_demo.go
+
+demo-detection:
+	@echo "Running CUDA detection demo..."
+	cd demos && go run cuda_detection_demo.go
 
 # Performance profiling
 profile:
@@ -128,7 +154,13 @@ help:
 	@echo "  build        - Build the library"
 	@echo "  test         - Run tests"
 	@echo "  benchmark    - Run benchmarks"
-	@echo "  examples     - Run example programs"
+	@echo "  examples     - Run basic demo"
+	@echo "  demos        - Run all demos"
+	@echo "  demo-missing-features - Run comprehensive library demo"
+	@echo "  demo-advanced- Run advanced features demo"
+	@echo "  demo-basic   - Run basic demo"
+	@echo "  demo-memory  - Run memory demo"
+	@echo "  demo-detection - Run CUDA detection demo"
 	@echo "  deps         - Install dependencies"
 	@echo "  lint         - Run linter"
 	@echo "  format       - Format code"
