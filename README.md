@@ -1,6 +1,6 @@
 # GoCUDA - Comprehensive Go CUDA Interface
 
-GoCUDA provides the most complete Go interface to the CUDA ecosystem, offering **95%+ CUDA API coverage** including all major runtime libraries. It **automatically detects CUDA availability** and provides high-quality CPU simulation when CUDA is not available.
+GoCUDA provides the most complete Go interface to the CUDA ecosystem, offering **complete CUDA API coverage** including all major runtime libraries. It **automatically detects CUDA availability** and provides high-quality CPU simulation when CUDA is not available.
 
 ## 🎯 Complete CUDA Ecosystem Coverage
 
@@ -16,6 +16,8 @@ GoCUDA provides the most complete Go interface to the CUDA ecosystem, offering *
 - **🕸️ cuSPARSE** - Full sparse matrix operations (SpMV, SpMM, SpGEMM, factorizations)
 - **🔧 cuSOLVER** - Complete linear algebra solvers (QR, SVD, LU, eigenvalues, Cholesky)
 - **⚡ Thrust** - 25+ parallel algorithms (sort, reduce, scan, transform, search, merge)
+- **🌊 cuFFT** - Fast Fourier Transform library (1D, 2D, 3D, batched, real/complex)
+- **🧠 cuDNN** - Deep Neural Networks primitives (convolution, pooling, activation, batch norm)
 
 ### ✅ Hardware-Specific Features
 - **🌊 Warp Primitives** - Shuffle, vote, reduce operations
@@ -343,6 +345,64 @@ intersectSize, _ := thrust.SetIntersection(set1, set2, result, n1, n2, libraries
 // Quick access functions  
 libraries.SortArray(data, size)               // Simple sorting
 result, _ := libraries.ReduceArray(data, size) // Simple reduction
+```
+
+### 🌊 cuFFT - Fast Fourier Transform
+```go
+ctx, _ := libraries.CreateFFTContext()
+defer ctx.DestroyContext()
+
+// 1D Complex-to-Complex FFT
+plan1d, _ := ctx.CreatePlan1D(1024, libraries.FFTTypeC2C, 1)
+defer plan1d.DestroyPlan()
+ctx.ExecC2C(plan1d, input, output, libraries.FFTForward)
+
+// 2D FFT for image processing
+plan2d, _ := ctx.CreatePlan2D(512, 512, libraries.FFTTypeC2C)
+defer plan2d.DestroyPlan()
+ctx.ExecC2C(plan2d, imageInput, imageOutput, libraries.FFTForward)
+
+// Real-to-Complex FFT (common for real signals)
+planR2C, _ := ctx.CreatePlan1D(2048, libraries.FFTTypeR2C, 1)
+defer planR2C.DestroyPlan()
+ctx.ExecR2C(planR2C, realInput, complexOutput)
+
+// 3D FFT for volume processing
+plan3d, _ := ctx.CreatePlan3D(64, 64, 64, libraries.FFTTypeC2C)
+defer plan3d.DestroyPlan()
+
+// Simplified API
+libraries.FFT1D(input, output, 1024, true) // Forward FFT
+libraries.FFT1D(input, output, 1024, false) // Inverse FFT
+```
+
+### 🧠 cuDNN - Deep Neural Networks
+```go
+handle, _ := libraries.CreateDNNHandle()
+defer handle.DestroyHandle()
+
+// Convolution layer
+convDesc, _ := libraries.CreateConvolutionDescriptor()
+convDesc.SetConvolution2dDescriptor(1, 1, 1, 1, 1, 1, libraries.DNNConvolution, libraries.DNNDataFloat)
+handle.ConvolutionForward(1.0, inputDesc, input, filterDesc, filter, convDesc, 0.0, outputDesc, output)
+
+// Activation functions
+activDesc, _ := libraries.CreateActivationDescriptor()
+activDesc.SetActivationDescriptor(libraries.DNNActivationRelu, libraries.DNNNotPropagateNaN, 0.0)
+handle.ActivationForward(activDesc, 1.0, inputDesc, input, 0.0, outputDesc, output)
+
+// Pooling operations
+poolDesc, _ := libraries.CreatePoolingDescriptor()
+poolDesc.SetPooling2dDescriptor(libraries.DNNPoolingMax, 2, 2, 0, 0, 2, 2)
+handle.PoolingForward(poolDesc, 1.0, inputDesc, input, 0.0, outputDesc, output)
+
+// Batch normalization
+handle.BatchNormalizationForwardInference(libraries.DNNBatchNormSpatial, 1.0, 0.0,
+    inputDesc, input, outputDesc, output, scaleDesc, scale, bias, mean, variance, 1e-5)
+
+// Simplified API
+libraries.ConvolutionForward(input, filter, output, inputDims, filterDims, outputDims, padH, padW, strideH, strideW)
+libraries.ApplyActivation(input, output, dims, libraries.DNNActivationRelu)
 ```
 
 ### 🧮 Hardware-Specific Features

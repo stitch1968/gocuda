@@ -35,11 +35,19 @@ func main() {
 	demoThrust()
 	fmt.Println()
 
+	// Demo cuFFT - Fast Fourier Transform
+	demoCuFFT()
+	fmt.Println()
+
+	// Demo cuDNN - Deep Neural Networks
+	demoCuDNN()
+	fmt.Println()
+
 	// Demo Hardware-Specific Features
 	demoHardwareFeatures()
 	fmt.Println()
 
-	fmt.Println("✅ All missing CUDA features have been demonstrated!")
+	fmt.Println("✅ All CUDA runtime libraries and features have been demonstrated!")
 }
 
 func demoCuRAND() {
@@ -442,4 +450,190 @@ func demoHardwareFeatures() {
 		elapsed = time.Since(start)
 		fmt.Printf("      • Tensor Core GEMM (FP16, %dx%dx%d) in %v\n", m, n, k, elapsed)
 	}
+}
+
+func demoCuFFT() {
+	fmt.Println("🌊 cuFFT - Fast Fourier Transform")
+
+	// Create FFT context
+	ctx, err := libraries.CreateFFTContext()
+	if err != nil {
+		log.Printf("Failed to create FFT context: %v", err)
+		return
+	}
+	defer ctx.DestroyContext()
+
+	// Demo 1D FFT
+	size := 1024
+	complexSize := int64(size * 8) // Complex64 = 2 * float32
+
+	input, err := memory.Alloc(complexSize)
+	if err != nil {
+		log.Printf("Failed to allocate FFT input: %v", err)
+		return
+	}
+	defer input.Free()
+
+	output, err := memory.Alloc(complexSize)
+	if err != nil {
+		log.Printf("Failed to allocate FFT output: %v", err)
+		return
+	}
+	defer output.Free()
+
+	// Initialize input data
+	inputData := (*[1 << 30]libraries.Complex64)(input.Ptr())[:size:size]
+	for i := 0; i < size; i++ {
+		inputData[i].Real = float32(i%100) / 100.0
+		inputData[i].Imag = 0.0
+	}
+
+	// Create and execute 1D FFT plan
+	plan, err := ctx.CreatePlan1D(size, libraries.FFTTypeC2C, 1)
+	if err != nil {
+		log.Printf("Failed to create FFT plan: %v", err)
+		return
+	}
+	defer plan.DestroyPlan()
+
+	start := time.Now()
+	err = ctx.ExecC2C(plan, input, output, libraries.FFTForward)
+	elapsed := time.Since(start)
+	if err != nil {
+		log.Printf("FFT execution error: %v", err)
+	}
+
+	fmt.Printf("      • 1D Complex FFT (%d points) completed in %v\n", size, elapsed)
+
+	// Demo simplified API
+	start = time.Now()
+	err = libraries.FFT1D(input, output, size, true)
+	elapsed = time.Since(start)
+	if err != nil {
+		log.Printf("Simple FFT error: %v", err)
+	}
+
+	fmt.Printf("      • Simplified FFT API (%d points) completed in %v\n", size, elapsed)
+
+	// Demo Real-to-Complex FFT
+	realInput, _ := memory.Alloc(int64(size * 4)) // float32
+	defer realInput.Free()
+
+	realData := (*[1 << 30]float32)(realInput.Ptr())[:size:size]
+	for i := 0; i < size; i++ {
+		realData[i] = float32(i%50) / 25.0
+	}
+
+	r2cPlan, err := ctx.CreatePlan1D(size, libraries.FFTTypeR2C, 1)
+	if err != nil {
+		log.Printf("Failed to create R2C plan: %v", err)
+		return
+	}
+	defer r2cPlan.DestroyPlan()
+
+	start = time.Now()
+	err = ctx.ExecR2C(r2cPlan, realInput, output)
+	elapsed = time.Since(start)
+	if err != nil {
+		log.Printf("R2C FFT error: %v", err)
+	}
+
+	fmt.Printf("      • Real-to-Complex FFT (%d points) completed in %v\n", size, elapsed)
+}
+
+func demoCuDNN() {
+	fmt.Println("🧠 cuDNN - Deep Neural Networks")
+
+	// Create cuDNN handle
+	handle, err := libraries.CreateDNNHandle()
+	if err != nil {
+		log.Printf("Failed to create cuDNN handle: %v", err)
+		return
+	}
+	defer handle.DestroyHandle()
+
+	// Demo convolution
+	batchSize, channels, height, width := 1, 16, 28, 28
+	filterCount := 32
+	filterSize := 5
+
+	inputSize := int64(batchSize * channels * height * width * 4)
+	filterMemSize := int64(filterCount * channels * filterSize * filterSize * 4)
+	outputSize := int64(batchSize * filterCount * height * width * 4)
+
+	input, _ := memory.Alloc(inputSize)
+	defer input.Free()
+	filter, _ := memory.Alloc(filterMemSize)
+	defer filter.Free()
+	output, _ := memory.Alloc(outputSize)
+	defer output.Free()
+
+	start := time.Now()
+	err = libraries.ConvolutionForward(
+		input, filter, output,
+		[]int{batchSize, channels, height, width},
+		[]int{filterCount, channels, filterSize, filterSize},
+		[]int{batchSize, filterCount, height, width},
+		2, 2, 1, 1, // padding and stride
+	)
+	elapsed := time.Since(start)
+	if err != nil {
+		log.Printf("Convolution error: %v", err)
+	}
+
+	fmt.Printf("      • Convolution (%dx%dx%dx%d * %dx%dx%dx%d) completed in %v\n",
+		batchSize, channels, height, width, filterCount, channels, filterSize, filterSize, elapsed)
+
+	// Demo activation functions
+	activations := []struct {
+		name string
+		mode libraries.DNNActivationMode
+	}{
+		{"ReLU", libraries.DNNActivationRelu},
+		{"Sigmoid", libraries.DNNActivationSigmoid},
+		{"Tanh", libraries.DNNActivationTanh},
+	}
+
+	for _, activ := range activations {
+		start = time.Now()
+		err = libraries.ApplyActivation(
+			input, output,
+			[]int{batchSize, channels, height, width},
+			activ.mode,
+		)
+		elapsed = time.Since(start)
+		if err != nil {
+			log.Printf("%s activation error: %v", activ.name, err)
+		}
+
+		fmt.Printf("      • %s activation (%dx%dx%dx%d) completed in %v\n",
+			activ.name, batchSize, channels, height, width, elapsed)
+	}
+
+	// Demo pooling
+	poolInput, _ := memory.Alloc(int64(batchSize * 64 * 32 * 32 * 4))
+	defer poolInput.Free()
+	poolOutput, _ := memory.Alloc(int64(batchSize * 64 * 16 * 16 * 4))
+	defer poolOutput.Free()
+
+	// Create descriptors for pooling
+	inputDesc, _ := libraries.CreateTensorDescriptor()
+	defer inputDesc.DestroyTensorDescriptor()
+	outputDesc, _ := libraries.CreateTensorDescriptor()
+	defer outputDesc.DestroyTensorDescriptor()
+	poolDesc, _ := libraries.CreatePoolingDescriptor()
+	defer poolDesc.DestroyPoolingDescriptor()
+
+	inputDesc.SetTensor4dDescriptor(libraries.DNNTensorNCHW, libraries.DNNDataFloat, batchSize, 64, 32, 32)
+	outputDesc.SetTensor4dDescriptor(libraries.DNNTensorNCHW, libraries.DNNDataFloat, batchSize, 64, 16, 16)
+	poolDesc.SetPooling2dDescriptor(libraries.DNNPoolingMax, 2, 2, 0, 0, 2, 2)
+
+	start = time.Now()
+	err = handle.PoolingForward(poolDesc, 1.0, inputDesc, poolInput, 0.0, outputDesc, poolOutput)
+	elapsed = time.Since(start)
+	if err != nil {
+		log.Printf("Pooling error: %v", err)
+	}
+
+	fmt.Printf("      • Max Pooling (1x64x32x32 -> 1x64x16x16) completed in %v\n", elapsed)
 }

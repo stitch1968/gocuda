@@ -19,6 +19,12 @@ var (
 
 	// Thrust
 	CreateThrustCtx = CreateThrustContext
+
+	// cuFFT
+	CreateFFTCtx = CreateFFTContext
+
+	// cuDNN
+	CreateDNNCtx = CreateDNNHandle
 )
 
 // Quick access patterns for common operations
@@ -93,4 +99,116 @@ func ReduceArray(data *memory.Memory, n int) (float32, error) {
 	defer ctx.DestroyContext()
 
 	return ctx.Reduce(data, n, 0.0, PolicyDevice)
+}
+
+// FFT1D provides simplified 1D FFT computation
+func FFT1D(input, output *memory.Memory, size int, forward bool) error {
+	ctx, err := CreateFFTContext()
+	if err != nil {
+		return err
+	}
+	defer ctx.DestroyContext()
+
+	plan, err := ctx.CreatePlan1D(size, FFTTypeC2C, 1)
+	if err != nil {
+		return err
+	}
+	defer plan.DestroyPlan()
+
+	direction := FFTForward
+	if !forward {
+		direction = FFTInverse
+	}
+
+	return ctx.ExecC2C(plan, input, output, direction)
+}
+
+// ConvolutionForward provides simplified convolution operation
+func ConvolutionForward(input, filter, output *memory.Memory, inputDims, filterDims, outputDims []int,
+	padH, padW, strideH, strideW int) error {
+
+	handle, err := CreateDNNHandle()
+	if err != nil {
+		return err
+	}
+	defer handle.DestroyHandle()
+
+	// Create descriptors
+	inputDesc, err := CreateTensorDescriptor()
+	if err != nil {
+		return err
+	}
+	defer inputDesc.DestroyTensorDescriptor()
+
+	filterDesc, err := CreateFilterDescriptor()
+	if err != nil {
+		return err
+	}
+	defer filterDesc.DestroyFilterDescriptor()
+
+	outputDesc, err := CreateTensorDescriptor()
+	if err != nil {
+		return err
+	}
+	defer outputDesc.DestroyTensorDescriptor()
+
+	convDesc, err := CreateConvolutionDescriptor()
+	if err != nil {
+		return err
+	}
+	defer convDesc.DestroyConvolutionDescriptor()
+
+	// Set descriptor parameters
+	if len(inputDims) == 4 {
+		inputDesc.SetTensor4dDescriptor(DNNTensorNCHW, DNNDataFloat, inputDims[0], inputDims[1], inputDims[2], inputDims[3])
+	}
+	if len(filterDims) == 4 {
+		filterDesc.SetFilter4dDescriptor(DNNDataFloat, DNNTensorNCHW, filterDims[0], filterDims[1], filterDims[2], filterDims[3])
+	}
+	if len(outputDims) == 4 {
+		outputDesc.SetTensor4dDescriptor(DNNTensorNCHW, DNNDataFloat, outputDims[0], outputDims[1], outputDims[2], outputDims[3])
+	}
+
+	convDesc.SetConvolution2dDescriptor(padH, padW, strideH, strideW, 1, 1, DNNConvolution, DNNDataFloat)
+
+	// Perform convolution
+	return handle.ConvolutionForward(1.0, inputDesc, input, filterDesc, filter, convDesc, 0.0, outputDesc, output)
+}
+
+// ApplyActivation provides simplified activation function application
+func ApplyActivation(input, output *memory.Memory, dims []int, activationType DNNActivationMode) error {
+	handle, err := CreateDNNHandle()
+	if err != nil {
+		return err
+	}
+	defer handle.DestroyHandle()
+
+	// Create descriptors
+	inputDesc, err := CreateTensorDescriptor()
+	if err != nil {
+		return err
+	}
+	defer inputDesc.DestroyTensorDescriptor()
+
+	outputDesc, err := CreateTensorDescriptor()
+	if err != nil {
+		return err
+	}
+	defer outputDesc.DestroyTensorDescriptor()
+
+	activDesc, err := CreateActivationDescriptor()
+	if err != nil {
+		return err
+	}
+	defer activDesc.DestroyActivationDescriptor()
+
+	// Set descriptors
+	if len(dims) == 4 {
+		inputDesc.SetTensor4dDescriptor(DNNTensorNCHW, DNNDataFloat, dims[0], dims[1], dims[2], dims[3])
+		outputDesc.SetTensor4dDescriptor(DNNTensorNCHW, DNNDataFloat, dims[0], dims[1], dims[2], dims[3])
+	}
+	activDesc.SetActivationDescriptor(activationType, DNNNotPropagateNaN, 0.0)
+
+	// Apply activation
+	return handle.ActivationForward(activDesc, 1.0, inputDesc, input, 0.0, outputDesc, output)
 }
