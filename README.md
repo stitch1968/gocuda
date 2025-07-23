@@ -131,6 +131,7 @@ import (
     "github.com/stitch1968/gocuda"
     "github.com/stitch1968/gocuda/libraries"
     "github.com/stitch1968/gocuda/memory"
+    "github.com/stitch1968/gocuda/hardware"
 )
 
 func main() {
@@ -576,27 +577,77 @@ go run main.go
 gocuda/
 ├── 📁 Core Runtime
 │   ├── cuda.go              # Main CUDA interface & device management
-│   ├── memory/              # Memory allocation & transfers  
-│   ├── streams/             # Stream & event management
+│   ├── cuda_runtime.go      # CUDA runtime with GPU support
+│   ├── cuda_runtime_nocuda.go # CPU simulation fallback
+│   ├── memory.go            # Memory management interface
+│   ├── memory/              # Memory allocation & transfers
+│   │   ├── memory.go        # Core memory operations
+│   │   └── transfers.go     # Host-device transfers
+│   ├── streams.go           # Stream & event management interface
+│   ├── streams/             # Stream implementation
+│   │   └── streams.go       # Stream operations
+│   ├── kernels.go           # Kernel execution interface
 │   └── kernels/             # Built-in kernel operations
+│       └── operations.go    # Kernel implementations
 │
 ├── 📁 CUDA Runtime Libraries  
 │   ├── libraries/curand.go   # Random number generation
 │   ├── libraries/cusparse.go # Sparse matrix operations
 │   ├── libraries/cusolver.go # Linear algebra solvers
-│   └── libraries/thrust.go   # Parallel algorithms
+│   ├── libraries/thrust.go   # Parallel algorithms
+│   ├── libraries/cufft.go    # Fast Fourier Transform
+│   ├── libraries/cudnn.go    # Deep Neural Networks
+│   └── libraries/libraries.go # Unified library interface
 │
 ├── 📁 Hardware Features
 │   └── hardware/primitives.go # Warp ops, cooperative groups, tensor cores
 │
 ├── 📁 Advanced Features
 │   ├── advanced_features.go  # Dynamic parallelism, graphs, events
-│   └── performance/          # Multi-GPU, optimization, profiling
+│   ├── advanced/             # Advanced algorithms
+│   │   └── algorithms.go     # High-level algorithms
+│   ├── performance/          # Multi-GPU, optimization, profiling
+│   │   ├── algorithms.go     # Performance algorithms
+│   │   ├── async_pipeline.go # Asynchronous execution
+│   │   ├── kernel_fusion.go  # Kernel optimization
+│   │   ├── memory_optimization.go # Memory management
+│   │   ├── multigpu.go       # Multi-GPU support
+│   │   └── profiling.go      # Performance profiling
+│   └── profiler/             # Built-in profiler
+│       └── profiler.go       # Profiling implementation
 │
-└── 📁 Demos & Examples
-    ├── demos/missing_features/ # Comprehensive library demo
-    ├── demos/advanced_features/ # Advanced CUDA features
-    └── demos/examples/         # Basic usage examples
+├── 📁 Demos & Examples
+│   ├── demos/missing_features/ # Comprehensive library demo
+│   │   ├── main.go           # Full library showcase
+│   │   └── test/             # Realistic simulation tests
+│   ├── demos/advanced_features/ # Advanced CUDA features
+│   │   └── main.go           # Advanced feature demos
+│   ├── demos/examples/         # Basic usage examples
+│   │   └── main.go           # Basic tutorials
+│   ├── demos/advanced/         # Advanced demos
+│   │   └── main.go           # Advanced use cases
+│   └── demos/*.go              # Individual demo files
+│
+├── 📁 Build & Testing
+│   ├── build.sh / build.bat    # Cross-platform build scripts
+│   ├── verify_build.sh/.bat    # Build verification
+│   ├── tests/                  # Comprehensive test suites
+│   │   ├── advanced_test.go    # Advanced feature tests
+│   │   ├── cuda_test.go        # Core CUDA tests
+│   │   ├── integration_test.go # Integration tests
+│   │   ├── kernels_test.go     # Kernel tests
+│   │   ├── memory_test.go      # Memory tests
+│   │   ├── profiler_test.go    # Profiler tests
+│   │   └── streams_test.go     # Stream tests
+│   └── docs/                   # Comprehensive documentation
+│
+└── 📁 Utilities & Support
+    ├── internal/common.go      # Internal utilities
+    ├── enhanced_errors.go      # Enhanced error handling
+    ├── goroutine.go           # Go routine management
+    ├── simple_api.go          # Simplified API layer
+    ├── utils.go               # General utilities
+    └── Makefile               # Alternative build system
 ```
 
 ### Key Design Principles
