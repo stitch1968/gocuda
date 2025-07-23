@@ -25,6 +25,18 @@ var (
 
 	// cuDNN
 	CreateDNNCtx = CreateDNNHandle
+
+	// nvJPEG
+	CreateJpegDec = CreateJpegDecoder
+	CreateJpegEnc = CreateJpegEncoder
+
+	// nvJPEG2000
+	CreateJpeg2000Dec = CreateJpeg2000Decoder
+	CreateJpeg2000Enc = CreateJpeg2000Encoder
+
+	// CUTLASS
+	CreateCutlassGemmCtx = CreateCutlassGemm
+	CreateCutlassConvCtx = CreateCutlassConv
 )
 
 // Quick access patterns for common operations
@@ -211,4 +223,58 @@ func ApplyActivation(input, output *memory.Memory, dims []int, activationType DN
 
 	// Apply activation
 	return handle.ActivationForward(activDesc, 1.0, inputDesc, input, 0.0, outputDesc, output)
+}
+
+// JPEG convenience functions
+
+// DecodeJpegImage provides a simple interface for JPEG decoding
+func DecodeJpegImage(jpegData []byte) (*memory.Memory, int, int, error) {
+	return DecodeJpegQuick(jpegData, JpegFormatRGB)
+}
+
+// EncodeJpegImage provides a simple interface for JPEG encoding
+func EncodeJpegImage(imageData *memory.Memory, width, height int, quality int) ([]byte, error) {
+	return EncodeJpegQuick(imageData, width, height, JpegFormatRGB, quality)
+}
+
+// JPEG2000 convenience functions
+
+// DecodeJpeg2000Image provides a simple interface for JPEG2000 decoding
+func DecodeJpeg2000Image(j2kData []byte) (*memory.Memory, int, int, error) {
+	return DecodeJpeg2000Quick(j2kData, Jpeg2000FormatRGB)
+}
+
+// EncodeJpeg2000Image provides a simple interface for JPEG2000 encoding
+func EncodeJpeg2000Image(imageData *memory.Memory, width, height int, compressionRatio float32) ([]byte, error) {
+	return EncodeJpeg2000Quick(imageData, width, height, Jpeg2000FormatRGB, compressionRatio)
+}
+
+// CUTLASS convenience functions
+
+// GemmOperation performs a simple GEMM operation using CUTLASS
+func GemmOperation(A, B, C *memory.Memory, M, N, K int, alpha, beta float32) error {
+	desc := CutlassGemmDesc{
+		M:            M,
+		N:            N,
+		K:            K,
+		DataType:     CutlassFloat32,
+		LayoutA:      CutlassRowMajor,
+		LayoutB:      CutlassRowMajor,
+		LayoutC:      CutlassRowMajor,
+		OpA:          CutlassOpN,
+		OpB:          CutlassOpN,
+		Algorithm:    GetOptimalGemmAlgorithm(M, N, K, CutlassFloat32),
+		EpilogueOp:   CutlassEpilogueLinearCombination,
+		Alpha:        alpha,
+		Beta:         beta,
+		SplitKSlices: 1,
+	}
+
+	handle, err := CreateCutlassGemm(desc)
+	if err != nil {
+		return err
+	}
+	defer handle.Destroy()
+
+	return handle.CutlassGemm(A, B, C)
 }

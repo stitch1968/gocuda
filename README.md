@@ -18,6 +18,9 @@ GoCUDA provides the most complete Go interface to the CUDA ecosystem, offering *
 - **⚡ Thrust** - 25+ parallel algorithms (sort, reduce, scan, transform, search, merge)
 - **🌊 cuFFT** - Fast Fourier Transform library (1D, 2D, 3D, batched, real/complex)
 - **🧠 cuDNN** - Deep Neural Networks primitives (convolution, pooling, activation, batch norm)
+- **📸 nvJPEG** - High-performance JPEG encoder/decoder with batch processing
+- **🎨 nvJPEG2000** - Advanced JPEG2000 codec with lossless/lossy compression
+- **⚡ CUTLASS** - CUDA Templates for Linear Algebra (GEMM, convolution, tensor operations)
 
 ### ✅ Hardware-Specific Features
 - **🌊 Warp Primitives** - Shuffle, vote, reduce operations
@@ -162,6 +165,15 @@ func testCudaLibraries() {
     fmt.Println("⚡ Testing Thrust - Parallel Algorithms...")  
     testThrust()
     
+    fmt.Println("📸 Testing nvJPEG - Image Processing...")
+    testNvJPEG()
+    
+    fmt.Println("🎨 Testing nvJPEG2000 - Advanced Image Codecs...")
+    testNvJPEG2000()
+    
+    fmt.Println("⚡ Testing CUTLASS - High-Performance Templates...")
+    testCUTLASS()
+    
     fmt.Println("🧮 Testing Tensor Cores...")
     testTensorCores()
 }
@@ -260,6 +272,137 @@ func testTensorCores() {
     // Perform FP16 Tensor Core GEMM: D = A*B + C
     hardware.TensorCoreMMA(A, B, C, D, m, n, k, "fp16")
     fmt.Printf("   ✅ Tensor Core GEMM (%dx%dx%d) with FP16 precision\n", m, n, k)
+}
+
+func testNvJPEG() {
+    // Test JPEG encoding/decoding
+    decoder, _ := libraries.CreateJpegDecoder(libraries.JpegBackendDefault)
+    defer decoder.Destroy()
+    
+    encoder, _ := libraries.CreateJpegEncoder(libraries.JpegBackendDefault)
+    defer encoder.Destroy()
+    
+    // Create test image data
+    width, height := 256, 256
+    imageData, _ := memory.Alloc(int64(width * height * 3)) // RGB image
+    defer imageData.Free()
+    
+    // Encode to JPEG
+    encodeParams := libraries.JpegEncodeParams{
+        InputFormat: libraries.JpegFormatRGB,
+        Quality:     90,
+    }
+    jpegBytes, _ := encoder.EncodeJpeg(imageData, width, height, encodeParams)
+    fmt.Printf("   ✅ Encoded %dx%d image to JPEG (%d bytes)\n", width, height, len(jpegBytes))
+    
+    // Decode JPEG
+    decodeParams := libraries.JpegDecodeParams{
+        OutputFormat: libraries.JpegFormatRGB,
+        Backend:      libraries.JpegBackendDefault,
+    }
+    decodedData, w, h, _ := decoder.DecodeJpeg(jpegBytes, decodeParams)
+    defer decodedData.Free()
+    fmt.Printf("   ✅ Decoded JPEG to %dx%d image\n", w, h)
+}
+
+func testNvJPEG2000() {
+    // Test JPEG2000 encoding/decoding with advanced features
+    decoder, _ := libraries.CreateJpeg2000Decoder(libraries.Jpeg2000CodecJ2K)
+    defer decoder.Destroy()
+    
+    encoder, _ := libraries.CreateJpeg2000Encoder(libraries.Jpeg2000CodecJP2)
+    defer encoder.Destroy()
+    
+    // Create test image data
+    width, height := 512, 512
+    imageData, _ := memory.Alloc(int64(width * height * 3)) // RGB image
+    defer imageData.Free()
+    
+    // Encode to JPEG2000 with compression
+    encodeParams := libraries.Jpeg2000EnodeParams{
+        InputFormat:      libraries.Jpeg2000FormatRGB,
+        Codec:           libraries.Jpeg2000CodecJP2,
+        CompressionRatio: 20.0,
+        Lossless:        false,
+        NumLayers:       3,
+        NumLevels:       5,
+        ProgressionOrder: libraries.Jpeg2000ProgressionLRCP,
+    }
+    j2kBytes, _ := encoder.EncodeJpeg2000(imageData, width, height, encodeParams)
+    fmt.Printf("   ✅ Encoded %dx%d image to JPEG2000 (%d bytes, 20:1 compression)\n", 
+        width, height, len(j2kBytes))
+    
+    // Decode with region of interest
+    decodeParams := libraries.Jpeg2000DecodeParams{
+        OutputFormat: libraries.Jpeg2000FormatRGB,
+        Codec:       libraries.Jpeg2000CodecJP2,
+        DecodeLayer: 2, // Decode up to layer 2
+        ReduceFactor: 1, // Half resolution
+    }
+    decodedData, w, h, _ := decoder.DecodeJpeg2000(j2kBytes, decodeParams)
+    defer decodedData.Free()
+    fmt.Printf("   ✅ Decoded JPEG2000 with ROI to %dx%d image\n", w, h)
+}
+
+func testCUTLASS() {
+    // Test CUTLASS GEMM operation
+    M, N, K := 256, 256, 256
+    
+    desc := libraries.CutlassGemmDesc{
+        M: M, N: N, K: K,
+        DataType:    libraries.CutlassFloat32,
+        LayoutA:     libraries.CutlassRowMajor,
+        LayoutB:     libraries.CutlassRowMajor,
+        LayoutC:     libraries.CutlassRowMajor,
+        OpA:         libraries.CutlassOpN,
+        OpB:         libraries.CutlassOpN,
+        Algorithm:   libraries.GetOptimalGemmAlgorithm(M, N, K, libraries.CutlassFloat32),
+        EpilogueOp:  libraries.CutlassEpilogueLinearCombination,
+        Alpha:       1.0,
+        Beta:        0.0,
+    }
+    
+    gemm, _ := libraries.CreateCutlassGemm(desc)
+    defer gemm.Destroy()
+    
+    // Allocate matrices
+    A, _ := memory.Alloc(int64(M * K * 4)) // float32
+    B, _ := memory.Alloc(int64(K * N * 4))
+    C, _ := memory.Alloc(int64(M * N * 4))
+    defer A.Free()
+    defer B.Free()
+    defer C.Free()
+    
+    // Perform GEMM: C = A * B
+    gemm.CutlassGemm(A, B, C)
+    fmt.Printf("   ✅ CUTLASS GEMM %dx%dx%d with optimal algorithm\n", M, N, K)
+    
+    // Test convolution
+    convDesc := libraries.CutlassConvDesc{
+        N: 1, H: 64, W: 64, C: 32, // Input tensor
+        K: 64,                      // Output channels
+        R: 3, S: 3,                // 3x3 kernel
+        PadH: 1, PadW: 1,          // Same padding
+        StrideH: 1, StrideW: 1,    // Stride 1
+        Mode: libraries.CutlassConvForward,
+        DataType: libraries.CutlassFloat32,
+    }
+    
+    conv, _ := libraries.CreateCutlassConv(convDesc)
+    defer conv.Destroy()
+    
+    // Allocate tensors
+    input, _ := memory.Alloc(int64(convDesc.N * convDesc.H * convDesc.W * convDesc.C * 4))
+    filter, _ := memory.Alloc(int64(convDesc.K * convDesc.R * convDesc.S * convDesc.C * 4))
+    output, _ := memory.Alloc(int64(convDesc.N * convDesc.H * convDesc.W * convDesc.K * 4))
+    defer input.Free()
+    defer filter.Free()
+    defer output.Free()
+    
+    // Perform convolution
+    conv.CutlassConv(input, filter, output)
+    fmt.Printf("   ✅ CUTLASS Convolution %dx%dx%dx%d -> %d channels\n", 
+        convDesc.N, convDesc.H, convDesc.W, convDesc.C, convDesc.K)
 }
 ```
 ```
