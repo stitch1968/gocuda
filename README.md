@@ -123,9 +123,6 @@ build.bat cuda
 # Build and run comprehensive demo
 build.bat nocuda demo
 ```
-
-## Quick Start
-
 ## Quick Start
 
 ### 🚀 Comprehensive CUDA Libraries Demo
