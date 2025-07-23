@@ -1,0 +1,15 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Run Advanced Features Demo",
+			"type": "shell",
+			"command": "cd demos/advanced_features && go run main.go",
+			"group": "build",
+			"isBackground": false,
+			"problemMatcher": [
+				"$go"
+			]
+		}
+	]
+}
