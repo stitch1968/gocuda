@@ -42,14 +42,18 @@ var (
 // GetDefaultStream returns the default CUDA stream
 func GetDefaultStream() *Stream {
 	streamOnce.Do(func() {
-		defaultStream = newStream("DefaultStream")
+		defaultStream = newStreamOnDevice("DefaultStream", 0)
 	})
 	return defaultStream
 }
 
 func newStream(name string) *Stream {
+	return newStreamOnDevice(name, 0)
+}
+
+func newStreamOnDevice(name string, deviceID int) *Stream {
 	stream := &Stream{
-		deviceID:   0,
+		deviceID:   deviceID,
 		priority:   0,
 		flags:      0,
 		tasks:      make(chan func(), 100),
@@ -65,11 +69,18 @@ func newStream(name string) *Stream {
 // processor handles stream task processing
 func (s *Stream) processor() {
 	defer close(s.workerDone)
+	_ = RunOnDevice(s.deviceID, func() error {
+		for task := range s.tasks {
+			func() {
+				defer s.completeTask()
+				task()
+			}()
+		}
+		return nil
+	})
 	for task := range s.tasks {
-		func() {
-			defer s.completeTask()
-			task()
-		}()
+		s.completeTask()
+		task()
 	}
 }
 
@@ -130,6 +141,13 @@ func (s *Stream) IsClosed() bool {
 	return s.closed
 }
 
+// DeviceID returns the CUDA device associated with this stream.
+func (s *Stream) DeviceID() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.deviceID
+}
+
 // Error handling utilities
 
 // CudaError represents a CUDA error
@@ -174,4 +192,9 @@ func ElapsedTime(start, end *Event) float32 {
 // NewStream creates a new CUDA stream
 func NewStream() *Stream {
 	return newStream("UserStream")
+}
+
+// NewStreamOnDevice creates a new CUDA stream bound to the specified device.
+func NewStreamOnDevice(deviceID int) *Stream {
+	return newStreamOnDevice("UserStream", deviceID)
 }

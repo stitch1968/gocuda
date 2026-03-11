@@ -62,8 +62,8 @@ This file is the execution tracker for moving GoCUDA from a dual-mode developmen
 ## Runtime Safety Backlog
 
 - [x] Add explicit peer-copy support for cross-device transfers and multi-GPU memory ownership primitives
-- [ ] Expand context-bound execution across more high-level APIs so native CUDA mode consistently inherits device/thread affinity
-- [ ] Add CUDA-tagged validation covering the locked-thread device wrapper paths under real hardware mode
+- [x] Expand context-bound execution across more high-level APIs so native CUDA mode consistently inherits device/thread affinity
+- [x] Add CUDA-tagged validation covering the locked-thread device wrapper paths under real hardware mode
 
 ## Exit Criteria
 

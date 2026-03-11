@@ -206,8 +206,7 @@ func (c *Context) Run(fn func() error) error {
 
 // NewStream creates a new CUDA stream in this context - delegates to streams package
 func (c *Context) NewStream() (*Stream, error) {
-	// Delegate to the streams package
-	stream, err := streams.CreateStream()
+	stream, err := streams.CreateStreamOnDevice(c.device.ID)
 	if err != nil {
 		return nil, err
 	}

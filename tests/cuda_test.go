@@ -56,13 +56,62 @@ func TestNewContext(t *testing.T) {
 	}
 
 	// Note: Context cleanup is handled automatically
+	defer stream.Close()
 }
 
 func TestContextRun(t *testing.T) {
 	ctx, err := cuda.NewContext(0)
+
+	if stream.DeviceID() != 0 {
+		t.Fatalf("expected stream to inherit context device 0, got %d", stream.DeviceID())
+	}
 	if err != nil {
 		t.Fatalf("Failed to create context: %v", err)
 	}
+
+func TestGoWithStreamUsesStreamDevice(t *testing.T) {
+	devices, err := cuda.GetDevices()
+	if err != nil {
+		t.Fatalf("Failed to get devices: %v", err)
+	}
+
+	targetDevice := 0
+	if len(devices) > 1 {
+		targetDevice = 1
+	}
+
+	ctx, err := cuda.NewContext(targetDevice)
+	if err != nil {
+		t.Fatalf("Failed to create context: %v", err)
+	}
+
+	stream, err := ctx.NewStream()
+	if err != nil {
+		t.Fatalf("Failed to create stream: %v", err)
+	}
+	defer stream.Close()
+
+	var observedDevice int
+	err = cuda.GoWithStream(stream, func(ctx context.Context, args ...any) error {
+		currentDevice, err := cuda.GetCurrentDevice()
+		if err != nil {
+			return err
+		}
+		observedDevice = currentDevice
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("Failed to execute on stream: %v", err)
+	}
+
+	if err := stream.Synchronize(); err != nil {
+		t.Fatalf("Failed to synchronize stream: %v", err)
+	}
+
+	if observedDevice != targetDevice {
+		t.Fatalf("expected stream execution on device %d, got %d", targetDevice, observedDevice)
+	}
+}
 
 	executed := false
 	if err := ctx.Run(func() error {

@@ -68,15 +68,17 @@ func Go(fn GoFunc, args ...any) error {
 
 // GoWithStream executes a function on the GPU with a specific stream
 func GoWithStream(stream *Stream, fn GoFunc, args ...any) error {
-	ctx, err := DefaultContext()
-	if err != nil {
-		return err
-	}
 	if stream == nil {
+		var err error
 		stream, err = DefaultStream()
 		if err != nil {
 			return err
 		}
+	}
+
+	ctx, err := NewContext(stream.DeviceID())
+	if err != nil {
+		return err
 	}
 
 	kernel := &SimpleKernel{
@@ -104,15 +106,17 @@ func GoWithDimensions(gridDim, blockDim kernels.Dim3, fn GoFunc, args ...any) er
 
 // GoWithDimensionsAndStream executes a function on the GPU with custom dimensions and stream
 func GoWithDimensionsAndStream(stream *Stream, gridDim, blockDim kernels.Dim3, fn GoFunc, args ...any) error {
-	ctx, err := DefaultContext()
-	if err != nil {
-		return err
-	}
 	if stream == nil {
+		var err error
 		stream, err = DefaultStream()
 		if err != nil {
 			return err
 		}
+	}
+
+	ctx, err := NewContext(stream.DeviceID())
+	if err != nil {
+		return err
 	}
 
 	kernel := &SimpleKernel{

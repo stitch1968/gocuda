@@ -24,6 +24,18 @@ func TestStreamCreation(t *testing.T) {
 	t.Log("✅ Stream creation test passed")
 }
 
+func TestCreateStreamOnDevice(t *testing.T) {
+	stream, err := streams.CreateStreamOnDevice(0)
+	if err != nil {
+		t.Fatalf("Failed to create device-bound stream: %v", err)
+	}
+	defer streams.GetManager().DestroyStream(stream)
+
+	if stream.DeviceID() != 0 {
+		t.Fatalf("expected device-bound stream on device 0, got %d", stream.DeviceID())
+	}
+}
+
 // TestStreamManager tests stream manager functionality
 func TestStreamManager(t *testing.T) {
 	t.Log("Testing stream manager...")

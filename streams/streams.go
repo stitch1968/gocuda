@@ -131,10 +131,20 @@ func GetManager() *Manager {
 
 // CreateStream creates a new CUDA stream
 func (m *Manager) CreateStream(flags StreamFlags) (*Stream, error) {
+	return m.CreateStreamOnDevice(0, flags)
+}
+
+// CreateStreamOnDevice creates a new CUDA stream bound to a specific device.
+func (m *Manager) CreateStreamOnDevice(deviceID int, flags StreamFlags) (*Stream, error) {
+	devices := internal.GetDevices()
+	if deviceID < 0 || deviceID >= len(devices) {
+		return nil, fmt.Errorf("device ID %d out of range", deviceID)
+	}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	internalStream := internal.NewStream()
+	internalStream := internal.NewStreamOnDevice(deviceID)
 	stream := &Stream{
 		Stream:   internalStream,
 		priority: PriorityNormal,
@@ -151,7 +161,12 @@ func (m *Manager) CreateStream(flags StreamFlags) (*Stream, error) {
 
 // CreateStreamWithPriority creates a new CUDA stream with priority
 func (m *Manager) CreateStreamWithPriority(flags StreamFlags, priority Priority) (*Stream, error) {
-	stream, err := m.CreateStream(flags)
+	return m.CreateStreamWithPriorityOnDevice(0, flags, priority)
+}
+
+// CreateStreamWithPriorityOnDevice creates a new CUDA stream with priority on a specific device.
+func (m *Manager) CreateStreamWithPriorityOnDevice(deviceID int, flags StreamFlags, priority Priority) (*Stream, error) {
+	stream, err := m.CreateStreamOnDevice(deviceID, flags)
 	if err != nil {
 		return nil, err
 	}
@@ -252,6 +267,11 @@ func (s *Stream) AddCallback(callback func()) error {
 // CreateStream creates a new stream with default settings
 func CreateStream() (*Stream, error) {
 	return GetManager().CreateStream(StreamDefault)
+}
+
+// CreateStreamOnDevice creates a new stream on a specific device with default settings.
+func CreateStreamOnDevice(deviceID int) (*Stream, error) {
+	return GetManager().CreateStreamOnDevice(deviceID, StreamDefault)
 }
 
 // CreateStreamNonBlocking creates a new non-blocking stream

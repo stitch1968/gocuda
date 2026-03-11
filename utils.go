@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/stitch1968/gocuda/internal"
 	streamspkg "github.com/stitch1968/gocuda/streams"
 )
 
@@ -245,12 +246,14 @@ func Launch(name string, gridDim, blockDim Dim3, kernel Kernel, args ...any) err
 		return err
 	}
 
-	err = kernel.Execute(gridDim, blockDim, 0, stream, args...)
+	err = internal.RunOnDevice(stream.DeviceID(), func() error {
+		return kernel.Execute(gridDim, blockDim, 0, stream, args...)
+	})
 	if err != nil {
 		return fmt.Errorf("kernel execution failed: %v", err)
 	}
 
-	err = SynchronizeDevice()
+	err = internal.CudaDeviceSynchronizeOnDevice(stream.DeviceID())
 	if err != nil {
 		return err
 	}
@@ -264,8 +267,17 @@ func Launch(name string, gridDim, blockDim Dim3, kernel Kernel, args ...any) err
 func LaunchAsync(stream *Stream, gridDim, blockDim Dim3, kernel Kernel, args ...any) error {
 	// Execute kernel asynchronously using the provided stream
 	fmt.Printf("Launching async kernel with grid %+v, block %+v\n", gridDim, blockDim)
+	if stream == nil {
+		var err error
+		stream, err = DefaultStream()
+		if err != nil {
+			return err
+		}
+	}
 
-	return kernel.Execute(gridDim, blockDim, 0, stream, args...)
+	return internal.RunOnDevice(stream.DeviceID(), func() error {
+		return kernel.Execute(gridDim, blockDim, 0, stream, args...)
+	})
 }
 
 // BatchExecute executes multiple operations in batches
