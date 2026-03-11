@@ -161,6 +161,10 @@ type AmgXSolveInfo struct {
 
 // CreateAmgXHandle creates a new AmgX solver handle
 func CreateAmgXHandle(config AmgXConfig) (*AmgXHandle, error) {
+	if err := ensureCudaReady(); err != nil {
+		return nil, err
+	}
+
 	handle := &AmgXHandle{
 		config:    config,
 		setupDone: false,
@@ -196,6 +200,10 @@ func CreateAmgXHandle(config AmgXConfig) (*AmgXHandle, error) {
 
 // CreateAmgXMatrix creates an AmgX matrix
 func CreateAmgXMatrix(n, nnz int, rowPtr, colInd, values *memory.Memory, mode AmgXMode) (*AmgXMatrix, error) {
+	if err := ensureCudaReady(); err != nil {
+		return nil, err
+	}
+
 	if n <= 0 || nnz <= 0 {
 		return nil, fmt.Errorf("invalid matrix dimensions: n=%d, nnz=%d", n, nnz)
 	}
@@ -221,6 +229,10 @@ func CreateAmgXMatrix(n, nnz int, rowPtr, colInd, values *memory.Memory, mode Am
 
 // CreateAmgXVector creates an AmgX vector
 func CreateAmgXVector(size int, data *memory.Memory, mode AmgXMode) (*AmgXVector, error) {
+	if err := ensureCudaReady(); err != nil {
+		return nil, err
+	}
+
 	if size <= 0 {
 		return nil, fmt.Errorf("invalid vector size: %d", size)
 	}

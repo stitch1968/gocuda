@@ -27,6 +27,10 @@ const (
 
 // CreateThrustContext creates a new Thrust context
 func CreateThrustContext() (*ThrustContext, error) {
+	if err := ensureCudaReady(); err != nil {
+		return nil, err
+	}
+
 	return &ThrustContext{
 		handle: uintptr(time.Now().UnixNano()),
 	}, nil

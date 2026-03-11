@@ -74,6 +74,10 @@ type JpegEncodeParams struct {
 
 // CreateJpegDecoder creates a new JPEG decoder
 func CreateJpegDecoder(backend JpegBackend) (*JpegDecoderState, error) {
+	if err := ensureCudaReady(); err != nil {
+		return nil, err
+	}
+
 	decoder := &JpegDecoderState{
 		backend: backend,
 	}
@@ -97,6 +101,10 @@ func CreateJpegDecoder(backend JpegBackend) (*JpegDecoderState, error) {
 
 // CreateJpegEncoder creates a new JPEG encoder
 func CreateJpegEncoder(backend JpegBackend) (*JpegEncoderState, error) {
+	if err := ensureCudaReady(); err != nil {
+		return nil, err
+	}
+
 	encoder := &JpegEncoderState{
 		backend: backend,
 		quality: 90, // Default quality

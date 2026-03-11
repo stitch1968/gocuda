@@ -112,6 +112,10 @@ type DSSSolutionInfo struct {
 
 // CreateDSSHandle creates a new cuDSS solver handle
 func CreateDSSHandle(config DSSConfig) (*DSSHandle, error) {
+	if err := ensureCudaReady(); err != nil {
+		return nil, err
+	}
+
 	handle := &DSSHandle{
 		config:   config,
 		factored: false,
@@ -139,6 +143,10 @@ func CreateDSSHandle(config DSSConfig) (*DSSHandle, error) {
 
 // CreateDSSMatrix creates a DSS matrix from sparse data
 func CreateDSSMatrix(n, nnz int, rowPtr, colInd, values *memory.Memory, format DSSMatrixFormat, symmetry bool) (*DSSMatrix, error) {
+	if err := ensureCudaReady(); err != nil {
+		return nil, err
+	}
+
 	if n <= 0 || nnz <= 0 {
 		return nil, fmt.Errorf("invalid matrix dimensions: n=%d, nnz=%d", n, nnz)
 	}

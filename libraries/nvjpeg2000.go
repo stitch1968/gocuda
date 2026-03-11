@@ -104,6 +104,10 @@ type Jpeg2000ImageInfo struct {
 
 // CreateJpeg2000Decoder creates a new JPEG2000 decoder
 func CreateJpeg2000Decoder(codec Jpeg2000Codec) (*Jpeg2000DecoderState, error) {
+	if err := ensureCudaReady(); err != nil {
+		return nil, err
+	}
+
 	decoder := &Jpeg2000DecoderState{
 		codec: codec,
 	}
@@ -127,6 +131,10 @@ func CreateJpeg2000Decoder(codec Jpeg2000Codec) (*Jpeg2000DecoderState, error) {
 
 // CreateJpeg2000Encoder creates a new JPEG2000 encoder
 func CreateJpeg2000Encoder(codec Jpeg2000Codec) (*Jpeg2000EncoderState, error) {
+	if err := ensureCudaReady(); err != nil {
+		return nil, err
+	}
+
 	encoder := &Jpeg2000EncoderState{
 		codec:            codec,
 		compressionRatio: 10.0, // Default 10:1 compression

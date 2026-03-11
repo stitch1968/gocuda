@@ -40,6 +40,10 @@ type SparseContext struct {
 
 // CreateSparseContext creates a new cuSPARSE context
 func CreateSparseContext() (*SparseContext, error) {
+	if err := ensureCudaReady(); err != nil {
+		return nil, err
+	}
+
 	return &SparseContext{
 		handle: uintptr(time.Now().UnixNano()), // Simulated handle
 	}, nil

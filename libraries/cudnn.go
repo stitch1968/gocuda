@@ -156,6 +156,10 @@ const (
 
 // CreateDNNHandle creates a cuDNN library handle
 func CreateDNNHandle() (*DNNHandle, error) {
+	if err := ensureCudaReady(); err != nil {
+		return nil, err
+	}
+
 	handle := &DNNHandle{
 		handle: uintptr(time.Now().UnixNano()),
 	}
@@ -181,6 +185,10 @@ func (h *DNNHandle) DestroyHandle() error {
 
 // CreateTensorDescriptor creates a tensor descriptor
 func CreateTensorDescriptor() (*TensorDescriptor, error) {
+	if err := ensureCudaReady(); err != nil {
+		return nil, err
+	}
+
 	desc := &TensorDescriptor{
 		handle: uintptr(time.Now().UnixNano()),
 	}
@@ -244,6 +252,10 @@ func (desc *TensorDescriptor) DestroyTensorDescriptor() error {
 
 // CreateFilterDescriptor creates a filter descriptor
 func CreateFilterDescriptor() (*FilterDescriptor, error) {
+	if err := ensureCudaReady(); err != nil {
+		return nil, err
+	}
+
 	desc := &FilterDescriptor{
 		handle: uintptr(time.Now().UnixNano()),
 	}
@@ -296,6 +308,10 @@ func (desc *FilterDescriptor) DestroyFilterDescriptor() error {
 
 // CreateConvolutionDescriptor creates a convolution descriptor
 func CreateConvolutionDescriptor() (*ConvolutionDescriptor, error) {
+	if err := ensureCudaReady(); err != nil {
+		return nil, err
+	}
+
 	desc := &ConvolutionDescriptor{
 		handle:    uintptr(time.Now().UnixNano()),
 		dilationH: 1,
@@ -395,6 +411,10 @@ func (desc *ConvolutionDescriptor) DestroyConvolutionDescriptor() error {
 
 // CreatePoolingDescriptor creates a pooling descriptor
 func CreatePoolingDescriptor() (*PoolingDescriptor, error) {
+	if err := ensureCudaReady(); err != nil {
+		return nil, err
+	}
+
 	desc := &PoolingDescriptor{
 		handle: uintptr(time.Now().UnixNano()),
 	}
@@ -460,6 +480,10 @@ func (desc *PoolingDescriptor) DestroyPoolingDescriptor() error {
 
 // CreateActivationDescriptor creates an activation descriptor
 func CreateActivationDescriptor() (*ActivationDescriptor, error) {
+	if err := ensureCudaReady(); err != nil {
+		return nil, err
+	}
+
 	desc := &ActivationDescriptor{
 		handle: uintptr(time.Now().UnixNano()),
 	}
@@ -521,6 +545,10 @@ func (desc *ActivationDescriptor) DestroyActivationDescriptor() error {
 
 // CreateBatchNormDescriptor creates a batch normalization descriptor
 func CreateBatchNormDescriptor() (*BatchNormDescriptor, error) {
+	if err := ensureCudaReady(); err != nil {
+		return nil, err
+	}
+
 	desc := &BatchNormDescriptor{
 		handle: uintptr(time.Now().UnixNano()),
 	}

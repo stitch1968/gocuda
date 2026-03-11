@@ -41,6 +41,10 @@ type LUInfo struct {
 
 // CreateSolverContext creates a new cuSOLVER context
 func CreateSolverContext() (*SolverContext, error) {
+	if err := ensureCudaReady(); err != nil {
+		return nil, err
+	}
+
 	return &SolverContext{
 		handle: uintptr(time.Now().UnixNano()),
 	}, nil

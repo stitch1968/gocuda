@@ -122,6 +122,10 @@ type CutlassConvHandle struct {
 
 // CreateCutlassGemm creates a CUTLASS GEMM operation handle
 func CreateCutlassGemm(desc CutlassGemmDesc) (*CutlassGemmHandle, error) {
+	if err := ensureCudaReady(); err != nil {
+		return nil, err
+	}
+
 	handle := &CutlassGemmHandle{
 		descriptor: desc,
 	}
@@ -148,6 +152,10 @@ func CreateCutlassGemm(desc CutlassGemmDesc) (*CutlassGemmHandle, error) {
 
 // CreateCutlassConv creates a CUTLASS convolution operation handle
 func CreateCutlassConv(desc CutlassConvDesc) (*CutlassConvHandle, error) {
+	if err := ensureCudaReady(); err != nil {
+		return nil, err
+	}
+
 	handle := &CutlassConvHandle{
 		descriptor: desc,
 	}

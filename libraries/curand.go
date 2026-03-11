@@ -36,6 +36,10 @@ type RandomGenerator struct {
 
 // CreateRandomGenerator creates a new random number generator
 func CreateRandomGenerator(rngType RngType) (*RandomGenerator, error) {
+	if err := ensureCudaReady(); err != nil {
+		return nil, err
+	}
+
 	rg := &RandomGenerator{
 		rngType: rngType,
 		seed:    uint64(time.Now().UnixNano()),

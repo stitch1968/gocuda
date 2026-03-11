@@ -62,6 +62,10 @@ type Complex128 struct {
 
 // CreateFFTContext creates a new cuFFT context
 func CreateFFTContext() (*FFTContext, error) {
+	if err := ensureCudaReady(); err != nil {
+		return nil, err
+	}
+
 	ctx := &FFTContext{
 		handle: uintptr(time.Now().UnixNano()), // Simulated handle
 		plans:  make([]*FFTPlan, 0),

@@ -162,6 +162,10 @@ type MathVectorOp struct {
 
 // CreateMathContext creates a new CUDA Math API context
 func CreateMathContext(config MathConfig) (*MathContext, error) {
+	if err := ensureCudaReady(); err != nil {
+		return nil, err
+	}
+
 	ctx := &MathContext{
 		config: config,
 	}

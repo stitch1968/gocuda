@@ -150,6 +150,10 @@ type TensorPlan struct {
 
 // CreateCuTensorHandle creates a new cuTENSOR handle
 func CreateCuTensorHandle() (*CuTensorHandle, error) {
+	if err := ensureCudaReady(); err != nil {
+		return nil, err
+	}
+
 	handle := &CuTensorHandle{
 		planCache:   make(map[string]*memory.Memory),
 		descriptors: make([]*CuTensorDescriptor, 0),
@@ -184,6 +188,10 @@ func CreateCuTensorHandle() (*CuTensorHandle, error) {
 
 // CreateCuTensorDescriptor creates a tensor descriptor
 func CreateCuTensorDescriptor(dataType TensorDataType, dimensions []int, layout TensorLayout) (*CuTensorDescriptor, error) {
+	if err := ensureCudaReady(); err != nil {
+		return nil, err
+	}
+
 	if len(dimensions) == 0 {
 		return nil, fmt.Errorf("tensor must have at least one dimension")
 	}
