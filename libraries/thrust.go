@@ -3,12 +3,14 @@
 package libraries
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"slices"
 	"sort"
 	"time"
 
+	cuda "github.com/stitch1968/gocuda"
 	"github.com/stitch1968/gocuda/memory"
 )
 
@@ -17,7 +19,10 @@ import (
 // ThrustContext manages Thrust operations
 type ThrustContext struct {
 	handle uintptr
+	native bool
 }
+
+var errThrustUnsupported = errors.New("thrust native path unsupported for requested parameters")
 
 // ExecutionPolicy defines how algorithms should execute
 type ExecutionPolicy int
@@ -33,10 +38,19 @@ func CreateThrustContext() (*ThrustContext, error) {
 	if err := ensureCudaReady(); err != nil {
 		return nil, err
 	}
+	if cuda.ShouldUseCuda() && thrustNativeAvailable() {
+		ctx, err := createNativeThrustContext()
+		if err == nil {
+			return ctx, nil
+		}
+	}
+	return createDeterministicThrustContext(), nil
+}
 
+func createDeterministicThrustContext() *ThrustContext {
 	return &ThrustContext{
 		handle: uintptr(time.Now().UnixNano()),
-	}, nil
+	}
 }
 
 // Sort sorts elements in ascending order
@@ -238,6 +252,15 @@ func (ctx *ThrustContext) Partition(data *memory.Memory, n int, predicate string
 
 // Copy copies elements from source to destination
 func (ctx *ThrustContext) Copy(src, dst *memory.Memory, n int, policy ExecutionPolicy) error {
+	if ctx != nil && ctx.native && policy != PolicyHost {
+		err := executeNativeThrustCopy(src, dst, n)
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, errThrustUnsupported) {
+			return err
+		}
+	}
 	values, err := thrustReadValues(src, n)
 	if err != nil {
 		return err
@@ -271,6 +294,15 @@ func (ctx *ThrustContext) CopyIf(src, dst *memory.Memory, n int, predicate strin
 
 // Fill fills memory with specified value
 func (ctx *ThrustContext) Fill(data *memory.Memory, n int, value float32, policy ExecutionPolicy) error {
+	if ctx != nil && ctx.native && policy != PolicyHost {
+		err := executeNativeThrustFill(data, n, value)
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, errThrustUnsupported) {
+			return err
+		}
+	}
 	values := make([]float32, n)
 	for index := range values {
 		values[index] = value
@@ -280,6 +312,15 @@ func (ctx *ThrustContext) Fill(data *memory.Memory, n int, value float32, policy
 
 // Generate fills memory using generator function
 func (ctx *ThrustContext) Generate(data *memory.Memory, n int, generator string, policy ExecutionPolicy) error {
+	if ctx != nil && ctx.native && policy != PolicyHost {
+		err := executeNativeThrustGenerate(data, n, generator)
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, errThrustUnsupported) {
+			return err
+		}
+	}
 	values := make([]float32, n)
 	for index := range values {
 		generated, err := evaluateThrustGenerator(generator, index)
@@ -420,6 +461,9 @@ func (ctx *ThrustContext) MaxElement(data *memory.Memory, n int, policy Executio
 
 // DestroyContext cleans up Thrust context
 func (ctx *ThrustContext) DestroyContext() error {
+	if ctx != nil && ctx.native {
+		return destroyNativeThrustContext(ctx)
+	}
 	ctx.handle = 0
 	return nil
 }

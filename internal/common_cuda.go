@@ -44,6 +44,10 @@ cudaError_t cudaMemcpy_Internal(void* dst, void* src, size_t count, int kind) {
 	return cudaMemcpy(dst, src, count, (enum cudaMemcpyKind)kind);
 }
 
+cudaError_t cudaMemset_Internal(void* dst, int value, size_t count) {
+	return cudaMemset(dst, value, count);
+}
+
 cudaError_t cudaDeviceSynchronize_Internal() {
 	return cudaDeviceSynchronize();
 }
@@ -279,6 +283,20 @@ func CudaMemcpyOnDevice(dst, src unsafe.Pointer, count int64, kind int, deviceID
 		status := C.cudaMemcpy_Internal(dst, src, C.size_t(count), C.int(kind))
 		if status != 0 {
 			return fmt.Errorf("cudaMemcpy failed with error code %d", status)
+		}
+		return nil
+	})
+}
+
+// CudaMemsetOnDevice performs CUDA memset after selecting a specific device.
+func CudaMemsetOnDevice(dst unsafe.Pointer, value int, count int64, deviceID int) error {
+	if !ShouldUseCuda() {
+		return fmt.Errorf("CUDA not available")
+	}
+	return RunOnDevice(deviceID, func() error {
+		status := C.cudaMemset_Internal(dst, C.int(value), C.size_t(count))
+		if status != 0 {
+			return fmt.Errorf("cudaMemset failed with error code %d", status)
 		}
 		return nil
 	})

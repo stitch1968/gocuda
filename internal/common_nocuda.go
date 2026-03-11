@@ -85,6 +85,11 @@ func CudaMemcpyOnDevice(dst, src unsafe.Pointer, count int64, kind int, deviceID
 	return CudaMemcpy(dst, src, count, kind)
 }
 
+// CudaMemsetOnDevice performs CUDA memset on a specific device (simulation stub).
+func CudaMemsetOnDevice(dst unsafe.Pointer, value int, count int64, deviceID int) error {
+	return fmt.Errorf("CUDA not available - using simulation mode")
+}
+
 // Memory copy kind constants
 const (
 	MemcpyKindHostToHost     = 0
