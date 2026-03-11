@@ -66,6 +66,11 @@ if exist "setup_windows_cuda_import_libs.bat" (
     ) else (
         echo ⚠️ lib_mingw\libnvjpeg2k.a: NOT FOUND ^(run setup_windows_cuda_import_libs.bat with your nvjpeg2k DLL to generate it^)
     )
+    if exist "lib_mingw\libcublas.a" (
+        echo ✅ lib_mingw\libcublas.a: EXISTS
+    ) else (
+        echo ⚠️ lib_mingw\libcublas.a: NOT FOUND ^(run setup_windows_cuda_import_libs.bat with your cublas DLL to generate it^)
+    )
     if exist "lib_mingw\libcudss.a" (
         echo ✅ lib_mingw\libcudss.a: EXISTS
     ) else (

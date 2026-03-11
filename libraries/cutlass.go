@@ -3,9 +3,11 @@
 package libraries
 
 import (
+	"errors"
 	"fmt"
 	"math"
 
+	cuda "github.com/stitch1968/gocuda"
 	"github.com/stitch1968/gocuda/memory"
 )
 
@@ -109,9 +111,11 @@ type CutlassConvDesc struct {
 
 // CUTLASS GEMM handle
 type CutlassGemmHandle struct {
-	handle     *memory.Memory
-	descriptor CutlassGemmDesc
-	workspace  *memory.Memory
+	handle       *memory.Memory
+	descriptor   CutlassGemmDesc
+	workspace    *memory.Memory
+	nativeHandle uintptr
+	native       bool
 }
 
 // CUTLASS convolution handle
@@ -121,12 +125,23 @@ type CutlassConvHandle struct {
 	workspace  *memory.Memory
 }
 
+var errCUTLASSUnsupported = errors.New("cutlass native path unsupported for requested parameters")
+
 // CreateCutlassGemm creates a CUTLASS GEMM operation handle
 func CreateCutlassGemm(desc CutlassGemmDesc) (*CutlassGemmHandle, error) {
 	if err := ensureCudaReady(); err != nil {
 		return nil, err
 	}
+	if cuda.ShouldUseCuda() && cutlassNativeAvailable() {
+		handle, err := createNativeCutlassGemm(desc)
+		if err == nil {
+			return handle, nil
+		}
+	}
+	return createDeterministicCutlassGemm(desc)
+}
 
+func createDeterministicCutlassGemm(desc CutlassGemmDesc) (*CutlassGemmHandle, error) {
 	handle := &CutlassGemmHandle{
 		descriptor: desc,
 	}
@@ -193,6 +208,15 @@ func (handle *CutlassGemmHandle) CutlassGemm(A, B, C *memory.Memory) error {
 	if desc.M <= 0 || desc.N <= 0 || desc.K <= 0 {
 		return fmt.Errorf("invalid matrix dimensions: M=%d, N=%d, K=%d", desc.M, desc.N, desc.K)
 	}
+	if handle != nil && handle.native {
+		err := executeNativeCutlassGemm(handle, A, B, C)
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, errCUTLASSUnsupported) {
+			return err
+		}
+	}
 
 	return executeCutlassGemm(desc, A, B, C)
 }
@@ -211,7 +235,7 @@ func (handle *CutlassGemmHandle) CutlassGemmBatched(A, B, C []*memory.Memory, ba
 	}
 
 	for index := range batchCount {
-		if err := executeCutlassGemm(handle.descriptor, A[index], B[index], C[index]); err != nil {
+		if err := handle.CutlassGemm(A[index], B[index], C[index]); err != nil {
 			return fmt.Errorf("CUTLASS batched GEMM execution failed at %d: %v", index, err)
 		}
 	}
@@ -384,12 +408,15 @@ func GetOptimalGemmAlgorithm(M, N, K int, dataType CutlassDataType) CutlassGemmA
 
 // Destroy cleans up GEMM handle resources
 func (handle *CutlassGemmHandle) Destroy() error {
+	if handle != nil && handle.native {
+		return destroyNativeCutlassGemm(handle)
+	}
 	if handle.handle != nil {
-		handle.handle.Free()
+		_ = handle.handle.Free()
 		handle.handle = nil
 	}
 	if handle.workspace != nil {
-		handle.workspace.Free()
+		_ = handle.workspace.Free()
 		handle.workspace = nil
 	}
 	return nil
@@ -398,11 +425,11 @@ func (handle *CutlassGemmHandle) Destroy() error {
 // Destroy cleans up convolution handle resources
 func (handle *CutlassConvHandle) Destroy() error {
 	if handle.handle != nil {
-		handle.handle.Free()
+		_ = handle.handle.Free()
 		handle.handle = nil
 	}
 	if handle.workspace != nil {
-		handle.workspace.Free()
+		_ = handle.workspace.Free()
 		handle.workspace = nil
 	}
 	return nil

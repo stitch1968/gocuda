@@ -44,6 +44,10 @@ if "%MODE%"=="cuda" (
         echo WARNING: lib_mingw\libnvjpeg2k.a not found
         echo Run setup_windows_cuda_import_libs.bat with your local nvjpeg2k DLL path before expecting Windows nvJPEG2000 native builds to link.
     )
+    if not exist "lib_mingw\libcublas.a" (
+        echo WARNING: lib_mingw\libcublas.a not found
+        echo Run setup_windows_cuda_import_libs.bat with your local cublas DLL path before expecting Windows CUTLASS native GEMM builds to link.
+    )
     if not exist "lib_mingw\libcudss.a" (
         echo WARNING: lib_mingw\libcudss.a not found
         echo Run setup_windows_cuda_import_libs.bat with your local cudart/cudnn/cudss DLL paths before expecting Windows cuDSS native builds to link.
