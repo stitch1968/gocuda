@@ -53,6 +53,19 @@ else
 fi
 echo ""
 
+echo "🧰 Testing Windows import-lib helper..."
+if [ -f "setup_windows_cuda_import_libs.bat" ]; then
+    echo "✅ setup_windows_cuda_import_libs.bat: EXISTS"
+    if [ -f "generate_mingw_import_lib.py" ]; then
+        echo "✅ generate_mingw_import_lib.py: EXISTS"
+    else
+        echo "❌ generate_mingw_import_lib.py: NOT FOUND"
+    fi
+else
+    echo "❌ setup_windows_cuda_import_libs.bat: NOT FOUND"
+fi
+echo ""
+
 # Test Makefile
 echo "🔧 Testing Makefile..."
 if [ -f "Makefile" ]; then

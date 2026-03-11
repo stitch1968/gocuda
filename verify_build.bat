@@ -43,6 +43,29 @@ if exist "build.bat" (
 )
 echo.
 
+echo 🧰 Testing Windows import-lib helper...
+if exist "setup_windows_cuda_import_libs.bat" (
+    echo ✅ setup_windows_cuda_import_libs.bat: EXISTS
+    if exist "generate_mingw_import_lib.py" (
+        echo ✅ generate_mingw_import_lib.py: EXISTS
+    ) else (
+        echo ❌ generate_mingw_import_lib.py: NOT FOUND
+    )
+    if exist "lib_mingw\libcudnn.a" (
+        echo ✅ lib_mingw\libcudnn.a: EXISTS
+    ) else (
+        echo ⚠️ lib_mingw\libcudnn.a: NOT FOUND ^(run setup_windows_cuda_import_libs.bat to generate it^)
+    )
+    if exist "lib_mingw\libnvjpeg.a" (
+        echo ✅ lib_mingw\libnvjpeg.a: EXISTS
+    ) else (
+        echo ⚠️ lib_mingw\libnvjpeg.a: NOT FOUND ^(run setup_windows_cuda_import_libs.bat with your nvjpeg DLL to generate it^)
+    )
+) else (
+    echo ❌ setup_windows_cuda_import_libs.bat: NOT FOUND
+)
+echo.
+
 REM Test Makefile
 echo 🔧 Testing Makefile...
 if exist "Makefile" (

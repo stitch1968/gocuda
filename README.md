@@ -18,7 +18,7 @@ GoCUDA provides a broad Go interface to CUDA concepts and selected CUDA ecosyste
 - **⚡ Thrust** - Production-ready deterministic algorithm wrapper with explicit device-transfer support
 - **🌊 cuFFT** - Native cuFFT backend in CUDA mode with simulation fallback in non-CUDA runtime mode
 - **🧠 cuDNN** - Production-ready deterministic tensor, convolution, pooling, activation, and batch-normalization wrapper
-- **📸 nvJPEG** - Production-ready deterministic JPEG encode/decode wrapper with explicit device-transfer support
+- **📸 nvJPEG** - Production-ready JPEG encode/decode wrapper with deterministic fallback and non-Windows CUDA-tagged native bindings
 - **🎨 nvJPEG2000** - Production-ready JPEG 2000 encode/decode wrapper backed by `ffmpeg` and `ffprobe`
 - **⚡ CUTLASS** - Production-ready deterministic linear algebra wrapper with explicit device-transfer support
 - **🔍 cuDSS** - Production-ready deterministic sparse direct solver with explicit device-transfer support
@@ -107,6 +107,8 @@ go build ./...
 - NVIDIA CUDA Toolkit installed
 - Visual Studio Build Tools or Visual Studio with the C++ workload installed
 - The repository's `lib_mingw` import libraries available for cgo linking on Windows
+- Run `setup_windows_cuda_import_libs.bat` with your local `cudart64_*.dll`, `cudnn64_*.dll`, optional `nvjpeg64_*.dll`, and optional `nvcuda.dll` paths to generate/update the required MinGW import libraries
+- Native cuDNN and nvJPEG execution are wired for CUDA-tagged builds; Windows requires generated `lib_mingw\libcudnn.a` and `lib_mingw\libnvjpeg.a` before those native paths can link
 
 ### Quick Verification
 Test that everything works correctly:

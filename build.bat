@@ -32,6 +32,14 @@ if "%MODE%"=="cuda" (
     REM Build with CUDA support
     echo Building with CUDA tags...
     set CGO_ENABLED=1
+    if not exist "lib_mingw\libcudnn.a" (
+        echo WARNING: lib_mingw\libcudnn.a not found
+        echo Run setup_windows_cuda_import_libs.bat with your local cudart/cudnn DLL paths before expecting Windows cuDNN native builds to link.
+    )
+    if not exist "lib_mingw\libnvjpeg.a" (
+        echo WARNING: lib_mingw\libnvjpeg.a not found
+        echo Run setup_windows_cuda_import_libs.bat with your local cudart/cudnn/nvjpeg DLL paths before expecting Windows nvJPEG native builds to link.
+    )
     go build -tags cuda -v ./...
     if errorlevel 1 (
         echo Build failed!

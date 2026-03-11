@@ -4,11 +4,13 @@ package libraries
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"image"
 	"image/color"
 	"image/jpeg"
 
+	cuda "github.com/stitch1968/gocuda"
 	"github.com/stitch1968/gocuda/memory"
 )
 
@@ -40,18 +42,27 @@ const (
 
 // JpegDecoderState decoder state
 type JpegDecoderState struct {
-	handle  *memory.Memory
-	backend JpegBackend
-	stream  *memory.Memory
+	handle       *memory.Memory
+	backend      JpegBackend
+	stream       *memory.Memory
+	nativeHandle uintptr
+	nativeState  uintptr
+	native       bool
 }
 
 // JpegEncoderState encoder state
 type JpegEncoderState struct {
-	handle  *memory.Memory
-	backend JpegBackend
-	stream  *memory.Memory
-	quality int
+	handle       *memory.Memory
+	backend      JpegBackend
+	stream       *memory.Memory
+	quality      int
+	nativeHandle uintptr
+	nativeState  uintptr
+	nativeParams uintptr
+	native       bool
 }
+
+var errNVJPEGUnsupported = errors.New("nvjpeg native path unsupported for requested parameters")
 
 // JpegDecodeParams decode parameters
 type JpegDecodeParams struct {
@@ -78,22 +89,24 @@ func CreateJpegDecoder(backend JpegBackend) (*JpegDecoderState, error) {
 	if err := ensureCudaReady(); err != nil {
 		return nil, err
 	}
-
-	decoder := &JpegDecoderState{
-		backend: backend,
+	if cuda.ShouldUseCuda() && nvjpegNativeAvailable() {
+		return createNativeJpegDecoder(backend)
 	}
+	return createDeterministicJpegDecoder(backend)
+}
 
-	// Allocate decoder handle (simulated)
+func createDeterministicJpegDecoder(backend JpegBackend) (*JpegDecoderState, error) {
+	decoder := &JpegDecoderState{backend: backend}
+
 	var err error
-	decoder.handle, err = memory.Alloc(2048) // Decoder state memory
+	decoder.handle, err = memory.Alloc(2048)
 	if err != nil {
 		return nil, fmt.Errorf("failed to allocate decoder handle: %v", err)
 	}
 
-	// Allocate stream memory
 	decoder.stream, err = memory.Alloc(1024)
 	if err != nil {
-		decoder.handle.Free()
+		_ = decoder.handle.Free()
 		return nil, fmt.Errorf("failed to allocate stream memory: %v", err)
 	}
 
@@ -105,23 +118,28 @@ func CreateJpegEncoder(backend JpegBackend) (*JpegEncoderState, error) {
 	if err := ensureCudaReady(); err != nil {
 		return nil, err
 	}
+	defaultQuality := 90
+	if cuda.ShouldUseCuda() && nvjpegNativeAvailable() {
+		return createNativeJpegEncoder(backend, defaultQuality)
+	}
+	return createDeterministicJpegEncoder(backend, defaultQuality)
+}
 
+func createDeterministicJpegEncoder(backend JpegBackend, quality int) (*JpegEncoderState, error) {
 	encoder := &JpegEncoderState{
 		backend: backend,
-		quality: 90, // Default quality
+		quality: quality,
 	}
 
-	// Allocate encoder handle (simulated)
 	var err error
-	encoder.handle, err = memory.Alloc(2048) // Encoder state memory
+	encoder.handle, err = memory.Alloc(2048)
 	if err != nil {
 		return nil, fmt.Errorf("failed to allocate encoder handle: %v", err)
 	}
 
-	// Allocate stream memory
 	encoder.stream, err = memory.Alloc(1024)
 	if err != nil {
-		encoder.handle.Free()
+		_ = encoder.handle.Free()
 		return nil, fmt.Errorf("failed to allocate stream memory: %v", err)
 	}
 
@@ -130,11 +148,23 @@ func CreateJpegEncoder(backend JpegBackend) (*JpegEncoderState, error) {
 
 // DecodeJpeg decodes a JPEG image from byte data
 func (decoder *JpegDecoderState) DecodeJpeg(jpegData []byte, params JpegDecodeParams) (*memory.Memory, int, int, error) {
+	if decoder != nil && decoder.native {
+		output, width, height, err := decodeNativeJpeg(decoder, jpegData, params)
+		if err == nil {
+			return output, width, height, nil
+		}
+		if !errors.Is(err, errNVJPEGUnsupported) {
+			return nil, 0, 0, err
+		}
+	}
+	return decodeJpegDeterministic(jpegData, params)
+}
+
+func decodeJpegDeterministic(jpegData []byte, params JpegDecodeParams) (*memory.Memory, int, int, error) {
 	if len(jpegData) == 0 {
 		return nil, 0, 0, fmt.Errorf("empty JPEG data")
 	}
 
-	// Simulate JPEG decoding using Go's standard library for CPU fallback
 	reader := bytes.NewReader(jpegData)
 	img, err := jpeg.Decode(reader)
 	if err != nil {
@@ -152,7 +182,6 @@ func (decoder *JpegDecoderState) DecodeJpeg(jpegData []byte, params JpegDecodePa
 		height = params.ScaleHeight
 	}
 
-	// Calculate output size based on format
 	var channels int
 	switch params.OutputFormat {
 	case JpegFormatGrayscale:
@@ -211,6 +240,19 @@ func (decoder *JpegDecoderState) DecodeJpegBatch(jpegDataList [][]byte, params J
 
 // EncodeJpeg encodes image data to JPEG format
 func (encoder *JpegEncoderState) EncodeJpeg(imageData *memory.Memory, width, height int, params JpegEncodeParams) ([]byte, error) {
+	if encoder != nil && encoder.native {
+		encoded, err := encodeNativeJpeg(encoder, imageData, width, height, params)
+		if err == nil {
+			return encoded, nil
+		}
+		if !errors.Is(err, errNVJPEGUnsupported) {
+			return nil, err
+		}
+	}
+	return encodeJpegDeterministic(imageData, width, height, params, encoder.quality)
+}
+
+func encodeJpegDeterministic(imageData *memory.Memory, width, height int, params JpegEncodeParams, defaultQuality int) ([]byte, error) {
 	if imageData == nil {
 		return nil, fmt.Errorf("image data cannot be nil")
 	}
@@ -218,7 +260,6 @@ func (encoder *JpegEncoderState) EncodeJpeg(imageData *memory.Memory, width, hei
 		return nil, fmt.Errorf("invalid image dimensions: %dx%d", width, height)
 	}
 
-	// Calculate expected input size
 	var channels int
 	switch params.InputFormat {
 	case JpegFormatGrayscale:
@@ -244,10 +285,9 @@ func (encoder *JpegEncoderState) EncodeJpeg(imageData *memory.Memory, width, hei
 		return nil, err
 	}
 
-	// Set encoder quality
 	quality := params.Quality
 	if quality == 0 {
-		quality = encoder.quality
+		quality = defaultQuality
 	}
 	options := &jpeg.Options{Quality: quality}
 	err = jpeg.Encode(&buf, img, options)
@@ -272,6 +312,12 @@ func GetJpegImageInfo(jpegData []byte) (width, height, channels int, err error) 
 	if len(jpegData) == 0 {
 		return 0, 0, 0, fmt.Errorf("empty JPEG data")
 	}
+	if cuda.ShouldUseCuda() && nvjpegNativeAvailable() {
+		width, height, channels, err = getNativeJpegImageInfo(jpegData)
+		if err == nil {
+			return width, height, channels, nil
+		}
+	}
 
 	reader := bytes.NewReader(jpegData)
 	config, err := jpeg.DecodeConfig(reader)
@@ -291,12 +337,15 @@ func GetJpegImageInfo(jpegData []byte) (width, height, channels int, err error) 
 
 // Destroy cleans up decoder resources
 func (decoder *JpegDecoderState) Destroy() error {
+	if decoder != nil && decoder.native {
+		return destroyNativeJpegDecoder(decoder)
+	}
 	if decoder.handle != nil {
-		decoder.handle.Free()
+		_ = decoder.handle.Free()
 		decoder.handle = nil
 	}
 	if decoder.stream != nil {
-		decoder.stream.Free()
+		_ = decoder.stream.Free()
 		decoder.stream = nil
 	}
 	return nil
@@ -304,12 +353,15 @@ func (decoder *JpegDecoderState) Destroy() error {
 
 // Destroy cleans up encoder resources
 func (encoder *JpegEncoderState) Destroy() error {
+	if encoder != nil && encoder.native {
+		return destroyNativeJpegEncoder(encoder)
+	}
 	if encoder.handle != nil {
-		encoder.handle.Free()
+		_ = encoder.handle.Free()
 		encoder.handle = nil
 	}
 	if encoder.stream != nil {
-		encoder.stream.Free()
+		_ = encoder.stream.Free()
 		encoder.stream = nil
 	}
 	return nil

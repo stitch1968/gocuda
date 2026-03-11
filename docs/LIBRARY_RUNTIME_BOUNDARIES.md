@@ -18,7 +18,7 @@ GoCUDA exposes a broad surface area across CUDA ecosystem packages, but not ever
 - `libraries/amgx.go`: sparse-system setup, solve, multi-RHS solve, and matrix-update behavior are implemented by deterministic CSR-based execution with explicit host/device transfers and are production-ready across simulation and CUDA runtime modes.
 - `libraries/cudnn.go`: convolution, pooling, activation, and batch normalization behavior is implemented by deterministic descriptor-driven execution with explicit host/device transfers and is production-ready across simulation and CUDA runtime modes.
 - `libraries/thrust.go`: Thrust-style algorithms are implemented by deterministic Go execution with explicit host/device transfers and are production-ready across simulation and CUDA runtime modes.
-- `libraries/nvjpeg.go`: JPEG encode/decode behavior is implemented by deterministic Go execution with explicit host/device transfers and is production-ready across simulation and CUDA runtime modes.
+- `libraries/nvjpeg.go`: JPEG encode/decode behavior is production-ready across simulation and CUDA runtime modes via deterministic Go execution, with native nvJPEG dispatch now wired for CUDA-tagged builds and deterministic fallback preserved elsewhere.
 - `libraries/nvjpeg2000.go`: JPEG 2000 encode/decode and metadata extraction are implemented by `ffmpeg`/`ffprobe`-backed execution with explicit host/device transfers and are production-ready when those tools are installed.
 - `libraries/cutensor.go`: tensor contraction and transformation behavior is implemented by deterministic descriptor-driven execution with explicit host/device transfers and is production-ready across simulation and CUDA runtime modes.
 - `libraries/cutlass.go`: GEMM, convolution, sparse-dense multiplication, and triangular-update behavior are implemented by deterministic host/device-safe execution and are production-ready across simulation and CUDA runtime modes.
@@ -26,9 +26,9 @@ GoCUDA exposes a broad surface area across CUDA ecosystem packages, but not ever
 
 ## Remaining Native Parity Gaps
 
-- `libraries/cudnn.go`: native CUDA-tagged cuDNN bindings are still a roadmap item.
+- `libraries/cudnn.go`: native CUDA-tagged cuDNN bindings now exist for CUDA-tagged builds; Windows requires generated `lib_mingw\libcudnn.a` and hardware validation before the native path can be considered validated.
 - `libraries/thrust.go`: native CUDA-tagged Thrust-backed execution is still a roadmap item.
-- `libraries/nvjpeg.go`: native CUDA-tagged nvJPEG bindings are still a roadmap item.
+- `libraries/nvjpeg.go`: native CUDA-tagged nvJPEG bindings now exist for CUDA-tagged builds; Windows requires generated `lib_mingw\libnvjpeg.a` and hardware validation before the native path can be considered validated.
 - `libraries/nvjpeg2000.go`: native CUDA-tagged nvJPEG2000 bindings are still a roadmap item; current production-ready execution uses `ffmpeg`/`ffprobe`.
 - `libraries/cutensor.go`: native CUDA-tagged cuTENSOR bindings are still a roadmap item.
 - `libraries/cutlass.go`: native CUDA kernel parity is still a roadmap item.

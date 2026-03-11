@@ -37,9 +37,9 @@ This file is the execution tracker for moving GoCUDA from a dual-mode developmen
 
 ## Native Parity Backlog
 
-- [ ] cuDNN: add native CUDA-tagged cuDNN bindings to complement the current deterministic production-ready implementation (in progress: native dispatch and non-Windows CUDA backend started)
+- [ ] cuDNN: add native CUDA-tagged cuDNN bindings to complement the current deterministic production-ready implementation (in progress: native dispatch, Windows+non-Windows build wiring, CUDA-tagged native tests, and import-lib setup path added; pending hardware validation)
 - [ ] Thrust: add native CUDA-tagged implementations to complement the current deterministic production-ready implementation
-- [ ] nvJPEG: add native CUDA-tagged nvJPEG bindings to complement the current deterministic production-ready implementation
+- [ ] nvJPEG: add native CUDA-tagged nvJPEG bindings to complement the current deterministic production-ready implementation (in progress: native dispatch, Windows+non-Windows build wiring, CUDA-tagged native tests, and import-lib setup path added; pending hardware validation)
 - [ ] nvJPEG2000: add native CUDA-tagged nvJPEG2000 bindings to complement the current `ffmpeg`/`ffprobe`-backed production-ready implementation
 - [ ] CUTLASS: add native CUDA kernels to complement the current deterministic production-ready implementation
 - [ ] cuDSS: add native CUDA-tagged bindings to complement the current deterministic production-ready implementation
