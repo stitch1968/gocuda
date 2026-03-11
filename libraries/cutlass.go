@@ -288,6 +288,15 @@ func CutlassRank2k(A, B, C *memory.Memory, N, K int, alpha, beta float32) error 
 	if N <= 0 || K <= 0 {
 		return fmt.Errorf("invalid matrix dimensions: N=%d, K=%d", N, K)
 	}
+	if cuda.ShouldUseCuda() && cutlassNativeAvailable() {
+		err := executeNativeCutlassRank2k(A, B, C, N, K, alpha, beta)
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, errCUTLASSUnsupported) {
+			return err
+		}
+	}
 
 	return executeCutlassRank2k(A, B, C, N, K, alpha, beta)
 }
@@ -310,6 +319,15 @@ func CutlassTrmm(A, B *memory.Memory, M, N int, side, uplo, trans, diag string, 
 
 	if !validSides[side] || !validUplo[uplo] || !validTrans[trans] || !validDiag[diag] {
 		return fmt.Errorf("invalid TRMM parameters")
+	}
+	if cuda.ShouldUseCuda() && cutlassNativeAvailable() {
+		err := executeNativeCutlassTrmm(A, B, M, N, side, uplo, trans, diag, alpha)
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, errCUTLASSUnsupported) {
+			return err
+		}
 	}
 
 	return executeCutlassTrmm(A, B, M, N, side, uplo, trans, diag, alpha)

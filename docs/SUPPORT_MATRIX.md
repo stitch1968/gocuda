@@ -41,7 +41,7 @@ This document defines the currently supported environments and the parts of the 
 | nvJPEG | Production-ready in simulation and CUDA modes | Deterministic JPEG encode/decode with explicit device-transfer support. Native nvJPEG bindings are wired for CUDA-tagged builds; Windows requires generated `lib_mingw\libnvjpeg.a` and hardware validation. |
 | nvJPEG2000 | Production-ready in simulation and CUDA modes | Real JPEG 2000 encode/decode and metadata extraction backed by `ffmpeg`/`ffprobe`. Native nvJPEG2000 bindings are wired for CUDA-tagged builds for a bounded 8-bit interleaved slice; Windows requires generated `lib_mingw\libnvjpeg2k.a` and hardware validation. |
 | cuTENSOR | Production-ready in simulation and CUDA modes | Validated descriptor-driven tensor execution with explicit device-transfer support. Native cuTENSOR bindings are wired for CUDA-tagged builds; Windows requires generated `lib_mingw\libcutensor.a` and hardware validation. |
-| CUTLASS | Production-ready in simulation and CUDA modes | Validated host/device-safe linear algebra execution. Native cuBLAS-backed CUTLASS GEMM is wired for CUDA-tagged builds for a bounded float32/float64 row-major slice; Windows requires generated `lib_mingw\libcublas.a` and hardware validation. |
+| CUTLASS | Production-ready in simulation and CUDA modes | Validated host/device-safe linear algebra execution. Native cuBLAS-backed CUTLASS dispatch is wired for CUDA-tagged builds for a bounded float32/float64 row-major GEMM slice plus float32 `Rank2k` with `beta=0` and float32 `Trmm`; Windows requires generated `lib_mingw\libcublas.a` and hardware validation. |
 | cuDSS | Production-ready in simulation and CUDA modes | Validated host/device-safe sparse direct solving. |
 
 ## Remaining Native Gaps

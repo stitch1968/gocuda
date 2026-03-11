@@ -21,7 +21,7 @@ GoCUDA exposes a broad surface area across CUDA ecosystem packages, but not ever
 - `libraries/nvjpeg.go`: JPEG encode/decode behavior is production-ready across simulation and CUDA runtime modes via deterministic Go execution, with native nvJPEG dispatch now wired for CUDA-tagged builds and deterministic fallback preserved elsewhere.
 - `libraries/nvjpeg2000.go`: JPEG 2000 encode/decode and metadata extraction are implemented by `ffmpeg`/`ffprobe`-backed execution with explicit host/device transfers and are production-ready when those tools are installed. Native nvJPEG2000 dispatch is now wired for CUDA-tagged builds for a bounded 8-bit interleaved encode/decode/probe slice, with deterministic fallback preserved elsewhere.
 - `libraries/cutensor.go`: tensor contraction and transformation behavior is implemented by deterministic descriptor-driven execution with explicit host/device transfers and is production-ready across simulation and CUDA runtime modes.
-- `libraries/cutlass.go`: GEMM, convolution, sparse-dense multiplication, and triangular-update behavior are implemented by deterministic host/device-safe execution and are production-ready across simulation and CUDA runtime modes. Native cuBLAS-backed CUTLASS GEMM dispatch is now wired for CUDA-tagged builds for bounded float32/float64 row-major linear-combination GEMM, with deterministic fallback preserved elsewhere.
+- `libraries/cutlass.go`: GEMM, convolution, sparse-dense multiplication, and triangular-update behavior are implemented by deterministic host/device-safe execution and are production-ready across simulation and CUDA runtime modes. Native cuBLAS-backed CUTLASS dispatch is now wired for CUDA-tagged builds for bounded float32/float64 row-major linear-combination GEMM, float32 `Rank2k` with `beta=0`, and float32 `Trmm`, with deterministic fallback preserved elsewhere.
 - `libraries/cudss.go`: sparse direct-solver analysis, factorization, and solve behavior are implemented by deterministic host/device-safe execution and are production-ready across simulation and CUDA runtime modes.
 
 ## Remaining Native Parity Gaps
@@ -33,7 +33,7 @@ GoCUDA exposes a broad surface area across CUDA ecosystem packages, but not ever
 - `libraries/cudss.go`: native CUDA-tagged cuDSS bindings now exist for CUDA-tagged builds; Windows requires generated `lib_mingw\libcudss.a` and hardware validation before the native path can be considered validated.
 - `libraries/amgx.go`: native CUDA-tagged AmgX bindings now exist for CUDA-tagged builds; Windows requires generated `lib_mingw\libamgxsh.a` and hardware validation before the native path can be considered validated.
 - `libraries/cutensor.go`: native CUDA-tagged cuTENSOR bindings now exist for CUDA-tagged builds; Windows requires generated `lib_mingw\libcutensor.a` and hardware validation before the native path can be considered validated.
-- `libraries/cutlass.go`: native CUDA-tagged CUTLASS parity now exists for a bounded cuBLAS-backed GEMM slice; Windows requires generated `lib_mingw\libcublas.a` and hardware validation before the native path can be considered validated.
+- `libraries/cutlass.go`: native CUDA-tagged CUTLASS parity now exists for a bounded cuBLAS-backed GEMM/`Rank2k`/`Trmm` slice; Windows requires generated `lib_mingw\libcublas.a` and hardware validation before the native path can be considered validated.
 
 ## Practical Guidance
 
