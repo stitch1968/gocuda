@@ -3,10 +3,12 @@
 package libraries
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"slices"
 
+	cuda "github.com/stitch1968/gocuda"
 	"github.com/stitch1968/gocuda/memory"
 )
 
@@ -93,6 +95,8 @@ type CuTensorDescriptor struct {
 	alignReq   int
 }
 
+var errCuTensorUnsupported = errors.New("cutensor native path unsupported for requested parameters")
+
 // ContractionDescriptor contraction descriptor
 type ContractionDescriptor struct {
 	TensorA   *CuTensorDescriptor
@@ -123,11 +127,13 @@ const (
 type CuTensorHandle struct {
 	handle       *memory.Memory
 	workspace    *memory.Memory
-	planCache    map[string]*memory.Memory
+	planCache    map[string]*TensorPlan
 	descriptors  []*CuTensorDescriptor
 	computeType  TensorDataType
 	mathMode     TensorMathMode
 	streamHandle *memory.Memory
+	nativeHandle uintptr
+	native       bool
 }
 
 // TensorMathMode math modes
@@ -142,18 +148,25 @@ const (
 
 // TensorPlan for optimized execution
 type TensorPlan struct {
-	handle        *memory.Memory
-	operation     TensorOperation
-	algorithm     ContractionAlgorithm
-	workspaceSize int64
-	executionTime float64
-	memoryReq     int64
-	descA         *CuTensorDescriptor
-	descB         *CuTensorDescriptor
-	descC         *CuTensorDescriptor
-	modesA        []int
-	modesB        []int
-	modesC        []int
+	handle         *memory.Memory
+	operation      TensorOperation
+	algorithm      ContractionAlgorithm
+	workspaceSize  int64
+	executionTime  float64
+	memoryReq      int64
+	descA          *CuTensorDescriptor
+	descB          *CuTensorDescriptor
+	descC          *CuTensorDescriptor
+	modesA         []int
+	modesB         []int
+	modesC         []int
+	nativeHandle   uintptr
+	nativeOpDesc   uintptr
+	nativePlanPref uintptr
+	nativeDescA    uintptr
+	nativeDescB    uintptr
+	nativeDescC    uintptr
+	native         bool
 }
 
 // CreateCuTensorHandle creates a new cuTENSOR handle
@@ -161,9 +174,21 @@ func CreateCuTensorHandle() (*CuTensorHandle, error) {
 	if err := ensureCudaReady(); err != nil {
 		return nil, err
 	}
+	if cuda.ShouldUseCuda() && cutensorNativeAvailable() {
+		handle, err := createNativeCuTensorHandle()
+		if err == nil {
+			return handle, nil
+		}
+		if !errors.Is(err, errCuTensorUnsupported) {
+			return nil, err
+		}
+	}
+	return createDeterministicCuTensorHandle()
+}
 
+func createDeterministicCuTensorHandle() (*CuTensorHandle, error) {
 	handle := &CuTensorHandle{
-		planCache:   make(map[string]*memory.Memory),
+		planCache:   make(map[string]*TensorPlan),
 		descriptors: make([]*CuTensorDescriptor, 0),
 		computeType: TensorFloat32,
 		mathMode:    TensorMathDefault,
@@ -283,6 +308,15 @@ func (handle *CuTensorHandle) TensorContraction(
 		Algorithm: algorithm,
 		Workspace: handle.workspace,
 	}
+	if handle.native {
+		err := executeNativeTensorContraction(handle, contractionDesc, tensorA, tensorB, tensorC)
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, errCuTensorUnsupported) {
+			return err
+		}
+	}
 
 	return executeTensorContraction(contractionDesc, tensorA, tensorB, tensorC)
 }
@@ -331,6 +365,15 @@ func (handle *CuTensorHandle) TensorElementwiseAdd(
 	if !validateTensorCompatibility(descA, descB, descC) {
 		return fmt.Errorf("tensor dimensions are not compatible for element-wise operations")
 	}
+	if handle.native {
+		err := executeNativeTensorElementwise(handle, descA, tensorA, descB, tensorB, descC, tensorC, alpha, beta, gamma, false)
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, errCuTensorUnsupported) {
+			return err
+		}
+	}
 
 	return executeTensorElementwise(descA, tensorA, descB, tensorB, descC, tensorC, alpha, beta, gamma, false)
 }
@@ -343,6 +386,15 @@ func (handle *CuTensorHandle) TensorElementwiseMul(
 
 	if !validateTensorCompatibility(descA, descB, descC) {
 		return fmt.Errorf("tensor dimensions are not compatible for element-wise operations")
+	}
+	if handle.native {
+		err := executeNativeTensorElementwise(handle, descA, tensorA, descB, tensorB, descC, tensorC, alpha, beta, gamma, true)
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, errCuTensorUnsupported) {
+			return err
+		}
 	}
 
 	return executeTensorElementwise(descA, tensorA, descB, tensorB, descC, tensorC, alpha, beta, gamma, true)
@@ -370,6 +422,15 @@ func (handle *CuTensorHandle) TensorReduce(
 			return fmt.Errorf("invalid reduction mode: %d", mode)
 		}
 	}
+	if handle.native {
+		err := executeNativeTensorReduce(handle, descA, tensorA, descC, tensorC, reduceModes, reductionOp, alpha, beta)
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, errCuTensorUnsupported) {
+			return err
+		}
+	}
 
 	return executeTensorReduce(descA, tensorA, descC, tensorC, reduceModes, reductionOp, alpha, beta)
 }
@@ -393,6 +454,15 @@ func (handle *CuTensorHandle) TensorPermute(
 			return fmt.Errorf("invalid permutation array")
 		}
 		used[p] = true
+	}
+	if handle.native {
+		err := executeNativeTensorPermute(handle, descA, tensorA, descC, tensorC, perm, alpha)
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, errCuTensorUnsupported) {
+			return err
+		}
 	}
 
 	return executeTensorPermute(descA, tensorA, descC, tensorC, perm, alpha)
@@ -424,9 +494,29 @@ func (handle *CuTensorHandle) CreateContractionPlan(
 
 	// Check if plan exists in cache
 	if cachedPlan, exists := handle.planCache[planKey]; exists {
-		return &TensorPlan{handle: cachedPlan}, nil
+		return cachedPlan, nil
 	}
+	if handle.native {
+		plan, err := createNativeContractionPlan(handle, descA, modesA, descB, modesB, descC, modesC, algorithm)
+		if err == nil {
+			handle.planCache[planKey] = plan
+			return plan, nil
+		}
+		if !errors.Is(err, errCuTensorUnsupported) {
+			return nil, err
+		}
+	}
+	return createDeterministicContractionPlan(handle, planKey, descA, modesA, descB, modesB, descC, modesC, algorithm)
+}
 
+func createDeterministicContractionPlan(
+	handle *CuTensorHandle,
+	planKey string,
+	descA *CuTensorDescriptor, modesA []int,
+	descB *CuTensorDescriptor, modesB []int,
+	descC *CuTensorDescriptor, modesC []int,
+	algorithm ContractionAlgorithm,
+) (*TensorPlan, error) {
 	// Create new plan
 	planHandle, err := memory.Alloc(2048)
 	if err != nil {
@@ -453,7 +543,7 @@ func (handle *CuTensorHandle) CreateContractionPlan(
 	plan.memoryReq = calculateMemoryRequirement(descA, descB, descC)
 
 	// Cache the plan
-	handle.planCache[planKey] = planHandle
+	handle.planCache[planKey] = plan
 
 	return plan, nil
 }
@@ -466,8 +556,16 @@ func (handle *CuTensorHandle) ExecuteContractionPlan(
 	beta float64,
 	tensorC *memory.Memory) error {
 
-	if plan == nil || plan.handle == nil {
+	if plan == nil {
 		return fmt.Errorf("invalid or destroyed plan")
+	}
+	if plan.handle == nil {
+		if !plan.native || plan.nativeHandle == 0 {
+			return fmt.Errorf("invalid or destroyed plan")
+		}
+	}
+	if handle.native && plan.native {
+		return executeNativeContractionPlan(handle, plan, alpha, tensorA, tensorB, beta, tensorC)
 	}
 
 	// Ensure workspace is large enough
@@ -665,10 +763,18 @@ func (handle *CuTensorHandle) Destroy() error {
 	// Free plan cache
 	for _, plan := range handle.planCache {
 		if plan != nil {
-			plan.Free()
+			if err := plan.Destroy(); err != nil {
+				return err
+			}
 		}
 	}
-	handle.planCache = make(map[string]*memory.Memory)
+	handle.planCache = make(map[string]*TensorPlan)
+
+	if handle.nativeHandle != 0 {
+		if err := destroyNativeCuTensorHandle(handle); err != nil {
+			return err
+		}
+	}
 
 	// Free workspace
 	if handle.workspace != nil {
@@ -1117,6 +1223,11 @@ func (plan *TensorPlan) Destroy() error {
 	if plan.handle != nil {
 		plan.handle.Free()
 		plan.handle = nil
+	}
+	if plan.nativeHandle != 0 || plan.nativeOpDesc != 0 || plan.nativePlanPref != 0 || plan.nativeDescA != 0 || plan.nativeDescB != 0 || plan.nativeDescC != 0 {
+		if err := destroyNativeTensorPlan(plan); err != nil {
+			return err
+		}
 	}
 	return nil
 }

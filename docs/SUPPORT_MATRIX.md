@@ -40,7 +40,7 @@ This document defines the currently supported environments and the parts of the 
 | Thrust | Production-ready in simulation and CUDA modes | Validated Go algorithm execution with explicit device-transfer support. |
 | nvJPEG | Production-ready in simulation and CUDA modes | Deterministic JPEG encode/decode with explicit device-transfer support. Native nvJPEG bindings are wired for CUDA-tagged builds; Windows requires generated `lib_mingw\libnvjpeg.a` and hardware validation. |
 | nvJPEG2000 | Production-ready in simulation and CUDA modes | Real JPEG 2000 encode/decode and metadata extraction backed by `ffmpeg`/`ffprobe`. |
-| cuTENSOR | Production-ready in simulation and CUDA modes | Validated descriptor-driven tensor execution with explicit device-transfer support. |
+| cuTENSOR | Production-ready in simulation and CUDA modes | Validated descriptor-driven tensor execution with explicit device-transfer support. Native cuTENSOR bindings are wired for CUDA-tagged builds; Windows requires generated `lib_mingw\libcutensor.a` and hardware validation. |
 | CUTLASS | Production-ready in simulation and CUDA modes | Validated host/device-safe linear algebra execution. |
 | cuDSS | Production-ready in simulation and CUDA modes | Validated host/device-safe sparse direct solving. |
 
@@ -48,11 +48,11 @@ This document defines the currently supported environments and the parts of the 
 
 The production verification command now passes, but some wrappers still rely on validated Go or external-tool execution rather than native CUDA vendor bindings:
 
-- `cuTENSOR` native CUDA bindings
 - `CUTLASS` native CUDA kernels
 - `cuDNN` hardware validation on a Windows CUDA runner after import-library generation
-- `cuDSS` native CUDA bindings
-- `AmgX` native CUDA bindings
+- `cuDSS` hardware validation on a Windows CUDA runner after import-library generation
+- `AmgX` hardware validation on a Windows CUDA runner after import-library generation
+- `cuTENSOR` hardware validation on a Windows CUDA runner after import-library generation
 - `nvJPEG` hardware validation on a Windows CUDA runner after import-library generation
 - `nvJPEG2000` native CUDA bindings (current implementation uses `ffmpeg`/`ffprobe`)
 

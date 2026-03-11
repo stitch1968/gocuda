@@ -71,6 +71,11 @@ if exist "setup_windows_cuda_import_libs.bat" (
     ) else (
         echo ⚠️ lib_mingw\libamgxsh.a: NOT FOUND ^(run setup_windows_cuda_import_libs.bat with your amgxsh.dll path to generate it^)
     )
+    if exist "lib_mingw\libcutensor.a" (
+        echo ✅ lib_mingw\libcutensor.a: EXISTS
+    ) else (
+        echo ⚠️ lib_mingw\libcutensor.a: NOT FOUND ^(run setup_windows_cuda_import_libs.bat with your cutensor DLL path to generate it^)
+    )
 ) else (
     echo ❌ setup_windows_cuda_import_libs.bat: NOT FOUND
 )

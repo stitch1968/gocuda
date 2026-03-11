@@ -48,6 +48,10 @@ if "%MODE%"=="cuda" (
         echo WARNING: lib_mingw\libamgxsh.a not found
         echo Run setup_windows_cuda_import_libs.bat with your local amgxsh.dll path before expecting Windows AmgX native builds to link.
     )
+    if not exist "lib_mingw\libcutensor.a" (
+        echo WARNING: lib_mingw\libcutensor.a not found
+        echo Run setup_windows_cuda_import_libs.bat with your local cutensor DLL path before expecting Windows cuTENSOR native builds to link.
+    )
     go build -tags cuda -v ./...
     if errorlevel 1 (
         echo Build failed!

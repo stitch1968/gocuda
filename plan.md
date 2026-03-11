@@ -44,7 +44,7 @@ This file is the execution tracker for moving GoCUDA from a dual-mode developmen
 - [ ] CUTLASS: add native CUDA kernels to complement the current deterministic production-ready implementation
 - [ ] cuDSS: add native CUDA-tagged bindings to complement the current deterministic production-ready implementation (in progress: native dispatch, CUDA-tagged solve backend, and CUDA-tagged native tests added)
 - [ ] AmgX: add native CUDA-tagged bindings to complement the current deterministic production-ready implementation (in progress: native dispatch, CUDA-tagged setup/solve backend, CUDA-tagged native tests, and Windows import-lib setup path added)
-- [ ] cuTENSOR: add native CUDA-tagged bindings to complement the current deterministic production-ready implementation
+- [ ] cuTENSOR: add native CUDA-tagged bindings to complement the current deterministic production-ready implementation (in progress: native handle creation, native contraction/elementwise/reduction/permutation dispatch, cached native contraction plans, CUDA-tagged native tests, and Windows import-lib setup path added; pending hardware validation)
 
 ## Operational Hardening
 

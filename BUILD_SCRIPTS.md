@@ -123,7 +123,7 @@ go run demos/missing_features/main.go
 - **Requires NVIDIA GPU** with CUDA drivers installed
 - **Windows also requires** Visual Studio Build Tools or Visual Studio with the C++ workload
 - **Windows cgo linking uses** the repository's `lib_mingw` import libraries
-- **Windows import-lib generation helper:** `setup_windows_cuda_import_libs.bat <cudart_dll> <cudnn_dll> [nvjpeg_dll] [cudss_dll] [amgx_dll] [cuda_driver_dll]`
+- **Windows import-lib generation helper:** `setup_windows_cuda_import_libs.bat <cudart_dll> <cudnn_dll> [nvjpeg_dll] [cudss_dll] [amgx_dll] [cutensor_dll] [cuda_driver_dll]`
 - **Real GPU acceleration** - Direct hardware execution
 - **Managed memory is used for high-level allocations** so CPU-backed helper paths can safely inspect buffers in CUDA builds
 - **Some `libraries/` wrappers remain compatibility layers** backed by CPU-side helper logic on managed buffers rather than direct vendor library calls
@@ -134,10 +134,10 @@ go run demos/missing_features/main.go
 GoCUDA includes `generate_mingw_import_lib.py` to build MinGW import libraries from installed CUDA DLLs. The convenience wrapper below generates the current Windows link inputs used by the repository:
 
 ```cmd
-setup_windows_cuda_import_libs.bat "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\cudart64_13.dll" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\cudnn64_9.dll" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\nvjpeg64_13.dll" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\cudss64_0.dll" "C:\amgx\bin\amgxsh.dll" "C:\Windows\System32\nvcuda.dll"
+setup_windows_cuda_import_libs.bat "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\cudart64_13.dll" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\cudnn64_9.dll" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\nvjpeg64_13.dll" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\cudss64_0.dll" "C:\amgx\bin\amgxsh.dll" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\cutensor64_2.dll" "C:\Windows\System32\nvcuda.dll"
 ```
 
-This prepares the Windows-side `lib_mingw` inputs for CUDA runtime, cuDNN, nvJPEG, cuDSS, and AmgX work. After `lib_mingw\libcudnn.a`, `lib_mingw\libnvjpeg.a`, `lib_mingw\libcudss.a`, and `lib_mingw\libamgxsh.a` are generated, CUDA-tagged Windows builds can link those native backends.
+This prepares the Windows-side `lib_mingw` inputs for CUDA runtime, cuDNN, nvJPEG, cuDSS, AmgX, and cuTENSOR work. After `lib_mingw\libcudnn.a`, `lib_mingw\libnvjpeg.a`, `lib_mingw\libcudss.a`, `lib_mingw\libamgxsh.a`, and `lib_mingw\libcutensor.a` are generated, CUDA-tagged Windows builds can link those native backends.
 
 ## Troubleshooting
 
