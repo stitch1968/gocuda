@@ -193,6 +193,17 @@ func NewContext(deviceID int) (*Context, error) {
 	return ctx, nil
 }
 
+// Run executes fn while binding the calling OS thread to this context's device.
+func (c *Context) Run(fn func() error) error {
+	if c == nil {
+		return fmt.Errorf("nil CUDA context")
+	}
+	if fn == nil {
+		return fmt.Errorf("nil context callback")
+	}
+	return internal.RunOnDevice(c.device.ID, fn)
+}
+
 // NewStream creates a new CUDA stream in this context - delegates to streams package
 func (c *Context) NewStream() (*Stream, error) {
 	// Delegate to the streams package

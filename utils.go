@@ -211,7 +211,9 @@ func WithContext(deviceID int, fn func(*Context) error) error {
 	}
 	// Note: Context cleanup is handled by the context itself
 
-	return fn(ctx)
+	return ctx.Run(func() error {
+		return fn(ctx)
+	})
 }
 
 // WithStream executes a function with a CUDA stream

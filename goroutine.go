@@ -68,6 +68,17 @@ func Go(fn GoFunc, args ...interface{}) error {
 
 // GoWithStream executes a function on the GPU with a specific stream
 func GoWithStream(stream *Stream, fn GoFunc, args ...interface{}) error {
+	ctx, err := DefaultContext()
+	if err != nil {
+		return err
+	}
+	if stream == nil {
+		stream, err = DefaultStream()
+		if err != nil {
+			return err
+		}
+	}
+
 	kernel := &SimpleKernel{
 		Name: "UserDefinedKernel",
 		Func: func(kernelArgs ...interface{}) error {
@@ -78,8 +89,9 @@ func GoWithStream(stream *Stream, fn GoFunc, args ...interface{}) error {
 
 	// Execute kernel on stream using the proper stream interface
 	stream.Execute(func() {
-		// Simulate kernel execution
-		kernel.Func(args...)
+		_ = ctx.Run(func() error {
+			return kernel.Func(args...)
+		})
 	})
 
 	return nil
@@ -92,6 +104,17 @@ func GoWithDimensions(gridDim, blockDim kernels.Dim3, fn GoFunc, args ...interfa
 
 // GoWithDimensionsAndStream executes a function on the GPU with custom dimensions and stream
 func GoWithDimensionsAndStream(stream *Stream, gridDim, blockDim kernels.Dim3, fn GoFunc, args ...interface{}) error {
+	ctx, err := DefaultContext()
+	if err != nil {
+		return err
+	}
+	if stream == nil {
+		stream, err = DefaultStream()
+		if err != nil {
+			return err
+		}
+	}
+
 	kernel := &SimpleKernel{
 		Name: "UserDefinedKernel",
 		Func: func(kernelArgs ...interface{}) error {
@@ -102,9 +125,10 @@ func GoWithDimensionsAndStream(stream *Stream, gridDim, blockDim kernels.Dim3, f
 
 	// Execute kernel on stream with dimensions
 	stream.Execute(func() {
-		// Simulate kernel execution with dimensions
-		fmt.Printf("Executing kernel with grid %+v, block %+v\n", gridDim, blockDim)
-		kernel.Func(args...)
+		_ = ctx.Run(func() error {
+			fmt.Printf("Executing kernel with grid %+v, block %+v\n", gridDim, blockDim)
+			return kernel.Func(args...)
+		})
 	})
 
 	return nil

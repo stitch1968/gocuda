@@ -58,6 +58,25 @@ func TestNewContext(t *testing.T) {
 	// Note: Context cleanup is handled automatically
 }
 
+func TestContextRun(t *testing.T) {
+	ctx, err := cuda.NewContext(0)
+	if err != nil {
+		t.Fatalf("Failed to create context: %v", err)
+	}
+
+	executed := false
+	if err := ctx.Run(func() error {
+		executed = true
+		return nil
+	}); err != nil {
+		t.Fatalf("Context-bound execution failed: %v", err)
+	}
+
+	if !executed {
+		t.Fatal("expected context-bound callback to run")
+	}
+}
+
 func TestNewStream(t *testing.T) {
 	ctx, err := cuda.NewContext(0)
 	if err != nil {

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"unsafe"
 
 	"github.com/stitch1968/gocuda/internal"
@@ -46,6 +47,7 @@ type Memory struct {
 	pitch      int64 // For 2D/3D memory allocations
 	alignment  int   // Memory alignment (typically 256 bytes for CUDA)
 	deviceID   int   // Device where memory is allocated
+	freed      atomic.Bool
 }
 
 // Manager handles GPU memory allocation and deallocation
@@ -74,6 +76,9 @@ func AllocWithTypeAndStream(stream *internal.Stream, size int64, memType Type) (
 	if size <= 0 {
 		return nil, fmt.Errorf("invalid size: %d", size)
 	}
+	if stream == nil {
+		stream = internal.GetDefaultStream()
+	}
 
 	var ptr unsafe.Pointer
 	var data []byte
@@ -82,7 +87,8 @@ func AllocWithTypeAndStream(stream *internal.Stream, size int64, memType Type) (
 	// Check if we should use real CUDA or simulation
 	if internal.ShouldUseCuda() && memType == TypeDevice {
 		// Use real CUDA memory allocation
-		ptr, err = internal.CudaMalloc(size)
+		deviceID := internal.GetDevice()
+		ptr, err = internal.CudaMallocOnDevice(size, deviceID)
 		if err != nil {
 			return nil, fmt.Errorf("CUDA malloc failed: %v", err)
 		}
@@ -108,10 +114,13 @@ func AllocWithTypeAndStream(stream *internal.Stream, size int64, memType Type) (
 		cudaBacked: internal.ShouldUseCuda() && memType == TypeDevice,
 		memType:    memType,
 		alignment:  256,
-		deviceID:   0, // Default device
+		deviceID:   0,
 		attributes: Attribute{
 			IsAligned: true,
 		},
+	}
+	if mem.cudaBacked {
+		mem.deviceID = internal.GetDevice()
 	}
 
 	// Register the allocation
@@ -128,20 +137,28 @@ func AllocWithTypeAndStream(stream *internal.Stream, size int64, memType Type) (
 
 // Free releases the memory
 func (m *Memory) Free() error {
-	if m.ptr == nil {
+	if m == nil {
+		return nil
+	}
+	if !m.freed.CompareAndSwap(false, true) {
 		return nil // Already freed
 	}
+	if m.ptr == nil {
+		return nil
+	}
+
+	ptr := m.ptr
 
 	// Unregister the allocation
 	globalManager.mu.Lock()
-	delete(globalManager.allocations, uintptr(m.ptr))
+	delete(globalManager.allocations, uintptr(ptr))
 	globalManager.totalBytes -= m.size
 	globalManager.mu.Unlock()
 
 	var err error
 	if m.cudaBacked {
 		// Use real CUDA memory deallocation
-		err = internal.CudaFree(m.ptr)
+		err = internal.CudaFreeOnDevice(ptr, m.deviceID)
 	}
 	// For simulation, Go's GC will handle the slice cleanup
 

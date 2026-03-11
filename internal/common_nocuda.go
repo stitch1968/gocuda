@@ -55,9 +55,19 @@ func CudaMalloc(size int64) (unsafe.Pointer, error) {
 	return nil, fmt.Errorf("CUDA not available - using simulation mode")
 }
 
+// CudaMallocOnDevice allocates CUDA memory on a specific device (simulation stub).
+func CudaMallocOnDevice(size int64, deviceID int) (unsafe.Pointer, error) {
+	return CudaMalloc(size)
+}
+
 // CudaFree frees CUDA memory (simulation stub)
 func CudaFree(ptr unsafe.Pointer) error {
 	return fmt.Errorf("CUDA not available - using simulation mode")
+}
+
+// CudaFreeOnDevice frees CUDA memory on a specific device (simulation stub).
+func CudaFreeOnDevice(ptr unsafe.Pointer, deviceID int) error {
+	return CudaFree(ptr)
 }
 
 // GetCudaMemoryInfo returns CUDA memory information (simulation stub)
@@ -69,6 +79,11 @@ func GetCudaMemoryInfo() (free, total int64) {
 // CudaMemcpy performs CUDA memory copy (simulation stub)
 func CudaMemcpy(dst, src unsafe.Pointer, count int64, kind int) error {
 	return fmt.Errorf("CUDA not available - using simulation mode")
+}
+
+// CudaMemcpyOnDevice performs CUDA memory copy on a specific device (simulation stub).
+func CudaMemcpyOnDevice(dst, src unsafe.Pointer, count int64, kind int, deviceID int) error {
+	return CudaMemcpy(dst, src, count, kind)
 }
 
 // Memory copy kind constants
@@ -86,6 +101,16 @@ func CudaDeviceSynchronize() error {
 	// In simulation mode, just add a small delay to simulate work
 	time.Sleep(1 * time.Millisecond)
 	return nil
+}
+
+// CudaDeviceSynchronizeOnDevice synchronizes a specific device (simulation).
+func CudaDeviceSynchronizeOnDevice(deviceID int) error {
+	return CudaDeviceSynchronize()
+}
+
+// RunOnDevice executes fn within the selected device context (simulation pass-through).
+func RunOnDevice(deviceID int, fn func() error) error {
+	return fn()
 }
 
 // Device management utilities

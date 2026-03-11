@@ -5,6 +5,7 @@ package internal
 
 import (
 	"fmt"
+	"runtime"
 	"sync"
 	"unsafe"
 )
@@ -100,35 +101,100 @@ func GetCudaDeviceCount() int {
 
 // CUDA memory functions
 
+func currentDeviceLocked() (int, error) {
+	var device C.int
+	err := C.cudaGetDevice_Internal(&device)
+	if err != 0 {
+		return 0, fmt.Errorf("cudaGetDevice failed with error code %d", err)
+	}
+	return int(device), nil
+}
+
+func setDeviceLocked(deviceID int) error {
+	err := C.cudaSetDevice_Internal(C.int(deviceID))
+	if err != 0 {
+		return fmt.Errorf("cudaSetDevice failed with error code %d", err)
+	}
+	return nil
+}
+
+func withLockedDevice(deviceID int, fn func() error) error {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	previousDevice, err := currentDeviceLocked()
+	if err != nil {
+		return err
+	}
+	if previousDevice != deviceID {
+		if err := setDeviceLocked(deviceID); err != nil {
+			return err
+		}
+		defer func() {
+			_ = setDeviceLocked(previousDevice)
+		}()
+	}
+
+	return fn()
+}
+
+func withLockedThread(fn func() error) error {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	return fn()
+}
+
+// RunOnDevice executes fn on a locked OS thread after selecting the target CUDA device.
+func RunOnDevice(deviceID int, fn func() error) error {
+	if !ShouldUseCuda() {
+		return fn()
+	}
+	return withLockedDevice(deviceID, fn)
+}
+
 // CudaMalloc allocates CUDA memory
 func CudaMalloc(size int64) (unsafe.Pointer, error) {
+	return CudaMallocOnDevice(size, 0)
+}
+
+// CudaMallocOnDevice allocates CUDA memory on a specific device.
+func CudaMallocOnDevice(size int64, deviceID int) (unsafe.Pointer, error) {
 	if !ShouldUseCuda() {
 		return nil, fmt.Errorf("CUDA not available")
 	}
 
 	var ptr unsafe.Pointer
-	// C.cudaMalloc expects a void** (pointer to pointer), so we cast &ptr
-	// In Go, unsafe.Pointer constitutes a *void in C context, so &ptr is void**
-	// However, cgo can be specific. Let's cast properly.
-	// Cast unsafe.Pointer(&ptr) to *unsafe.Pointer, then to **C.void
-	cPtr := unsafe.Pointer(&ptr)
-	err := C.cudaMalloc_Internal(cPtr, C.size_t(size))
-	if err != 0 {
-		return nil, fmt.Errorf("cudaMalloc failed with error code %d", err)
+	err := RunOnDevice(deviceID, func() error {
+		cPtr := unsafe.Pointer(&ptr)
+		status := C.cudaMalloc_Internal(cPtr, C.size_t(size))
+		if status != 0 {
+			return fmt.Errorf("cudaMalloc failed with error code %d", status)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return ptr, nil
 }
 
 // CudaFree frees CUDA memory
 func CudaFree(ptr unsafe.Pointer) error {
+	return CudaFreeOnDevice(ptr, 0)
+}
+
+// CudaFreeOnDevice frees CUDA memory on a specific device.
+func CudaFreeOnDevice(ptr unsafe.Pointer, deviceID int) error {
 	if !ShouldUseCuda() {
 		return fmt.Errorf("CUDA not available")
 	}
-	err := C.cudaFree_Internal(ptr)
-	if err != 0 {
-		return fmt.Errorf("cudaFree failed with error code %d", err)
-	}
-	return nil
+	return RunOnDevice(deviceID, func() error {
+		status := C.cudaFree_Internal(ptr)
+		if status != 0 {
+			return fmt.Errorf("cudaFree failed with error code %d", status)
+		}
+		return nil
+	})
 }
 
 // GetCudaMemoryInfo returns CUDA memory information
@@ -143,14 +209,21 @@ func GetCudaMemoryInfo() (free, total int64) {
 
 // CudaMemcpy performs CUDA memory copy
 func CudaMemcpy(dst, src unsafe.Pointer, count int64, kind int) error {
+	return CudaMemcpyOnDevice(dst, src, count, kind, 0)
+}
+
+// CudaMemcpyOnDevice performs CUDA memory copy after selecting a specific device.
+func CudaMemcpyOnDevice(dst, src unsafe.Pointer, count int64, kind int, deviceID int) error {
 	if !ShouldUseCuda() {
 		return fmt.Errorf("CUDA not available")
 	}
-	err := C.cudaMemcpy_Internal(dst, src, C.size_t(count), C.int(kind))
-	if err != 0 {
-		return fmt.Errorf("cudaMemcpy failed with error code %d", err)
-	}
-	return nil
+	return RunOnDevice(deviceID, func() error {
+		status := C.cudaMemcpy_Internal(dst, src, C.size_t(count), C.int(kind))
+		if status != 0 {
+			return fmt.Errorf("cudaMemcpy failed with error code %d", status)
+		}
+		return nil
+	})
 }
 
 // Memory copy kind constants
@@ -166,14 +239,21 @@ const (
 
 // CudaDeviceSynchronize synchronizes the device
 func CudaDeviceSynchronize() error {
+	return CudaDeviceSynchronizeOnDevice(0)
+}
+
+// CudaDeviceSynchronizeOnDevice synchronizes the specified device.
+func CudaDeviceSynchronizeOnDevice(deviceID int) error {
 	if !ShouldUseCuda() {
 		return nil
 	}
-	err := C.cudaDeviceSynchronize_Internal()
-	if err != 0 {
-		return fmt.Errorf("cudaDeviceSynchronize failed with error code %d", err)
-	}
-	return nil
+	return RunOnDevice(deviceID, func() error {
+		status := C.cudaDeviceSynchronize_Internal()
+		if status != 0 {
+			return fmt.Errorf("cudaDeviceSynchronize failed with error code %d", status)
+		}
+		return nil
+	})
 }
 
 // Device management utilities
@@ -208,11 +288,7 @@ func SetDevice(deviceID int) error {
 	if !ShouldUseCuda() {
 		return fmt.Errorf("CUDA not available")
 	}
-	err := C.cudaSetDevice_Internal(C.int(deviceID))
-	if err != 0 {
-		return fmt.Errorf("cudaSetDevice failed with error code %d", err)
-	}
-	return nil
+	return RunOnDevice(deviceID, func() error { return nil })
 }
 
 // GetDevice returns the current device ID
@@ -220,7 +296,14 @@ func GetDevice() int {
 	if !ShouldUseCuda() {
 		return 0
 	}
-	var device C.int
-	C.cudaGetDevice_Internal(&device)
-	return int(device)
+	var device int
+	_ = withLockedThread(func() error {
+		current, err := currentDeviceLocked()
+		if err != nil {
+			return err
+		}
+		device = current
+		return nil
+	})
+	return device
 }

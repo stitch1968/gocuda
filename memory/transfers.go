@@ -20,6 +20,12 @@ func CopyHostToDeviceWithStream(stream *internal.Stream, dst *Memory, src []byte
 	if dst == nil {
 		return fmt.Errorf("null destination pointer")
 	}
+	if stream == nil {
+		stream = internal.GetDefaultStream()
+	}
+	if len(src) == 0 || dst.size == 0 {
+		return nil
+	}
 
 	copySize := dst.size
 	if int64(len(src)) < copySize {
@@ -29,7 +35,7 @@ func CopyHostToDeviceWithStream(stream *internal.Stream, dst *Memory, src []byte
 	// Check if we should use real CUDA or simulation
 	if internal.ShouldUseCuda() && dst.memType == TypeDevice && dst.data == nil {
 		// Use real CUDA memcpy
-		return internal.CudaMemcpy(dst.ptr, unsafe.Pointer(&src[0]), copySize, internal.MemcpyKindHostToDevice)
+		return internal.CudaMemcpyOnDevice(dst.ptr, unsafe.Pointer(&src[0]), copySize, internal.MemcpyKindHostToDevice, dst.deviceID)
 	}
 
 	// Use simulation
@@ -50,6 +56,12 @@ func CopyDeviceToHostWithStream(stream *internal.Stream, dst []byte, src *Memory
 	if src == nil {
 		return fmt.Errorf("null source pointer")
 	}
+	if stream == nil {
+		stream = internal.GetDefaultStream()
+	}
+	if len(dst) == 0 || src.size == 0 {
+		return nil
+	}
 
 	copySize := src.size
 	if int64(len(dst)) < copySize {
@@ -59,7 +71,7 @@ func CopyDeviceToHostWithStream(stream *internal.Stream, dst []byte, src *Memory
 	// Check if we should use real CUDA or simulation
 	if internal.ShouldUseCuda() && src.memType == TypeDevice && src.data == nil {
 		// Use real CUDA memcpy
-		return internal.CudaMemcpy(unsafe.Pointer(&dst[0]), src.ptr, copySize, internal.MemcpyKindDeviceToHost)
+		return internal.CudaMemcpyOnDevice(unsafe.Pointer(&dst[0]), src.ptr, copySize, internal.MemcpyKindDeviceToHost, src.deviceID)
 	}
 
 	// Use simulation
@@ -80,6 +92,12 @@ func CopyDeviceToDeviceWithStream(stream *internal.Stream, dst, src *Memory) err
 	if dst == nil || src == nil {
 		return fmt.Errorf("null pointer")
 	}
+	if stream == nil {
+		stream = internal.GetDefaultStream()
+	}
+	if dst.size == 0 || src.size == 0 {
+		return nil
+	}
 
 	copySize := src.size
 	if dst.size < copySize {
@@ -88,8 +106,11 @@ func CopyDeviceToDeviceWithStream(stream *internal.Stream, dst, src *Memory) err
 
 	// Check if we should use real CUDA or simulation
 	if internal.ShouldUseCuda() && dst.memType == TypeDevice && src.memType == TypeDevice {
+		if dst.deviceID != src.deviceID {
+			return fmt.Errorf("cross-device memcpy requires explicit peer-copy support: src device %d dst device %d", src.deviceID, dst.deviceID)
+		}
 		// Use real CUDA memcpy
-		return internal.CudaMemcpy(dst.ptr, src.ptr, copySize, internal.MemcpyKindDeviceToDevice)
+		return internal.CudaMemcpyOnDevice(dst.ptr, src.ptr, copySize, internal.MemcpyKindDeviceToDevice, dst.deviceID)
 	}
 
 	// Use simulation

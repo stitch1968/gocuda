@@ -53,6 +53,17 @@ This file is the execution tracker for moving GoCUDA from a dual-mode developmen
 - [x] Add benchmark baselines for native-library paths to detect performance regressions
 - [x] Add production diagnostics for runtime mode, selected device, toolkit version, and linked-library availability
 - [x] Add smoke-test demos that validate the native path for each productionized library
+- [x] Ensure user-created stream destruction closes worker goroutines while preserving the default stream
+- [x] Expose explicit initialization-state APIs so callers can detect successful runtime setup without relying on panics or implicit side effects
+- [x] Make memory freeing idempotent and race-safe against finalizer-triggered cleanup paths
+- [x] Add device-aware internal CUDA wrapper execution and a context-bound execution helper for locked-thread device selection
+- [x] Guard zero-length transfer operations and reject implicit cross-device copies until explicit peer-copy support exists
+
+## Runtime Safety Backlog
+
+- [ ] Add explicit peer-copy support for cross-device transfers and multi-GPU memory ownership
+- [ ] Expand context-bound execution across more high-level APIs so native CUDA mode consistently inherits device/thread affinity
+- [ ] Add CUDA-tagged validation covering the locked-thread device wrapper paths under real hardware mode
 
 ## Exit Criteria
 

@@ -156,6 +156,49 @@ func TestMemoryManager(t *testing.T) {
 	t.Log("✅ Memory manager test passed")
 }
 
+func TestMemoryDoubleFreeIsSafe(t *testing.T) {
+	mem, err := memory.Alloc(64)
+	if err != nil {
+		t.Fatalf("Failed to allocate memory: %v", err)
+	}
+
+	if err := mem.Free(); err != nil {
+		t.Fatalf("First free failed: %v", err)
+	}
+	if err := mem.Free(); err != nil {
+		t.Fatalf("Second free should be a no-op, got error: %v", err)
+	}
+}
+
+func TestZeroLengthTransfersAreNoOps(t *testing.T) {
+	mem, err := memory.Alloc(16)
+	if err != nil {
+		t.Fatalf("Failed to allocate memory: %v", err)
+	}
+	defer mem.Free()
+
+	if err := memory.CopyHostToDevice(mem, nil); err != nil {
+		t.Fatalf("Expected zero-length host-to-device copy to succeed: %v", err)
+	}
+	if err := memory.CopyDeviceToHost(nil, mem); err != nil {
+		t.Fatalf("Expected zero-length device-to-host copy to succeed: %v", err)
+	}
+
+	empty, err := memory.Alloc(1)
+	if err != nil {
+		t.Fatalf("Failed to allocate second memory block: %v", err)
+	}
+	defer empty.Free()
+
+	if err := memory.CopyDeviceToDevice(empty, mem); err != nil {
+		// Non-zero device-to-device copies should still work with valid buffers.
+		t.Fatalf("Expected device-to-device copy to succeed: %v", err)
+	}
+	if err := memory.CopyDeviceToDeviceWithStream(internal.GetDefaultStream(), empty, nil); err == nil {
+		t.Fatal("Expected null-pointer device-to-device copy to fail")
+	}
+}
+
 // TestMemoryInfo tests global memory info
 func TestMemoryInfo(t *testing.T) {
 	t.Log("Testing memory info...")
