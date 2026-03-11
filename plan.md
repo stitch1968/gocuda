@@ -42,7 +42,7 @@ This file is the execution tracker for moving GoCUDA from a dual-mode developmen
 - [ ] nvJPEG: add native CUDA-tagged nvJPEG bindings to complement the current deterministic production-ready implementation (in progress: native dispatch, Windows+non-Windows build wiring, CUDA-tagged native tests, and import-lib setup path added; pending hardware validation)
 - [ ] nvJPEG2000: add native CUDA-tagged nvJPEG2000 bindings to complement the current `ffmpeg`/`ffprobe`-backed production-ready implementation
 - [ ] CUTLASS: add native CUDA kernels to complement the current deterministic production-ready implementation
-- [ ] cuDSS: add native CUDA-tagged bindings to complement the current deterministic production-ready implementation
+- [ ] cuDSS: add native CUDA-tagged bindings to complement the current deterministic production-ready implementation (in progress: native dispatch, CUDA-tagged solve backend, and CUDA-tagged native tests added)
 - [ ] AmgX: add native CUDA-tagged bindings to complement the current deterministic production-ready implementation
 - [ ] cuTENSOR: add native CUDA-tagged bindings to complement the current deterministic production-ready implementation
 

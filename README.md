@@ -107,8 +107,8 @@ go build ./...
 - NVIDIA CUDA Toolkit installed
 - Visual Studio Build Tools or Visual Studio with the C++ workload installed
 - The repository's `lib_mingw` import libraries available for cgo linking on Windows
-- Run `setup_windows_cuda_import_libs.bat` with your local `cudart64_*.dll`, `cudnn64_*.dll`, optional `nvjpeg64_*.dll`, and optional `nvcuda.dll` paths to generate/update the required MinGW import libraries
-- Native cuDNN and nvJPEG execution are wired for CUDA-tagged builds; Windows requires generated `lib_mingw\libcudnn.a` and `lib_mingw\libnvjpeg.a` before those native paths can link
+- Run `setup_windows_cuda_import_libs.bat` with your local `cudart64_*.dll`, `cudnn64_*.dll`, optional `nvjpeg64_*.dll`, optional `cudss64_*.dll`, and optional `nvcuda.dll` paths to generate/update the required MinGW import libraries
+- Native cuDNN, nvJPEG, and cuDSS execution are wired for CUDA-tagged builds; Windows requires generated `lib_mingw\libcudnn.a`, `lib_mingw\libnvjpeg.a`, and `lib_mingw\libcudss.a` before those native paths can link
 
 ### Quick Verification
 Test that everything works correctly:

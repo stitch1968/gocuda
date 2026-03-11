@@ -30,6 +30,7 @@ GoCUDA exposes a broad surface area across CUDA ecosystem packages, but not ever
 - `libraries/thrust.go`: native CUDA-tagged Thrust-backed execution is still a roadmap item.
 - `libraries/nvjpeg.go`: native CUDA-tagged nvJPEG bindings now exist for CUDA-tagged builds; Windows requires generated `lib_mingw\libnvjpeg.a` and hardware validation before the native path can be considered validated.
 - `libraries/nvjpeg2000.go`: native CUDA-tagged nvJPEG2000 bindings are still a roadmap item; current production-ready execution uses `ffmpeg`/`ffprobe`.
+- `libraries/cudss.go`: native CUDA-tagged cuDSS bindings now exist for CUDA-tagged builds; Windows requires generated `lib_mingw\libcudss.a` and hardware validation before the native path can be considered validated.
 - `libraries/cutensor.go`: native CUDA-tagged cuTENSOR bindings are still a roadmap item.
 - `libraries/cutlass.go`: native CUDA kernel parity is still a roadmap item.
 - `libraries/cudss.go`: native CUDA-tagged cuDSS bindings are still a roadmap item.

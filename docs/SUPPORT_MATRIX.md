@@ -13,7 +13,7 @@ This document defines the currently supported environments and the parts of the 
 
 | Platform | Simulation Mode | CUDA Hardware Mode | Notes |
 | --- | --- | --- | --- |
-| Windows x64 | Supported | Supported with documented native-library caveats | Requires CUDA Toolkit, MSVC-compatible build environment, and repo import libs for `cuda`/`cudart`. Native cuDNN wiring is present, but successful Windows CUDA builds depend on generating `lib_mingw\libcudnn.a` from the installed cuDNN DLL and validating on hardware. |
+| Windows x64 | Supported | Supported with documented native-library caveats | Requires CUDA Toolkit, MSVC-compatible build environment, and repo import libs for `cuda`/`cudart`. Native cuDNN, nvJPEG, and cuDSS wiring are present, but successful Windows CUDA builds depend on generating `lib_mingw\libcudnn.a`, `lib_mingw\libnvjpeg.a`, and `lib_mingw\libcudss.a` from installed vendor DLLs and validating on hardware. |
 | Linux x86_64 | Supported | Supported | Requires CUDA Toolkit with `lib64` runtime libraries available. |
 | macOS | Supported for simulation only | Not supported | NVIDIA CUDA hardware mode is not supported by this repository on macOS. |
 

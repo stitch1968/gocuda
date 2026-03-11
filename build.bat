@@ -40,6 +40,10 @@ if "%MODE%"=="cuda" (
         echo WARNING: lib_mingw\libnvjpeg.a not found
         echo Run setup_windows_cuda_import_libs.bat with your local cudart/cudnn/nvjpeg DLL paths before expecting Windows nvJPEG native builds to link.
     )
+    if not exist "lib_mingw\libcudss.a" (
+        echo WARNING: lib_mingw\libcudss.a not found
+        echo Run setup_windows_cuda_import_libs.bat with your local cudart/cudnn/cudss DLL paths before expecting Windows cuDSS native builds to link.
+    )
     go build -tags cuda -v ./...
     if errorlevel 1 (
         echo Build failed!

@@ -3,9 +3,11 @@
 package libraries
 
 import (
+	"errors"
 	"fmt"
 	"math"
 
+	cuda "github.com/stitch1968/gocuda"
 	"github.com/stitch1968/gocuda/memory"
 )
 
@@ -77,28 +79,37 @@ type DSSConfig struct {
 
 // DSS solver handle
 type DSSHandle struct {
-	handle    *memory.Memory
-	config    DSSConfig
-	workspace *memory.Memory
-	n         int
-	nnz       int
-	factored  bool
-	matrix    *DSSMatrix
-	dense     []float64
-	det       float64
+	handle       *memory.Memory
+	config       DSSConfig
+	workspace    *memory.Memory
+	n            int
+	nnz          int
+	factored     bool
+	matrix       *DSSMatrix
+	dense        []float64
+	det          float64
+	nativeHandle uintptr
+	nativeConfig uintptr
+	nativeData   uintptr
+	native       bool
 }
 
 // DSS matrix descriptor
 type DSSMatrix struct {
-	handle   *memory.Memory
-	rowPtr   *memory.Memory
-	colInd   *memory.Memory
-	values   *memory.Memory
-	n        int
-	nnz      int
-	format   DSSMatrixFormat
-	symmetry bool
+	handle       *memory.Memory
+	rowPtr       *memory.Memory
+	colInd       *memory.Memory
+	values       *memory.Memory
+	n            int
+	nnz          int
+	format       DSSMatrixFormat
+	symmetry     bool
+	nativeHandle uintptr
+	nativeType   int
+	native       bool
 }
+
+var errCUDSSUnsupported = errors.New("cudss native path unsupported for requested parameters")
 
 // DSS solution info
 type DSSSolutionInfo struct {
@@ -118,7 +129,13 @@ func CreateDSSHandle(config DSSConfig) (*DSSHandle, error) {
 	if err := ensureCudaReady(); err != nil {
 		return nil, err
 	}
+	if cuda.ShouldUseCuda() && cudssNativeAvailable() {
+		return createNativeDSSHandle(config)
+	}
+	return createDeterministicDSSHandle(config)
+}
 
+func createDeterministicDSSHandle(config DSSConfig) (*DSSHandle, error) {
 	handle := &DSSHandle{
 		config:   config,
 		factored: false,
@@ -157,7 +174,13 @@ func CreateDSSMatrix(n, nnz int, rowPtr, colInd, values *memory.Memory, format D
 	if rowPtr == nil || colInd == nil || values == nil {
 		return nil, fmt.Errorf("matrix data pointers cannot be nil")
 	}
+	if cuda.ShouldUseCuda() && cudssNativeAvailable() {
+		return createNativeDSSMatrix(n, nnz, rowPtr, colInd, values, format, symmetry)
+	}
+	return createDeterministicDSSMatrix(n, nnz, rowPtr, colInd, values, format, symmetry)
+}
 
+func createDeterministicDSSMatrix(n, nnz int, rowPtr, colInd, values *memory.Memory, format DSSMatrixFormat, symmetry bool) (*DSSMatrix, error) {
 	matrix := &DSSMatrix{
 		rowPtr:   rowPtr,
 		colInd:   colInd,
@@ -180,6 +203,13 @@ func CreateDSSMatrix(n, nnz int, rowPtr, colInd, values *memory.Memory, format D
 
 // Analyze performs symbolic analysis of the sparse matrix
 func (handle *DSSHandle) Analyze(matrix *DSSMatrix) error {
+	if handle != nil && handle.native && matrix != nil && matrix.native {
+		if err := analyzeNativeDSS(handle, matrix); err == nil {
+			return nil
+		} else if !errors.Is(err, errCUDSSUnsupported) {
+			return err
+		}
+	}
 	if matrix == nil {
 		return fmt.Errorf("matrix cannot be nil")
 	}
@@ -192,6 +222,21 @@ func (handle *DSSHandle) Analyze(matrix *DSSMatrix) error {
 
 // Factor performs numerical factorization
 func (handle *DSSHandle) Factor(matrix *DSSMatrix) error {
+	if handle != nil && handle.native && matrix != nil && matrix.native {
+		dense, err := dssDenseFromMatrix(matrix)
+		if err != nil {
+			return err
+		}
+		handle.dense = dense
+		handle.matrix = matrix
+		handle.det, _ = dssDeterminant(dense, matrix.n)
+		if err := factorNativeDSS(handle, matrix); err == nil {
+			handle.factored = true
+			return nil
+		} else if !errors.Is(err, errCUDSSUnsupported) {
+			return err
+		}
+	}
 	if matrix == nil {
 		return fmt.Errorf("matrix cannot be nil")
 	}
@@ -214,6 +259,15 @@ func (handle *DSSHandle) Factor(matrix *DSSMatrix) error {
 
 // Solve solves the linear system Ax = b
 func (handle *DSSHandle) Solve(b, x *memory.Memory, nrhs int) (*DSSSolutionInfo, error) {
+	if handle != nil && handle.native && handle.matrix != nil && handle.matrix.native {
+		info, err := solveNativeDSS(handle, b, x, nrhs)
+		if err == nil {
+			return info, nil
+		}
+		if !errors.Is(err, errCUDSSUnsupported) {
+			return nil, err
+		}
+	}
 	if !handle.factored {
 		return nil, fmt.Errorf("matrix must be factored before solving")
 	}
@@ -288,23 +342,15 @@ func (handle *DSSHandle) SolveMultiple(B, X *memory.Memory, nrhs int) ([]*DSSSol
 
 	infos := make([]*DSSSolutionInfo, nrhs)
 
-	_, err := handle.Solve(B, X, nrhs)
+	info, err := handle.Solve(B, X, nrhs)
 	if err != nil {
 		return nil, err
 	}
 
 	// Create solution info for each RHS
 	for i := range nrhs {
-		infos[i] = &DSSSolutionInfo{
-			Iterations:         1,
-			Residual:           1e-14,
-			Error:              1e-15,
-			Determinant:        1.0,
-			PivotGrowth:        1.2,
-			ConditionNumber:    100.0,
-			BackwardError:      1e-16,
-			ComponentwiseError: 1e-15,
-		}
+		copied := *info
+		infos[i] = &copied
 	}
 
 	return infos, nil
@@ -339,6 +385,13 @@ func (handle *DSSHandle) GetInertia() ([3]int, error) {
 
 // Refactor updates the numerical factorization with new values
 func (handle *DSSHandle) Refactor(matrix *DSSMatrix) error {
+	if handle != nil && handle.native && matrix != nil && matrix.native {
+		if err := refactorNativeDSS(handle, matrix); err == nil {
+			return nil
+		} else if !errors.Is(err, errCUDSSUnsupported) {
+			return err
+		}
+	}
 	if !handle.factored {
 		return fmt.Errorf("matrix must be initially factored before refactoring")
 	}
@@ -385,6 +438,9 @@ func calculateDSSWorkspaceSize(config DSSConfig) int {
 
 // Destroy cleans up DSS handle resources
 func (handle *DSSHandle) Destroy() error {
+	if handle != nil && handle.native {
+		return destroyNativeDSSHandle(handle)
+	}
 	if handle.handle != nil {
 		handle.handle.Free()
 		handle.handle = nil
@@ -559,6 +615,9 @@ func dssResidual(dense []float64, n int, x, b []float64) float64 {
 
 // Destroy cleans up DSS matrix resources
 func (matrix *DSSMatrix) Destroy() error {
+	if matrix != nil && matrix.native {
+		return destroyNativeDSSMatrix(matrix)
+	}
 	if matrix.handle != nil {
 		matrix.handle.Free()
 		matrix.handle = nil
