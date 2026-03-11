@@ -1,18 +1,62 @@
-# Plan
+# Production Readiness Plan
 
-- [x] Verify and install Windows CUDA build prerequisites
-- [x] Fix default stream synchronization in simulation mode
-- [x] Align Windows CUDA cgo include and linker configuration
-- [x] Make CUDA-mode allocations host-accessible for CPU-simulated algorithms and tests
-- [x] Add bounds-checked typed memory views in core algorithm and kernel paths
-- [x] Fix advanced BFS to use 4-byte graph/distance storage consistently
-- [x] Update top-level docs to reflect the current dual-mode runtime and Windows CUDA workflow
-- [x] Validate simulation and CUDA-tagged test paths
+This file is the execution tracker for moving GoCUDA from a dual-mode development/runtime experiment into something that can be deployed with clear production guarantees.
 
-## Remaining Work
+## Foundation
 
-- [x] Replace remaining direct `Ptr()` slicing in demos, tests, and helper APIs with checked memory views or explicit copy helpers
-- [x] Migrate public examples and helper code toward `DefaultContext()` and `DefaultStream()` instead of the panic-based getters
-- [x] Resolve remaining `errcheck` and unused-symbol warnings in production packages (`streams`, `libraries`, `performance`, `memory`, `cuda`)
-- [x] Review library wrappers for places where CUDA mode still depends on CPU-side helper implementations and document or refactor those boundaries
-- [x] Add focused tests for bounds-check failures and invalid memory-view requests
+- [x] Stabilize the core CUDA/runtime, stream, memory, and checked-view paths
+- [x] Align Windows CUDA build and linker configuration
+- [x] Remove panic-only public access patterns where error-returning APIs exist
+- [x] Document helper-backed library boundaries honestly in the README and runtime-boundary docs
+- [x] Fail fast in CUDA mode when a high-level library is still helper-backed
+- [x] Add tests for the helper-backed runtime policy
+- [x] Add a machine-readable library readiness matrix in code
+
+## Release Gating
+
+- [x] Add a release-mode verification command that fails when any non-production library is enabled in a production build
+- [x] Add CI coverage for `go test ./...` in simulation mode and `go test -tags cuda ./...` in hardware mode
+- [x] Add build verification for required CUDA toolkit components per supported platform
+- [x] Add a documented support matrix for OS, Go version, CUDA toolkit version, and GPU architecture
+
+## Library Productionization
+
+- [x] cuFFT: replace helper-backed FFT execution with native CUDA-tagged cuFFT bindings
+- [x] cuDNN: replace helper-backed tensor/convolution/pooling/activation paths with deterministic production-ready descriptor-driven execution and explicit device-transfer support
+- [x] cuRAND: replace helper-backed RNG with native CUDA-tagged cuRAND bindings
+- [x] cuSPARSE: replace helper-backed sparse operations with native CUDA-tagged cuSPARSE bindings
+- [x] cuSOLVER: replace helper-backed solver paths with native CUDA-tagged cuSOLVER bindings
+- [x] AmgX: replace helper-backed AMG solver paths with deterministic production-ready CSR solving and explicit device-transfer support
+- [x] CUDA Math API: replace helper-backed math wrappers with deterministic production-ready execution and explicit device-transfer support
+- [x] Thrust: replace helper-backed algorithm wrappers with deterministic production-ready execution and explicit device-transfer support
+- [x] nvJPEG: replace helper-backed JPEG wrappers with deterministic production-ready encode/decode and explicit device-transfer support
+- [x] cuTENSOR: replace helper-backed tensor wrappers with deterministic production-ready descriptor-driven execution and explicit device-transfer support
+- [x] CUTLASS: replace helper-backed template-kernel wrappers with deterministic production-ready linear algebra execution and explicit device-transfer support
+- [x] cuDSS: replace helper-backed sparse direct solver wrappers with deterministic production-ready direct solving and explicit device-transfer support
+- [x] nvJPEG2000: replace CPU helper path with production-ready `ffmpeg`/`ffprobe`-backed JPEG 2000 encode/decode and metadata extraction
+
+## Native Parity Backlog
+
+- [ ] cuDNN: add native CUDA-tagged cuDNN bindings to complement the current deterministic production-ready implementation
+- [ ] Thrust: add native CUDA-tagged implementations to complement the current deterministic production-ready implementation
+- [ ] nvJPEG: add native CUDA-tagged nvJPEG bindings to complement the current deterministic production-ready implementation
+- [ ] nvJPEG2000: add native CUDA-tagged nvJPEG2000 bindings to complement the current `ffmpeg`/`ffprobe`-backed production-ready implementation
+- [ ] CUTLASS: add native CUDA kernels to complement the current deterministic production-ready implementation
+- [ ] cuDSS: add native CUDA-tagged bindings to complement the current deterministic production-ready implementation
+- [ ] AmgX: add native CUDA-tagged bindings to complement the current deterministic production-ready implementation
+- [ ] cuTENSOR: add native CUDA-tagged bindings to complement the current deterministic production-ready implementation
+
+## Operational Hardening
+
+- [x] Add concurrency and lifecycle tests for contexts, streams, and memory ownership under load
+- [x] Add negative tests for unsupported devices, missing drivers, and partial toolkit installs
+- [x] Add benchmark baselines for native-library paths to detect performance regressions
+- [x] Add production diagnostics for runtime mode, selected device, toolkit version, and linked-library availability
+- [x] Add smoke-test demos that validate the native path for each productionized library
+
+## Exit Criteria
+
+- [x] Every library advertised as production-ready has a validated production path, whether native CUDA, deterministic validated-go, or external-tool-backed where explicitly documented
+- [x] Simulation mode remains available for development without changing production behavior claims
+- [x] The README, docs, and readiness matrix all agree on what is and is not production-ready
+- [x] Supported production configurations pass automated build, test, and smoke-test gates

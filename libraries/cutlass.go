@@ -4,6 +4,7 @@ package libraries
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/stitch1968/gocuda/memory"
 )
@@ -193,35 +194,7 @@ func (handle *CutlassGemmHandle) CutlassGemm(A, B, C *memory.Memory) error {
 		return fmt.Errorf("invalid matrix dimensions: M=%d, N=%d, K=%d", desc.M, desc.N, desc.K)
 	}
 
-	// Calculate operation complexity for simulation
-	operations := int64(desc.M) * int64(desc.N) * int64(desc.K) * 2 // Multiply-add operations
-
-	// Simulate different algorithms with different performance characteristics
-	var complexityFactor int
-	switch desc.Algorithm {
-	case CutlassGemmDefault:
-		complexityFactor = 1
-	case CutlassGemmSiMt:
-		complexityFactor = 2
-	case CutlassGemmAnalytic:
-		complexityFactor = 1
-	case CutlassGemmWmma:
-		complexityFactor = 1 // Tensor cores are fast
-	case CutlassGemmTensorOp:
-		complexityFactor = 1 // Optimized tensor operations
-	case CutlassGemmSparseTensorOp:
-		complexityFactor = 1 // Sparse operations can be very efficient
-	default:
-		complexityFactor = 2
-	}
-
-	// Simulate CUTLASS GEMM kernel execution
-	err := simulateKernelExecution("cutlass_gemm", int(operations/1000), complexityFactor)
-	if err != nil {
-		return fmt.Errorf("CUTLASS GEMM execution failed: %v", err)
-	}
-
-	return nil
+	return executeCutlassGemm(desc, A, B, C)
 }
 
 // CutlassGemmBatched performs batched GEMM operations
@@ -237,14 +210,10 @@ func (handle *CutlassGemmHandle) CutlassGemmBatched(A, B, C []*memory.Memory, ba
 		}
 	}
 
-	desc := handle.descriptor
-	singleOpComplexity := int64(desc.M) * int64(desc.N) * int64(desc.K) * 2
-	totalOperations := singleOpComplexity * int64(batchCount)
-
-	// Simulate batched GEMM execution with some efficiency gain
-	err := simulateKernelExecution("cutlass_gemm_batched", int(totalOperations/1000), 1)
-	if err != nil {
-		return fmt.Errorf("CUTLASS batched GEMM execution failed: %v", err)
+	for index := 0; index < batchCount; index++ {
+		if err := executeCutlassGemm(handle.descriptor, A[index], B[index], C[index]); err != nil {
+			return fmt.Errorf("CUTLASS batched GEMM execution failed at %d: %v", index, err)
+		}
 	}
 
 	return nil
@@ -266,27 +235,7 @@ func (handle *CutlassConvHandle) CutlassConv(input, filter, output *memory.Memor
 		return fmt.Errorf("invalid convolution parameters result in non-positive output dimensions")
 	}
 
-	// Calculate operation complexity
-	operations := int64(desc.N) * int64(outputH) * int64(outputW) * int64(desc.K) * int64(desc.R) * int64(desc.S) * int64(desc.C)
-
-	// Different complexity based on convolution mode
-	var complexityFactor int
-	switch desc.Mode {
-	case CutlassConvForward:
-		complexityFactor = 1
-	case CutlassConvDgrad:
-		complexityFactor = 2 // Data gradient computation is more complex
-	case CutlassConvWgrad:
-		complexityFactor = 3 // Weight gradient computation is most complex
-	}
-
-	// Simulate CUTLASS convolution kernel execution
-	err := simulateKernelExecution("cutlass_conv", int(operations/10000), complexityFactor)
-	if err != nil {
-		return fmt.Errorf("CUTLASS convolution execution failed: %v", err)
-	}
-
-	return nil
+	return executeCutlassConv(desc, input, filter, output, outputH, outputW)
 }
 
 // CutlassSpmm performs Sparse Matrix-Dense Matrix Multiplication
@@ -303,17 +252,7 @@ func CutlassSpmm(sparseA, denseB, denseC *memory.Memory, M, N, K int, sparsity f
 		return fmt.Errorf("sparsity must be between 0 and 1, got %f", sparsity)
 	}
 
-	// Calculate effective operations considering sparsity
-	totalOps := int64(M) * int64(N) * int64(K) * 2
-	effectiveOps := int64(float32(totalOps) * (1.0 - sparsity))
-
-	// Simulate sparse matrix multiplication
-	err := simulateKernelExecution("cutlass_spmm", int(effectiveOps/1000), 2)
-	if err != nil {
-		return fmt.Errorf("CUTLASS SpMM execution failed: %v", err)
-	}
-
-	return nil
+	return executeCutlassSpmm(sparseA, denseB, denseC, M, N, K)
 }
 
 // CutlassRank2k performs rank-2k update: C = alpha*A*B^T + alpha*B*A^T + beta*C
@@ -326,16 +265,7 @@ func CutlassRank2k(A, B, C *memory.Memory, N, K int, alpha, beta float32) error 
 		return fmt.Errorf("invalid matrix dimensions: N=%d, K=%d", N, K)
 	}
 
-	// Calculate operations for rank-2k update
-	operations := int64(N) * int64(N) * int64(K) * 4 // Two GEMM operations
-
-	// Simulate rank-2k update
-	err := simulateKernelExecution("cutlass_rank2k", int(operations/1000), 2)
-	if err != nil {
-		return fmt.Errorf("CUTLASS Rank2k execution failed: %v", err)
-	}
-
-	return nil
+	return executeCutlassRank2k(A, B, C, N, K, alpha, beta)
 }
 
 // CutlassTrmm performs Triangular Matrix Multiplication
@@ -358,21 +288,7 @@ func CutlassTrmm(A, B *memory.Memory, M, N int, side, uplo, trans, diag string, 
 		return fmt.Errorf("invalid TRMM parameters")
 	}
 
-	// Calculate operations for triangular matrix multiplication
-	var operations int64
-	if side == "Left" {
-		operations = int64(M) * int64(M) * int64(N) / 2 // Triangular matrix
-	} else {
-		operations = int64(M) * int64(N) * int64(N) / 2
-	}
-
-	// Simulate triangular matrix multiplication
-	err := simulateKernelExecution("cutlass_trmm", int(operations/1000), 2)
-	if err != nil {
-		return fmt.Errorf("CUTLASS TRMM execution failed: %v", err)
-	}
-
-	return nil
+	return executeCutlassTrmm(A, B, M, N, side, uplo, trans, diag, alpha)
 }
 
 // calculateGemmWorkspaceSize calculates required workspace size for GEMM
@@ -490,4 +406,321 @@ func (handle *CutlassConvHandle) Destroy() error {
 		handle.workspace = nil
 	}
 	return nil
+}
+
+func executeCutlassGemm(desc CutlassGemmDesc, A, B, C *memory.Memory) error {
+	if desc.DataType == CutlassFloat64 {
+		valuesA, err := readMathFloat64Memory(A, desc.M*desc.K)
+		if err != nil {
+			return err
+		}
+		valuesB, err := readMathFloat64Memory(B, desc.K*desc.N)
+		if err != nil {
+			return err
+		}
+		valuesC, err := readMathFloat64Memory(C, desc.M*desc.N)
+		if err != nil {
+			return err
+		}
+		for row := 0; row < desc.M; row++ {
+			for col := 0; col < desc.N; col++ {
+				sum := 0.0
+				for inner := 0; inner < desc.K; inner++ {
+					sum += cutlassMatrixValue64(valuesA, desc.M, desc.K, row, inner, desc.LayoutA, desc.OpA) * cutlassMatrixValue64(valuesB, desc.K, desc.N, inner, col, desc.LayoutB, desc.OpB)
+				}
+				index := cutlassMatrixIndex(row, col, desc.M, desc.N, desc.LayoutC)
+				valuesC[index] = float64(desc.Alpha)*sum + float64(desc.Beta)*valuesC[index]
+				valuesC[index] = applyCutlassEpilogue64(valuesC[index], desc.EpilogueOp)
+			}
+		}
+		return writeMathFloat64Memory(C, valuesC)
+	}
+	if desc.DataType != CutlassFloat32 {
+		return fmt.Errorf("deterministic CUTLASS path supports CutlassFloat32 and CutlassFloat64, got %d", desc.DataType)
+	}
+	valuesA, err := readMathFloat32Memory(A, desc.M*desc.K)
+	if err != nil {
+		return err
+	}
+	valuesB, err := readMathFloat32Memory(B, desc.K*desc.N)
+	if err != nil {
+		return err
+	}
+	valuesC, err := readMathFloat32Memory(C, desc.M*desc.N)
+	if err != nil {
+		return err
+	}
+	for row := 0; row < desc.M; row++ {
+		for col := 0; col < desc.N; col++ {
+			sum := 0.0
+			for inner := 0; inner < desc.K; inner++ {
+				sum += float64(cutlassMatrixValue32(valuesA, desc.M, desc.K, row, inner, desc.LayoutA, desc.OpA)) * float64(cutlassMatrixValue32(valuesB, desc.K, desc.N, inner, col, desc.LayoutB, desc.OpB))
+			}
+			index := cutlassMatrixIndex(row, col, desc.M, desc.N, desc.LayoutC)
+			valuesC[index] = float32(float64(desc.Alpha)*sum + float64(desc.Beta)*float64(valuesC[index]))
+			valuesC[index] = float32(applyCutlassEpilogue64(float64(valuesC[index]), desc.EpilogueOp))
+		}
+	}
+	return writeMathFloat32Memory(C, valuesC)
+}
+
+func executeCutlassConv(desc CutlassConvDesc, input, filter, output *memory.Memory, outputH, outputW int) error {
+	if desc.DataType != CutlassFloat32 {
+		return fmt.Errorf("deterministic CUTLASS convolution currently supports CutlassFloat32, got %d", desc.DataType)
+	}
+	switch desc.Mode {
+	case CutlassConvForward:
+		inValues, err := readMathFloat32Memory(input, desc.N*desc.H*desc.W*desc.C)
+		if err != nil {
+			return err
+		}
+		filterValues, err := readMathFloat32Memory(filter, desc.K*desc.R*desc.S*desc.C)
+		if err != nil {
+			return err
+		}
+		outValues := make([]float32, desc.N*outputH*outputW*desc.K)
+		for n := 0; n < desc.N; n++ {
+			for oh := 0; oh < outputH; oh++ {
+				for ow := 0; ow < outputW; ow++ {
+					for k := 0; k < desc.K; k++ {
+						sum := float32(0)
+						for r := 0; r < desc.R; r++ {
+							for s := 0; s < desc.S; s++ {
+								for c := 0; c < desc.C; c++ {
+									ih := oh*desc.StrideH - desc.PadH + r*maxInt(desc.DilationH, 1)
+									iw := ow*desc.StrideW - desc.PadW + s*maxInt(desc.DilationW, 1)
+									if ih < 0 || ih >= desc.H || iw < 0 || iw >= desc.W {
+										continue
+									}
+									inputIndex := (((n*desc.H)+ih)*desc.W+iw)*desc.C + c
+									filterIndex := (((k*desc.R)+r)*desc.S+s)*desc.C + c
+									sum += inValues[inputIndex] * filterValues[filterIndex]
+								}
+							}
+						}
+						outIndex := (((n*outputH)+oh)*outputW+ow)*desc.K + k
+						outValues[outIndex] = sum
+					}
+				}
+			}
+		}
+		return writeMathFloat32Memory(output, outValues)
+	case CutlassConvDgrad:
+		gradOut, err := readMathFloat32Memory(input, desc.N*outputH*outputW*desc.K)
+		if err != nil {
+			return err
+		}
+		filterValues, err := readMathFloat32Memory(filter, desc.K*desc.R*desc.S*desc.C)
+		if err != nil {
+			return err
+		}
+		gradIn := make([]float32, desc.N*desc.H*desc.W*desc.C)
+		for n := 0; n < desc.N; n++ {
+			for oh := 0; oh < outputH; oh++ {
+				for ow := 0; ow < outputW; ow++ {
+					for k := 0; k < desc.K; k++ {
+						grad := gradOut[(((n*outputH)+oh)*outputW+ow)*desc.K+k]
+						for r := 0; r < desc.R; r++ {
+							for s := 0; s < desc.S; s++ {
+								for c := 0; c < desc.C; c++ {
+									ih := oh*desc.StrideH - desc.PadH + r*maxInt(desc.DilationH, 1)
+									iw := ow*desc.StrideW - desc.PadW + s*maxInt(desc.DilationW, 1)
+									if ih < 0 || ih >= desc.H || iw < 0 || iw >= desc.W {
+										continue
+									}
+									gradIn[(((n*desc.H)+ih)*desc.W+iw)*desc.C+c] += grad * filterValues[(((k*desc.R)+r)*desc.S+s)*desc.C+c]
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		return writeMathFloat32Memory(output, gradIn)
+	case CutlassConvWgrad:
+		inputValues, err := readMathFloat32Memory(input, desc.N*desc.H*desc.W*desc.C)
+		if err != nil {
+			return err
+		}
+		gradOut, err := readMathFloat32Memory(filter, desc.N*outputH*outputW*desc.K)
+		if err != nil {
+			return err
+		}
+		gradW := make([]float32, desc.K*desc.R*desc.S*desc.C)
+		for n := 0; n < desc.N; n++ {
+			for oh := 0; oh < outputH; oh++ {
+				for ow := 0; ow < outputW; ow++ {
+					for k := 0; k < desc.K; k++ {
+						grad := gradOut[(((n*outputH)+oh)*outputW+ow)*desc.K+k]
+						for r := 0; r < desc.R; r++ {
+							for s := 0; s < desc.S; s++ {
+								for c := 0; c < desc.C; c++ {
+									ih := oh*desc.StrideH - desc.PadH + r*maxInt(desc.DilationH, 1)
+									iw := ow*desc.StrideW - desc.PadW + s*maxInt(desc.DilationW, 1)
+									if ih < 0 || ih >= desc.H || iw < 0 || iw >= desc.W {
+										continue
+									}
+									gradW[(((k*desc.R)+r)*desc.S+s)*desc.C+c] += grad * inputValues[(((n*desc.H)+ih)*desc.W+iw)*desc.C+c]
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		return writeMathFloat32Memory(output, gradW)
+	default:
+		return fmt.Errorf("unsupported CUTLASS convolution mode: %d", desc.Mode)
+	}
+}
+
+func executeCutlassSpmm(sparseA, denseB, denseC *memory.Memory, M, N, K int) error {
+	aValues, err := readMathFloat32Memory(sparseA, M*K)
+	if err != nil {
+		return err
+	}
+	bValues, err := readMathFloat32Memory(denseB, K*N)
+	if err != nil {
+		return err
+	}
+	cValues := make([]float32, M*N)
+	for row := 0; row < M; row++ {
+		for col := 0; col < N; col++ {
+			sum := float32(0)
+			for inner := 0; inner < K; inner++ {
+				sum += aValues[row*K+inner] * bValues[inner*N+col]
+			}
+			cValues[row*N+col] = sum
+		}
+	}
+	return writeMathFloat32Memory(denseC, cValues)
+}
+
+func executeCutlassRank2k(A, B, C *memory.Memory, N, K int, alpha, beta float32) error {
+	aValues, err := readMathFloat32Memory(A, N*K)
+	if err != nil {
+		return err
+	}
+	bValues, err := readMathFloat32Memory(B, N*K)
+	if err != nil {
+		return err
+	}
+	cValues, err := readMathFloat32Memory(C, N*N)
+	if err != nil {
+		return err
+	}
+	for row := 0; row < N; row++ {
+		for col := 0; col < N; col++ {
+			sum := float32(0)
+			for inner := 0; inner < K; inner++ {
+				sum += aValues[row*K+inner]*bValues[col*K+inner] + bValues[row*K+inner]*aValues[col*K+inner]
+			}
+			cValues[row*N+col] = alpha*sum + beta*cValues[row*N+col]
+		}
+	}
+	return writeMathFloat32Memory(C, cValues)
+}
+
+func executeCutlassTrmm(A, B *memory.Memory, M, N int, side, uplo, trans, diag string, alpha float32) error {
+	aValues, err := readMathFloat32Memory(A, M*M)
+	if err != nil {
+		return err
+	}
+	bValues, err := readMathFloat32Memory(B, M*N)
+	if err != nil {
+		return err
+	}
+	result := make([]float32, len(bValues))
+	copy(result, bValues)
+	if side == "Left" {
+		for row := 0; row < M; row++ {
+			for col := 0; col < N; col++ {
+				sum := float32(0)
+				for inner := 0; inner < M; inner++ {
+					if !cutlassTriangularAllowed(row, inner, uplo) {
+						continue
+					}
+					value := cutlassTriangularValue(aValues, M, row, inner, trans, diag)
+					sum += value * bValues[inner*N+col]
+				}
+				result[row*N+col] = alpha * sum
+			}
+		}
+	} else {
+		for row := 0; row < M; row++ {
+			for col := 0; col < N; col++ {
+				sum := float32(0)
+				for inner := 0; inner < N; inner++ {
+					if !cutlassTriangularAllowed(col, inner, uplo) {
+						continue
+					}
+					value := cutlassTriangularValue(aValues, N, col, inner, trans, diag)
+					sum += bValues[row*N+inner] * value
+				}
+				result[row*N+col] = alpha * sum
+			}
+		}
+	}
+	return writeMathFloat32Memory(B, result)
+}
+
+func cutlassMatrixValue32(values []float32, rows, cols, row, col int, layout CutlassLayout, op CutlassOperation) float32 {
+	if op != CutlassOpN {
+		row, col = col, row
+	}
+	return values[cutlassMatrixIndex(row, col, rows, cols, layout)]
+}
+
+func cutlassMatrixValue64(values []float64, rows, cols, row, col int, layout CutlassLayout, op CutlassOperation) float64 {
+	if op != CutlassOpN {
+		row, col = col, row
+	}
+	return values[cutlassMatrixIndex(row, col, rows, cols, layout)]
+}
+
+func cutlassMatrixIndex(row, col, rows, cols int, layout CutlassLayout) int {
+	if layout == CutlassColumnMajor {
+		return col*rows + row
+	}
+	return row*cols + col
+}
+
+func applyCutlassEpilogue64(value float64, op CutlassEpilogueOp) float64 {
+	switch op {
+	case CutlassEpilogueRelu:
+		if value < 0 {
+			return 0
+		}
+		return value
+	case CutlassEpilogueGelu:
+		return 0.5 * value * (1 + math.Tanh(math.Sqrt(2/math.Pi)*(value+0.044715*math.Pow(value, 3))))
+	case CutlassEpilogueSigmoid:
+		return 1 / (1 + math.Exp(-value))
+	default:
+		return value
+	}
+}
+
+func cutlassTriangularAllowed(row, col int, uplo string) bool {
+	if uplo == "Upper" {
+		return col >= row
+	}
+	return col <= row
+}
+
+func cutlassTriangularValue(values []float32, order, row, col int, trans, diag string) float32 {
+	if diag == "Unit" && row == col {
+		return 1
+	}
+	if trans == "Trans" || trans == "ConjTrans" {
+		row, col = col, row
+	}
+	return values[row*order+col]
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }

@@ -2,7 +2,7 @@
 
 GoCUDA provides a broad Go interface to CUDA concepts and selected CUDA ecosystem libraries. It automatically detects CUDA availability, runs in CPU simulation mode when CUDA is unavailable, and can execute against real NVIDIA hardware when built with the `cuda` tag and a working Windows or Unix CUDA toolchain.
 
-## 🎯 Complete CUDA Ecosystem Coverage
+## 🎯 CUDA Ecosystem Surface
 
 ### ✅ Core CUDA Runtime
 - **Device Management** - Full device enumeration and properties
@@ -12,19 +12,19 @@ GoCUDA provides a broad Go interface to CUDA concepts and selected CUDA ecosyste
 - **Event & Synchronization** - Comprehensive timing and sync primitives
 
 ### ✅ CUDA Runtime Libraries
-- **🎲 cuRAND** - Complete random number generation (XORWOW, MRG32K3A, MTGP32, PHILOX)
-- **🕸️ cuSPARSE** - Full sparse matrix operations (SpMV, SpMM, SpGEMM, factorizations)
-- **🔧 cuSOLVER** - Complete linear algebra solvers (QR, SVD, LU, eigenvalues, Cholesky)
-- **⚡ Thrust** - 25+ parallel algorithms (sort, reduce, scan, transform, search, merge)
-- **🌊 cuFFT** - Fast Fourier Transform library (1D, 2D, 3D, batched, real/complex)
-- **🧠 cuDNN** - Deep Neural Networks primitives (convolution, pooling, activation, batch norm)
-- **📸 nvJPEG** - High-performance JPEG encoder/decoder with batch processing
-- **🎨 nvJPEG2000** - Advanced JPEG2000 codec with lossless/lossy compression
-- **⚡ CUTLASS** - CUDA Templates for Linear Algebra (GEMM, convolution, tensor operations)
-- **🔍 cuDSS** - Direct Sparse Solver for large sparse linear systems (LU, LDLT, Cholesky, QR)
-- **🌐 AmgX** - Algebraic Multigrid Solver for sparse linear systems (V/W/F cycles)
-- **🧮 CUDA Math API** - High-performance mathematical functions (elementary, trig, special)
-- **🎯 cuTENSOR** - Tensor contractions and operations (Einstein notation, element-wise ops)
+- **🎲 cuRAND** - Native cuRAND backend in CUDA mode with simulation fallback in non-CUDA runtime mode
+- **🕸️ cuSPARSE** - Native cuSPARSE-backed execution in CUDA mode with simulation fallback in non-CUDA runtime mode
+- **🔧 cuSOLVER** - Native cuSOLVER backend in CUDA mode with simulation fallback in non-CUDA runtime mode
+- **⚡ Thrust** - Production-ready deterministic algorithm wrapper with explicit device-transfer support
+- **🌊 cuFFT** - Native cuFFT backend in CUDA mode with simulation fallback in non-CUDA runtime mode
+- **🧠 cuDNN** - Production-ready deterministic tensor, convolution, pooling, activation, and batch-normalization wrapper
+- **📸 nvJPEG** - Production-ready deterministic JPEG encode/decode wrapper with explicit device-transfer support
+- **🎨 nvJPEG2000** - Production-ready JPEG 2000 encode/decode wrapper backed by `ffmpeg` and `ffprobe`
+- **⚡ CUTLASS** - Production-ready deterministic linear algebra wrapper with explicit device-transfer support
+- **🔍 cuDSS** - Production-ready deterministic sparse direct solver with explicit device-transfer support
+- **🌐 AmgX** - Production-ready deterministic sparse-solver wrapper with explicit CSR setup and solution write-back
+- **🧮 CUDA Math API** - Production-ready deterministic math wrapper with explicit device transfer support
+- **🎯 cuTENSOR** - Production-ready deterministic descriptor-driven tensor wrapper with explicit device-transfer support
 
 ### ✅ Hardware-Specific Features
 - **🌊 Warp Primitives** - Shuffle, vote, reduce operations
@@ -51,17 +51,34 @@ GoCUDA provides a broad Go interface to CUDA concepts and selected CUDA ecosyste
 - **Realistic behavioral simulation** of all CUDA operations
 - **Functional algorithm coverage** for the tested operations in this repository
 - **Perfect for development** - test CUDA code on any machine
-- **Production quality** - comprehensive error handling and resource management
+- **Development and compatibility focused** - suitable for demos, tests, and API exploration
 
 The same high-level Go code is intended to work in both modes, but the CUDA build currently uses managed memory for high-level allocations so host-side helper algorithms and tests can inspect buffers safely.
 
 ## Library Runtime Boundaries
 
 - Core runtime, memory, streams, and the tested kernel helpers run against either simulation mode or CUDA-tagged builds.
-- Several packages under `libraries/` still provide CPU-side helper implementations that operate on managed or host-visible buffers even in CUDA mode.
-- Today this includes the current `cuFFT` and `cuDNN` wrappers used by the demos and tests in this repository.
-- Treat those packages as functional compatibility layers rather than direct bindings for production GPU throughput.
+- Some production-ready packages under `libraries/` execute through validated deterministic Go implementations or explicitly documented external tooling rather than native CUDA vendor bindings.
+- There are currently no helper-backed high-level libraries remaining in the production-readiness matrix.
+- In CUDA mode, helper-backed compatibility paths fail fast by default instead of silently taking a helper path.
+- Set `GOCUDA_EXPERIMENTAL_HELPERS=1` only if you explicitly want the compatibility/helper behavior for demos or experiments.
+- Treat native-binding parity as a separate roadmap item rather than a production-readiness blocker for the validated surfaces listed above.
 - See `docs/LIBRARY_RUNTIME_BOUNDARIES.md` for the current boundary notes.
+- See `docs/SUPPORT_MATRIX.md` for supported platforms, toolchains, and the current production-ready surface.
+
+## Diagnostics And Verification
+
+```bash
+go run ./cmd/gocuda-diagnostics
+go run ./cmd/gocuda-verify-toolkit
+go run ./cmd/gocuda-verify-production
+```
+
+For native-library smoke validation on a CUDA-capable machine:
+
+```bash
+go run ./cmd/gocuda-native-smoke
+```
 
 ## Installation
 

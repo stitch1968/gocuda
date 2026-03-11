@@ -4,9 +4,9 @@
 package cuda
 
 /*
-#cgo CFLAGS: -I/usr/local/cuda/include -I/opt/cuda/include
+#cgo linux CFLAGS: -I/usr/local/cuda/include -I/opt/cuda/include
 #cgo windows CFLAGS: -I"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include" -I"D:/NVIDIA/include"
-#cgo LDFLAGS: -L/usr/local/cuda/lib64 -L/opt/cuda/lib64 -lcudart -lcuda
+#cgo linux LDFLAGS: -L/usr/local/cuda/lib64 -L/opt/cuda/lib64 -lcudart -lcuda
 #cgo windows LDFLAGS: -L${SRCDIR}/lib_mingw -lcudart -lcuda -Wl,--no-as-needed
 #cgo darwin LDFLAGS: -lcudart -lcuda
 
@@ -78,6 +78,10 @@ int getCudaClockRate(int device) {
 
 int getCudaMemoryClockRate(int device) {
 	return getCudaDeviceAttributeValue(device, cudaDevAttrMemoryClockRate);
+}
+
+cudaError_t cudaGetCurrentDeviceWrapper(int* device) {
+	return cudaGetDevice(device);
 }
 
 // Helper function to allocate managed memory so host-side simulation code can
@@ -341,6 +345,19 @@ func SetCudaDevice(deviceID int) error {
 	}
 
 	return nil
+}
+
+// CurrentCudaDeviceID returns the currently selected CUDA device ID.
+func CurrentCudaDeviceID() (int, error) {
+	if !ShouldUseCuda() {
+		return 0, nil
+	}
+	var device C.int
+	err := C.cudaGetCurrentDeviceWrapper(&device)
+	if err != C.cudaSuccess {
+		return 0, fmt.Errorf("failed to get current CUDA device: %s", C.GoString(C.cudaGetErrorStringWrapper(err)))
+	}
+	return int(device), nil
 }
 
 // GetCudaDeviceProperties returns properties for a CUDA device

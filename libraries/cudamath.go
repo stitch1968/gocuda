@@ -5,6 +5,8 @@ package libraries
 import (
 	"fmt"
 	"math"
+	"math/cmplx"
+	"unsafe"
 
 	"github.com/stitch1968/gocuda/memory"
 )
@@ -438,27 +440,23 @@ func (ctx *MathContext) executeVectorOp(op MathVectorOp) error {
 		return fmt.Errorf("vector size must be positive: %d", op.Size)
 	}
 
-	// Calculate operation complexity based on function type
-	complexity := calculateMathOpComplexity(op.Operation, op.Size)
-
-	// Apply precision modifiers
-	switch op.Config.Precision {
-	case MathPrecisionFast:
-		complexity = complexity / 2
-	case MathPrecisionAccurate:
-		complexity = complexity * 2
-	case MathPrecisionIEEE:
-		complexity = complexity * 3
+	config := op.Config
+	if config.DataType == 0 {
+		config.DataType = ctx.config.DataType
 	}
 
-	// Execute the mathematical operation
-	kernelName := getMathKernelName(op.Operation)
-	err := simulateKernelExecution(kernelName, complexity, 1)
-	if err != nil {
-		return fmt.Errorf("math operation %v failed: %v", op.Operation, err)
+	switch config.DataType {
+	case MathDataFloat32, MathDataHalf, MathDataBFloat16:
+		return executeMathVectorFloat32(op)
+	case MathDataFloat64:
+		return executeMathVectorFloat64(op)
+	case MathDataComplexFloat32:
+		return executeMathVectorComplex64(op)
+	case MathDataComplexFloat64:
+		return executeMathVectorComplex128(op)
+	default:
+		return fmt.Errorf("unsupported math data type: %d", config.DataType)
 	}
-
-	return nil
 }
 
 // Batch Operations for Multiple Vectors
@@ -497,16 +495,52 @@ func (ctx *MathContext) VectorSum(a *memory.Memory, size int) (float64, error) {
 	if a == nil {
 		return 0, fmt.Errorf("input memory cannot be nil")
 	}
-
-	// Simulate parallel reduction
-	complexity := size
-	err := simulateKernelExecution("mathVectorSum", complexity/100, 2)
-	if err != nil {
-		return 0, fmt.Errorf("vector sum failed: %v", err)
+	if size <= 0 {
+		return 0, fmt.Errorf("vector size must be positive: %d", size)
 	}
 
-	// Return simulated sum
-	return float64(size) * 0.5, nil
+	switch ctx.config.DataType {
+	case MathDataFloat64:
+		values, err := readMathFloat64Memory(a, size)
+		if err != nil {
+			return 0, err
+		}
+		total := 0.0
+		for _, value := range values {
+			total += value
+		}
+		return total, nil
+	case MathDataComplexFloat32:
+		values, err := readMathComplex64Memory(a, size)
+		if err != nil {
+			return 0, err
+		}
+		total := 0.0
+		for _, value := range values {
+			total += float64(real(value))
+		}
+		return total, nil
+	case MathDataComplexFloat64:
+		values, err := readMathComplex128Memory(a, size)
+		if err != nil {
+			return 0, err
+		}
+		total := 0.0
+		for _, value := range values {
+			total += real(value)
+		}
+		return total, nil
+	default:
+		values, err := readMathFloat32Memory(a, size)
+		if err != nil {
+			return 0, err
+		}
+		total := 0.0
+		for _, value := range values {
+			total += float64(value)
+		}
+		return total, nil
+	}
 }
 
 // VectorMax finds the maximum element in a vector
@@ -514,15 +548,40 @@ func (ctx *MathContext) VectorMax(a *memory.Memory, size int) (float64, int, err
 	if a == nil {
 		return 0, 0, fmt.Errorf("input memory cannot be nil")
 	}
-
-	complexity := size
-	err := simulateKernelExecution("mathVectorMax", complexity/100, 2)
-	if err != nil {
-		return 0, 0, fmt.Errorf("vector max failed: %v", err)
+	if size <= 0 {
+		return 0, 0, fmt.Errorf("vector size must be positive: %d", size)
 	}
 
-	// Return simulated max and index
-	return float64(size), size / 2, nil
+	switch ctx.config.DataType {
+	case MathDataFloat64:
+		values, err := readMathFloat64Memory(a, size)
+		if err != nil {
+			return 0, 0, err
+		}
+		maxValue, maxIndex := values[0], 0
+		for index := 1; index < len(values); index++ {
+			if values[index] > maxValue {
+				maxValue = values[index]
+				maxIndex = index
+			}
+		}
+		return maxValue, maxIndex, nil
+	case MathDataComplexFloat32, MathDataComplexFloat64:
+		return 0, 0, fmt.Errorf("vector max is not defined for complex math data types")
+	default:
+		values, err := readMathFloat32Memory(a, size)
+		if err != nil {
+			return 0, 0, err
+		}
+		maxValue, maxIndex := values[0], 0
+		for index := 1; index < len(values); index++ {
+			if values[index] > maxValue {
+				maxValue = values[index]
+				maxIndex = index
+			}
+		}
+		return float64(maxValue), maxIndex, nil
+	}
 }
 
 // VectorNorm computes the L2 norm of a vector
@@ -530,15 +589,55 @@ func (ctx *MathContext) VectorNorm(a *memory.Memory, size int) (float64, error) 
 	if a == nil {
 		return 0, fmt.Errorf("input memory cannot be nil")
 	}
-
-	complexity := size * 2 // Square and sum operations
-	err := simulateKernelExecution("mathVectorNorm", complexity/100, 2)
-	if err != nil {
-		return 0, fmt.Errorf("vector norm failed: %v", err)
+	if size <= 0 {
+		return 0, fmt.Errorf("vector size must be positive: %d", size)
 	}
 
-	// Return simulated norm
-	return math.Sqrt(float64(size)), nil
+	switch ctx.config.DataType {
+	case MathDataFloat64:
+		values, err := readMathFloat64Memory(a, size)
+		if err != nil {
+			return 0, err
+		}
+		total := 0.0
+		for _, value := range values {
+			total += value * value
+		}
+		return math.Sqrt(total), nil
+	case MathDataComplexFloat32:
+		values, err := readMathComplex64Memory(a, size)
+		if err != nil {
+			return 0, err
+		}
+		total := 0.0
+		for _, value := range values {
+			magnitude := cmplx.Abs(complex128(value))
+			total += magnitude * magnitude
+		}
+		return math.Sqrt(total), nil
+	case MathDataComplexFloat64:
+		values, err := readMathComplex128Memory(a, size)
+		if err != nil {
+			return 0, err
+		}
+		total := 0.0
+		for _, value := range values {
+			magnitude := cmplx.Abs(value)
+			total += magnitude * magnitude
+		}
+		return math.Sqrt(total), nil
+	default:
+		values, err := readMathFloat32Memory(a, size)
+		if err != nil {
+			return 0, err
+		}
+		total := 0.0
+		for _, value := range values {
+			floatValue := float64(value)
+			total += floatValue * floatValue
+		}
+		return math.Sqrt(total), nil
+	}
 }
 
 // Utility Functions
@@ -634,6 +733,354 @@ func getMathDataTypeSize(dataType MathDataType) int {
 	default:
 		return 4
 	}
+}
+
+func executeMathVectorFloat32(op MathVectorOp) error {
+	inputA, err := readMathFloat32Memory(op.InputA, op.Size)
+	if err != nil {
+		return err
+	}
+	var inputB []float32
+	if requiresBinaryMathInput(op.Operation) {
+		if op.InputB == nil {
+			return fmt.Errorf("operation %s requires a second input", mathOperationName(op.Operation))
+		}
+		inputB, err = readMathFloat32Memory(op.InputB, op.Size)
+		if err != nil {
+			return err
+		}
+	}
+	output := make([]float32, op.Size)
+	for index, value := range inputA {
+		result, calcErr := applyFloat32MathOperation(op.Operation, value, inputBValue(inputB, index))
+		if calcErr != nil {
+			return calcErr
+		}
+		output[index] = result
+	}
+	return writeMathFloat32Memory(op.Output, output)
+}
+
+func executeMathVectorFloat64(op MathVectorOp) error {
+	inputA, err := readMathFloat64Memory(op.InputA, op.Size)
+	if err != nil {
+		return err
+	}
+	var inputB []float64
+	if requiresBinaryMathInput(op.Operation) {
+		if op.InputB == nil {
+			return fmt.Errorf("operation %s requires a second input", mathOperationName(op.Operation))
+		}
+		inputB, err = readMathFloat64Memory(op.InputB, op.Size)
+		if err != nil {
+			return err
+		}
+	}
+	output := make([]float64, op.Size)
+	for index, value := range inputA {
+		result, calcErr := applyFloat64MathOperation(op.Operation, value, inputBValue(inputB, index))
+		if calcErr != nil {
+			return calcErr
+		}
+		output[index] = result
+	}
+	return writeMathFloat64Memory(op.Output, output)
+}
+
+func executeMathVectorComplex64(op MathVectorOp) error {
+	inputA, err := readMathComplex64Memory(op.InputA, op.Size)
+	if err != nil {
+		return err
+	}
+	var inputB []complex64
+	if requiresBinaryMathInput(op.Operation) {
+		if op.InputB == nil {
+			return fmt.Errorf("operation %s requires a second input", mathOperationName(op.Operation))
+		}
+		inputB, err = readMathComplex64Memory(op.InputB, op.Size)
+		if err != nil {
+			return err
+		}
+	}
+	if op.Operation == MathOpCabs || op.Operation == MathOpCarg {
+		output := make([]float32, op.Size)
+		for index, value := range inputA {
+			if op.Operation == MathOpCabs {
+				output[index] = float32(cmplx.Abs(complex128(value)))
+				continue
+			}
+			output[index] = float32(cmplx.Phase(complex128(value)))
+		}
+		return writeMathFloat32Memory(op.Output, output)
+	}
+	output := make([]complex64, op.Size)
+	for index, value := range inputA {
+		result, calcErr := applyComplex64MathOperation(op.Operation, value, inputBValue(inputB, index))
+		if calcErr != nil {
+			return calcErr
+		}
+		output[index] = result
+	}
+	return writeMathComplex64Memory(op.Output, output)
+}
+
+func executeMathVectorComplex128(op MathVectorOp) error {
+	inputA, err := readMathComplex128Memory(op.InputA, op.Size)
+	if err != nil {
+		return err
+	}
+	var inputB []complex128
+	if requiresBinaryMathInput(op.Operation) {
+		if op.InputB == nil {
+			return fmt.Errorf("operation %s requires a second input", mathOperationName(op.Operation))
+		}
+		inputB, err = readMathComplex128Memory(op.InputB, op.Size)
+		if err != nil {
+			return err
+		}
+	}
+	if op.Operation == MathOpCabs || op.Operation == MathOpCarg {
+		output := make([]float64, op.Size)
+		for index, value := range inputA {
+			if op.Operation == MathOpCabs {
+				output[index] = cmplx.Abs(value)
+				continue
+			}
+			output[index] = cmplx.Phase(value)
+		}
+		return writeMathFloat64Memory(op.Output, output)
+	}
+	output := make([]complex128, op.Size)
+	for index, value := range inputA {
+		result, calcErr := applyComplex128MathOperation(op.Operation, value, inputBValue(inputB, index))
+		if calcErr != nil {
+			return calcErr
+		}
+		output[index] = result
+	}
+	return writeMathComplex128Memory(op.Output, output)
+}
+
+func requiresBinaryMathInput(op MathOperation) bool {
+	switch op {
+	case MathOpAdd, MathOpSub, MathOpMul, MathOpDiv, MathOpFMA, MathOpPow, MathOpAtan2, MathOpFmod, MathOpRemainder, MathOpFmax, MathOpFmin, MathOpFdim, MathOpCopysign:
+		return true
+	default:
+		return false
+	}
+}
+
+func applyFloat32MathOperation(op MathOperation, a, b float32) (float32, error) {
+	result, err := applyFloat64MathOperation(op, float64(a), float64(b))
+	return float32(result), err
+}
+
+func applyFloat64MathOperation(op MathOperation, a, b float64) (float64, error) {
+	switch op {
+	case MathOpAdd:
+		return a + b, nil
+	case MathOpSub:
+		return a - b, nil
+	case MathOpMul, MathOpFMA:
+		return a * b, nil
+	case MathOpDiv:
+		return a / b, nil
+	case MathOpSqrt:
+		return math.Sqrt(a), nil
+	case MathOpRsqrt:
+		return 1 / math.Sqrt(a), nil
+	case MathOpRcp:
+		return 1 / a, nil
+	case MathOpSin:
+		return math.Sin(a), nil
+	case MathOpCos:
+		return math.Cos(a), nil
+	case MathOpTan:
+		return math.Tan(a), nil
+	case MathOpExp:
+		return math.Exp(a), nil
+	case MathOpLog:
+		return math.Log(a), nil
+	case MathOpPow:
+		return math.Pow(a, b), nil
+	case MathOpErf:
+		return math.Erf(a), nil
+	case MathOpGamma, MathOpTgamma:
+		return math.Gamma(a), nil
+	case MathOpLgamma:
+		lgamma, _ := math.Lgamma(a)
+		return lgamma, nil
+	case MathOpJ0:
+		return math.J0(a), nil
+	case MathOpJ1:
+		return math.J1(a), nil
+	case MathOpY0:
+		return math.Y0(a), nil
+	case MathOpY1:
+		return math.Y1(a), nil
+	case MathOpCeil:
+		return math.Ceil(a), nil
+	case MathOpFloor:
+		return math.Floor(a), nil
+	case MathOpTrunc:
+		return math.Trunc(a), nil
+	case MathOpRound:
+		return math.Round(a), nil
+	case MathOpFmod:
+		return math.Mod(a, b), nil
+	case MathOpRemainder:
+		return math.Remainder(a, b), nil
+	case MathOpFmax:
+		return math.Max(a, b), nil
+	case MathOpFmin:
+		return math.Min(a, b), nil
+	case MathOpFdim:
+		return math.Dim(a, b), nil
+	case MathOpCopysign:
+		return math.Copysign(a, b), nil
+	default:
+		return 0, fmt.Errorf("operation %s is not implemented for real-valued math data", mathOperationName(op))
+	}
+}
+
+func applyComplex64MathOperation(op MathOperation, a, b complex64) (complex64, error) {
+	result, err := applyComplex128MathOperation(op, complex128(a), complex128(b))
+	return complex64(result), err
+}
+
+func applyComplex128MathOperation(op MathOperation, a, b complex128) (complex128, error) {
+	switch op {
+	case MathOpAdd:
+		return a + b, nil
+	case MathOpSub:
+		return a - b, nil
+	case MathOpMul, MathOpFMA:
+		return a * b, nil
+	case MathOpDiv:
+		return a / b, nil
+	default:
+		return 0, fmt.Errorf("operation %s is not implemented for complex-valued math data", mathOperationName(op))
+	}
+}
+
+func mathOperationName(op MathOperation) string {
+	switch op {
+	case MathOpAdd:
+		return "add"
+	case MathOpMul:
+		return "mul"
+	case MathOpFMA:
+		return "fma"
+	case MathOpSqrt:
+		return "sqrt"
+	case MathOpRsqrt:
+		return "rsqrt"
+	case MathOpSin:
+		return "sin"
+	case MathOpCos:
+		return "cos"
+	case MathOpTan:
+		return "tan"
+	case MathOpExp:
+		return "exp"
+	case MathOpLog:
+		return "log"
+	case MathOpPow:
+		return "pow"
+	case MathOpErf:
+		return "erf"
+	case MathOpGamma:
+		return "gamma"
+	case MathOpJ0:
+		return "j0"
+	case MathOpCabs:
+		return "cabs"
+	case MathOpCarg:
+		return "carg"
+	default:
+		return fmt.Sprintf("op-%d", op)
+	}
+}
+
+func readMathFloat32Memory(mem *memory.Memory, length int) ([]float32, error) {
+	return readMathTypedMemory[float32](mem, length)
+}
+
+func writeMathFloat32Memory(mem *memory.Memory, values []float32) error {
+	return writeMathTypedMemory(mem, values)
+}
+
+func readMathFloat64Memory(mem *memory.Memory, length int) ([]float64, error) {
+	return readMathTypedMemory[float64](mem, length)
+}
+
+func writeMathFloat64Memory(mem *memory.Memory, values []float64) error {
+	return writeMathTypedMemory(mem, values)
+}
+
+func readMathComplex64Memory(mem *memory.Memory, length int) ([]complex64, error) {
+	return readMathTypedMemory[complex64](mem, length)
+}
+
+func writeMathComplex64Memory(mem *memory.Memory, values []complex64) error {
+	return writeMathTypedMemory(mem, values)
+}
+
+func readMathComplex128Memory(mem *memory.Memory, length int) ([]complex128, error) {
+	return readMathTypedMemory[complex128](mem, length)
+}
+
+func writeMathComplex128Memory(mem *memory.Memory, values []complex128) error {
+	return writeMathTypedMemory(mem, values)
+}
+
+func readMathTypedMemory[T any](mem *memory.Memory, length int) ([]T, error) {
+	if mem == nil {
+		return nil, fmt.Errorf("memory cannot be nil")
+	}
+	if length < 0 {
+		return nil, fmt.Errorf("length must be non-negative: %d", length)
+	}
+	values := make([]T, length)
+	if length == 0 {
+		return values, nil
+	}
+	var zero T
+	byteSize := int(unsafe.Sizeof(zero)) * length
+	if int64(byteSize) > mem.Size() {
+		return nil, fmt.Errorf("allocation too small: need %d bytes, have %d", byteSize, mem.Size())
+	}
+	hostBytes := unsafe.Slice((*byte)(unsafe.Pointer(&values[0])), byteSize)
+	if err := memory.CopyDeviceToHost(hostBytes, mem); err != nil {
+		return nil, err
+	}
+	return values, nil
+}
+
+func writeMathTypedMemory[T any](mem *memory.Memory, values []T) error {
+	if mem == nil {
+		return fmt.Errorf("memory cannot be nil")
+	}
+	if len(values) == 0 {
+		return nil
+	}
+	var zero T
+	byteSize := int(unsafe.Sizeof(zero)) * len(values)
+	if int64(byteSize) > mem.Size() {
+		return fmt.Errorf("allocation too small: need %d bytes, have %d", byteSize, mem.Size())
+	}
+	host := make([]T, len(values))
+	copy(host, values)
+	hostBytes := unsafe.Slice((*byte)(unsafe.Pointer(&host[0])), byteSize)
+	return memory.CopyHostToDevice(mem, hostBytes)
+}
+
+func inputBValue[T any](values []T, index int) T {
+	if len(values) == 0 {
+		var zero T
+		return zero
+	}
+	return values[index]
 }
 
 // Destroy cleans up math context resources

@@ -10,9 +10,9 @@ import (
 )
 
 /*
-#cgo CFLAGS: -I/usr/local/cuda/include -I/opt/cuda/include
+#cgo linux CFLAGS: -I/usr/local/cuda/include -I/opt/cuda/include
 #cgo windows CFLAGS: -I"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include" -I"D:/NVIDIA/include"
-#cgo LDFLAGS: -L/usr/local/cuda/lib64 -L/opt/cuda/lib64 -lcudart -lcuda
+#cgo linux LDFLAGS: -L/usr/local/cuda/lib64 -L/opt/cuda/lib64 -lcudart -lcuda
 #cgo windows LDFLAGS: -L${SRCDIR}/../lib_mingw -lcudart -lcuda -Wl,--no-as-needed
 #cgo darwin LDFLAGS: -lcudart -lcuda
 

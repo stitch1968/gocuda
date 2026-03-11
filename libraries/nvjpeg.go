@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"fmt"
 	"image"
+	"image/color"
 	"image/jpeg"
 
 	"github.com/stitch1968/gocuda/memory"
@@ -141,18 +142,13 @@ func (decoder *JpegDecoderState) DecodeJpeg(jpegData []byte, params JpegDecodePa
 	}
 
 	bounds := img.Bounds()
-	width := bounds.Dx()
-	height := bounds.Dy()
-
-	// Apply cropping if specified
-	if params.CropWidth > 0 && params.CropHeight > 0 {
-		width = params.CropWidth
-		height = params.CropHeight
-	}
-
-	// Apply scaling if specified
-	if params.ScaleWidth > 0 && params.ScaleHeight > 0 {
+	cropRect := resolveJpegCrop(bounds, params)
+	width := cropRect.Dx()
+	height := cropRect.Dy()
+	if params.ScaleWidth > 0 {
 		width = params.ScaleWidth
+	}
+	if params.ScaleHeight > 0 {
 		height = params.ScaleHeight
 	}
 
@@ -175,9 +171,8 @@ func (decoder *JpegDecoderState) DecodeJpeg(jpegData []byte, params JpegDecodePa
 		return nil, 0, 0, fmt.Errorf("failed to allocate output memory: %v", err)
 	}
 
-	// Simulate GPU decoding kernel execution
-	err = simulateKernelExecution("nvjpegDecode", width*height, 5)
-	if err != nil {
+	outputBytes := convertImageToJpegFormat(img, cropRect, width, height, params.OutputFormat)
+	if err := memory.CopyHostToDevice(outputMem, outputBytes); err != nil {
 		outputMem.Free()
 		return nil, 0, 0, err
 	}
@@ -211,17 +206,6 @@ func (decoder *JpegDecoderState) DecodeJpegBatch(jpegDataList [][]byte, params J
 		heights[i] = height
 	}
 
-	// Simulate batch processing overhead
-	err := simulateKernelExecution("nvjpegDecodeBatch", len(jpegDataList)*1000, 3)
-	if err != nil {
-		for _, output := range outputs {
-			if output != nil {
-				output.Free()
-			}
-		}
-		return nil, nil, nil, err
-	}
-
 	return outputs, widths, heights, nil
 }
 
@@ -249,21 +233,23 @@ func (encoder *JpegEncoderState) EncodeJpeg(imageData *memory.Memory, width, hei
 
 	expectedSize := width * height * channels
 
-	// Simulate GPU encoding kernel execution
-	err := simulateKernelExecution("nvjpegEncode", expectedSize, 4)
+	hostBytes := make([]byte, expectedSize)
+	if err := memory.CopyDeviceToHost(hostBytes, imageData); err != nil {
+		return nil, err
+	}
+
+	var buf bytes.Buffer
+	img, err := buildImageFromJpegBytes(hostBytes, width, height, params.InputFormat)
 	if err != nil {
 		return nil, err
 	}
 
-	// Simulate JPEG encoding - create a dummy JPEG header
-	// In real implementation, this would be GPU-accelerated encoding
-	var buf bytes.Buffer
-
-	// Create a simple dummy image for encoding simulation
-	img := image.NewRGBA(image.Rect(0, 0, width, height))
-
 	// Set encoder quality
-	options := &jpeg.Options{Quality: params.Quality}
+	quality := params.Quality
+	if quality == 0 {
+		quality = encoder.quality
+	}
+	options := &jpeg.Options{Quality: quality}
 	err = jpeg.Encode(&buf, img, options)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode JPEG: %v", err)
@@ -361,4 +347,96 @@ func EncodeJpegQuick(imageData *memory.Memory, width, height int, inputFormat Jp
 	}
 
 	return encoder.EncodeJpeg(imageData, width, height, params)
+}
+
+func resolveJpegCrop(bounds image.Rectangle, params JpegDecodeParams) image.Rectangle {
+	if params.CropWidth <= 0 || params.CropHeight <= 0 {
+		return bounds
+	}
+	minX := clampInt(bounds.Min.X+params.CropX, bounds.Min.X, bounds.Max.X)
+	minY := clampInt(bounds.Min.Y+params.CropY, bounds.Min.Y, bounds.Max.Y)
+	maxX := clampInt(minX+params.CropWidth, minX, bounds.Max.X)
+	maxY := clampInt(minY+params.CropHeight, minY, bounds.Max.Y)
+	return image.Rect(minX, minY, maxX, maxY)
+}
+
+func convertImageToJpegFormat(img image.Image, cropRect image.Rectangle, width, height int, format JpegFormat) []byte {
+	channels := jpegChannelCount(format)
+	output := make([]byte, width*height*channels)
+	for y := 0; y < height; y++ {
+		sourceY := cropRect.Min.Y + (y*cropRect.Dy())/height
+		for x := 0; x < width; x++ {
+			sourceX := cropRect.Min.X + (x*cropRect.Dx())/width
+			r, g, b, _ := img.At(sourceX, sourceY).RGBA()
+			r8 := byte(r >> 8)
+			g8 := byte(g >> 8)
+			b8 := byte(b >> 8)
+			offset := (y*width + x) * channels
+			switch format {
+			case JpegFormatGrayscale:
+				output[offset] = byte((299*uint16(r8) + 587*uint16(g8) + 114*uint16(b8)) / 1000)
+			case JpegFormatBGR:
+				output[offset], output[offset+1], output[offset+2] = b8, g8, r8
+			case JpegFormatRGBI:
+				output[offset], output[offset+1], output[offset+2], output[offset+3] = r8, g8, b8, 255
+			case JpegFormatBGRI:
+				output[offset], output[offset+1], output[offset+2], output[offset+3] = b8, g8, r8, 255
+			default:
+				output[offset], output[offset+1], output[offset+2] = r8, g8, b8
+			}
+		}
+	}
+	return output
+}
+
+func buildImageFromJpegBytes(data []byte, width, height int, format JpegFormat) (image.Image, error) {
+	channels := jpegChannelCount(format)
+	if len(data) < width*height*channels {
+		return nil, fmt.Errorf("image buffer too small: need %d bytes, have %d", width*height*channels, len(data))
+	}
+	if format == JpegFormatGrayscale {
+		img := image.NewGray(image.Rect(0, 0, width, height))
+		copy(img.Pix, data[:width*height])
+		return img, nil
+	}
+	img := image.NewRGBA(image.Rect(0, 0, width, height))
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			source := (y*width + x) * channels
+			var r, g, b byte
+			switch format {
+			case JpegFormatBGR:
+				b, g, r = data[source], data[source+1], data[source+2]
+			case JpegFormatRGBI:
+				r, g, b = data[source], data[source+1], data[source+2]
+			case JpegFormatBGRI:
+				b, g, r = data[source], data[source+1], data[source+2]
+			default:
+				r, g, b = data[source], data[source+1], data[source+2]
+			}
+			img.SetRGBA(x, y, color.RGBA{R: r, G: g, B: b, A: 255})
+		}
+	}
+	return img, nil
+}
+
+func jpegChannelCount(format JpegFormat) int {
+	switch format {
+	case JpegFormatGrayscale:
+		return 1
+	case JpegFormatRGBI, JpegFormatBGRI:
+		return 4
+	default:
+		return 3
+	}
+}
+
+func clampInt(value, minValue, maxValue int) int {
+	if value < minValue {
+		return minValue
+	}
+	if value > maxValue {
+		return maxValue
+	}
+	return value
 }

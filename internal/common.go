@@ -24,6 +24,15 @@ type Stream struct {
 	closed     bool
 }
 
+// NativeStreamHandle exposes the underlying CUDA stream pointer for internal
+// package consumers that need to attach library handles to a CUDA stream.
+func NativeStreamHandle(stream *Stream) unsafe.Pointer {
+	if stream == nil {
+		return nil
+	}
+	return stream.ptr
+}
+
 var (
 	defaultStream *Stream
 	streamOnce    sync.Once

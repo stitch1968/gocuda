@@ -5,7 +5,9 @@ package libraries
 import (
 	"fmt"
 	"time"
+	"unsafe"
 
+	cuda "github.com/stitch1968/gocuda"
 	"github.com/stitch1968/gocuda/memory"
 )
 
@@ -13,7 +15,8 @@ import (
 
 // SolverContext manages cuSOLVER operations
 type SolverContext struct {
-	handle uintptr // Simulated handle
+	handle unsafe.Pointer // Simulated or native handle
+	native bool
 }
 
 // QRInfo contains information about QR decomposition
@@ -44,9 +47,12 @@ func CreateSolverContext() (*SolverContext, error) {
 	if err := ensureCudaReady(); err != nil {
 		return nil, err
 	}
+	if cuda.ShouldUseCuda() {
+		return createNativeSolverContext()
+	}
 
 	return &SolverContext{
-		handle: uintptr(time.Now().UnixNano()),
+		handle: unsafe.Pointer(uintptr(time.Now().UnixNano())),
 	}, nil
 }
 
@@ -57,6 +63,10 @@ func (ctx *SolverContext) QRFactorization(A *memory.Memory, m, n int) (*QRInfo, 
 	}
 	if m <= 0 || n <= 0 {
 		return nil, fmt.Errorf("invalid matrix dimensions")
+	}
+
+	if ctx.native {
+		return nativeQRFactorization(ctx, A, m, n)
 	}
 
 	minMN := min(m, n)
@@ -99,6 +109,10 @@ func (ctx *SolverContext) SVDDecomposition(A *memory.Memory, m, n int, computeUV
 	}
 	if m <= 0 || n <= 0 {
 		return nil, fmt.Errorf("invalid matrix dimensions")
+	}
+
+	if ctx.native {
+		return nativeSVDDecomposition(ctx, A, m, n, computeUV)
 	}
 
 	minMN := min(m, n)
@@ -169,6 +183,10 @@ func (ctx *SolverContext) LUFactorization(A *memory.Memory, m, n int) (*LUInfo, 
 		return nil, fmt.Errorf("invalid matrix dimensions")
 	}
 
+	if ctx.native {
+		return nativeLUFactorization(ctx, A, m, n)
+	}
+
 	minMN := min(m, n)
 
 	// Allocate pivot indices
@@ -211,6 +229,10 @@ func (ctx *SolverContext) SolveLinearSystem(A *memory.Memory, b *memory.Memory, 
 		return nil, fmt.Errorf("invalid matrix dimension")
 	}
 
+	if ctx.native {
+		return nativeSolveLinearSystem(ctx, A, b, n)
+	}
+
 	// First, perform LU factorization
 	luInfo, err := ctx.LUFactorization(A, n, n)
 	if err != nil {
@@ -242,6 +264,10 @@ func (ctx *SolverContext) Eigenvalues(A *memory.Memory, n int, computeVectors bo
 	}
 	if n <= 0 {
 		return nil, nil, fmt.Errorf("invalid matrix dimension")
+	}
+
+	if ctx.native {
+		return nativeEigenvalues(ctx, A, n, computeVectors)
 	}
 
 	// Allocate eigenvalues (complex in general, but simplified to real)
@@ -283,6 +309,10 @@ func (ctx *SolverContext) CholeskyFactorization(A *memory.Memory, n int) error {
 		return fmt.Errorf("invalid matrix dimension")
 	}
 
+	if ctx.native {
+		return nativeCholeskyFactorization(ctx, A, n)
+	}
+
 	// Simulate Cholesky factorization - O(n³/3)
 	operations := n * n * n / 3
 	return simulateKernelExecution("cusolverDnSpotrf", operations, 4)
@@ -292,6 +322,9 @@ func (ctx *SolverContext) CholeskyFactorization(A *memory.Memory, n int) error {
 func (ctx *SolverContext) PseudoInverse(A *memory.Memory, m, n int) (*memory.Memory, error) {
 	if A == nil {
 		return nil, fmt.Errorf("input matrix cannot be nil")
+	}
+	if ctx.native {
+		return nativePseudoInverse(ctx, A, m, n)
 	}
 
 	// Perform SVD
@@ -377,7 +410,10 @@ func (lu *LUInfo) Destroy() error {
 
 // DestroyContext cleans up the solver context
 func (ctx *SolverContext) DestroyContext() error {
-	ctx.handle = 0
+	if ctx.native {
+		return destroyNativeSolverContext(ctx)
+	}
+	ctx.handle = nil
 	return nil
 }
 

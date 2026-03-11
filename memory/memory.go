@@ -86,9 +86,9 @@ func AllocWithTypeAndStream(stream *internal.Stream, size int64, memType Type) (
 		if err != nil {
 			return nil, fmt.Errorf("CUDA malloc failed: %v", err)
 		}
-		// Managed allocations remain host-accessible, which lets the CPU-backed
-		// simulation paths and tests inspect buffers safely in CUDA builds.
-		data = unsafe.Slice((*byte)(ptr), int(size))
+		// Real device allocations are not host-visible. Callers must use explicit
+		// transfer helpers instead of treating the device pointer as a Go slice.
+		data = nil
 	} else {
 		// Use simulation with regular memory
 		// CUDA requires 256-byte alignment for optimal performance

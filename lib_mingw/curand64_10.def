@@ -1,0 +1,30 @@
+LIBRARY curand64_10.dll
+EXPORTS
+  NvOptimusEnablementCuda @1
+  curandCreateGenerator @2
+  curandCreateGeneratorHost @3
+  curandCreatePoissonDistribution @4
+  curandDestroyDistribution @5
+  curandDestroyGenerator @6
+  curandGenerate @7
+  curandGenerateLogNormal @8
+  curandGenerateLogNormalDouble @9
+  curandGenerateLongLong @10
+  curandGenerateNormal @11
+  curandGenerateNormalDouble @12
+  curandGeneratePoisson @13
+  curandGeneratePoissonMethod @14
+  curandGenerateSeeds @15
+  curandGenerateUniform @16
+  curandGenerateUniformDouble @17
+  curandGetDirectionVectors32 @18
+  curandGetDirectionVectors64 @19
+  curandGetProperty @20
+  curandGetScrambleConstants32 @21
+  curandGetScrambleConstants64 @22
+  curandGetVersion @23
+  curandSetGeneratorOffset @24
+  curandSetGeneratorOrdering @25
+  curandSetPseudoRandomGeneratorSeed @26
+  curandSetQuasiRandomGeneratorDimensions @27
+  curandSetStream @28

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/stitch1968/gocuda/cuda"
+	cuda "github.com/stitch1968/gocuda"
 )
 
 var (

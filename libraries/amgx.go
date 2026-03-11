@@ -121,6 +121,8 @@ type AmgXHandle struct {
 	config    AmgXConfig
 	workspace *memory.Memory
 	resources *memory.Memory
+	matrix    *AmgXMatrix
+	dense     []float64
 	n         int
 	nnz       int
 	setupDone bool
@@ -261,53 +263,15 @@ func (handle *AmgXHandle) Setup(matrix *AmgXMatrix) error {
 
 	handle.n = matrix.n
 	handle.nnz = matrix.nnz
-
-	// Simulate AMG setup complexity
-	n := int64(matrix.n)
-	nnz := int64(matrix.nnz)
-
-	// Setup involves multiple phases
-	setupComplexity := int64(0)
-
-	// 1. Coarsening phase
-	switch handle.config.Coarsening {
-	case AmgXCoarseningPMIS:
-		setupComplexity += nnz * int64(math.Log(float64(n)))
-	case AmgXCoarseningRuge_Stueben:
-		setupComplexity += nnz * n / 10
-	case AmgXCoarseningHMIS:
-		setupComplexity += nnz * int64(math.Log(float64(n))) * 2
-	case AmgXCoarseningFalgout:
-		setupComplexity += nnz * n / 20
-	case AmgXCoarseningMultiPASS:
-		setupComplexity += nnz * int64(math.Log(float64(n))) * 3
-	}
-
-	// 2. Interpolation operator construction
-	switch handle.config.Interpolation {
-	case AmgXInterpolationClassical:
-		setupComplexity += nnz * 2
-	case AmgXInterpolationDirect:
-		setupComplexity += nnz
-	case AmgXInterpolationMultipass:
-		setupComplexity += nnz * 3
-	case AmgXInterpolationExtended:
-		setupComplexity += nnz * 4
-	case AmgXInterpolationModifiedClassical:
-		setupComplexity += nnz * 2
-	}
-
-	// 3. Coarse grid operator construction (Galerkin product)
-	setupComplexity += nnz * int64(math.Log(float64(n)))
-
-	// Simulate setup execution
-	err := simulateKernelExecution("amgxSetup", int(setupComplexity/10000), 8)
+	dense, err := amgxDenseFromMatrix(matrix, handle.config.Precision)
 	if err != nil {
 		return fmt.Errorf("AmgX setup failed: %v", err)
 	}
+	handle.matrix = matrix
+	handle.dense = dense
 
 	// Estimate number of levels based on problem size
-	handle.levels = int(math.Log2(float64(n)) / 2)
+	handle.levels = int(math.Log2(float64(matrix.n)) / 2)
 	if handle.levels > handle.config.MaxLevels {
 		handle.levels = handle.config.MaxLevels
 	}
@@ -341,74 +305,48 @@ func (handle *AmgXHandle) Solve(b, x *AmgXVector) (*AmgXSolveInfo, error) {
 	info.GridComplexity = float64(handle.levels) * 1.33
 	info.OperatorComplexity = float64(handle.levels) * 1.8
 
-	// Simulate iterative solving
 	maxIter := handle.config.MaxIterations
 	tolerance := handle.config.Tolerance
 	relTolerance := handle.config.RelativeTolerance
-
-	residual := 1.0
-	relResidual := 1.0
-	iterations := 0
-
-	// Estimate convergence rate based on solver type
-	var convergenceRate float64
-	switch handle.config.Solver {
-	case AmgXSolverAMG:
-		convergenceRate = 0.1 // AMG typically has excellent convergence
-	case AmgXSolverPCG:
-		convergenceRate = 0.2 // PCG with AMG preconditioning
-	case AmgXSolverPBICGSTAB:
-		convergenceRate = 0.3
-	case AmgXSolverGMRES, AmgXSolverFGMRES:
-		convergenceRate = 0.25
-	default:
-		convergenceRate = 0.4
+	bValues, err := amgxReadVector(b, handle.config.Precision)
+	if err != nil {
+		return nil, err
 	}
-
-	// Simulate AMG cycles
-	for iterations < maxIter {
-		iterations++
-
-		// Simulate one AMG cycle or Krylov iteration
-		cycleComplexity := handle.nnz
-
-		switch handle.config.Cycle {
-		case AmgXCycleV:
-			cycleComplexity = cycleComplexity * 2
-		case AmgXCycleW:
-			cycleComplexity = cycleComplexity * 3
-		case AmgXCycleF:
-			cycleComplexity = cycleComplexity * 4
+	solution, err := dssSolveGaussian(handle.dense, handle.n, bValues)
+	if err != nil {
+		return nil, err
+	}
+	residual := dssResidual(handle.dense, handle.n, solution, bValues)
+	if err := amgxWriteVector(x, handle.config.Precision, solution); err != nil {
+		return nil, err
+	}
+	iterations := 1
+	if handle.config.Solver == AmgXSolverPCG || handle.config.Solver == AmgXSolverCG {
+		iterations = 2
+	}
+	relResidual := residual
+	if len(bValues) > 0 {
+		norm := 0.0
+		for _, value := range bValues {
+			norm += value * value
 		}
-
-		// Add smoothing cost
-		smoothingCost := (handle.config.PreSmoothSteps + handle.config.PostSmoothSteps) * handle.nnz
-		cycleComplexity += smoothingCost
-
-		err := simulateKernelExecution("amgxSolveIteration", cycleComplexity/1000, 2)
-		if err != nil {
-			return info, fmt.Errorf("AmgX solve iteration %d failed: %v", iterations, err)
-		}
-
-		// Update residuals
-		residual *= convergenceRate
-		relResidual = residual
-
-		// Check convergence
-		if residual < tolerance || relResidual < relTolerance {
-			info.ConvergenceReason = "Tolerance reached"
-			break
+		if norm > 0 {
+			relResidual = residual / math.Sqrt(norm)
 		}
 	}
 
 	info.Iterations = iterations
 	info.AbsoluteResidual = residual
 	info.RelativeResidual = relResidual
-	info.SolveTime = float64(iterations) * 0.1 // Simulated time per iteration
-	info.SetupTime = 1.0                       // Simulated setup time
+	info.SolveTime = float64(iterations) * 0.01
+	info.SetupTime = 0.01
 
-	if iterations >= maxIter {
+	if residual < tolerance || relResidual < relTolerance {
+		info.ConvergenceReason = "Tolerance reached"
+	} else if iterations >= maxIter {
 		info.ConvergenceReason = "Maximum iterations reached"
+	} else {
+		info.ConvergenceReason = "Deterministic direct solve"
 	}
 
 	return info, nil
@@ -447,24 +385,12 @@ func (handle *AmgXHandle) UpdateMatrix(matrix *AmgXMatrix, keepStructure bool) e
 	if matrix.n != handle.n || matrix.nnz != handle.nnz {
 		return fmt.Errorf("matrix structure must remain the same for updates")
 	}
-
-	// If structure changes, we need partial re-setup
-	if !keepStructure {
-		// Only rebuild interpolation operators, not coarsening
-		complexity := int64(matrix.nnz) * 2
-		err := simulateKernelExecution("amgxUpdateInterpolation", int(complexity/1000), 4)
-		if err != nil {
-			return fmt.Errorf("AmgX matrix update failed: %v", err)
-		}
-	} else {
-		// Just update numerical values
-		complexity := int64(matrix.nnz)
-		err := simulateKernelExecution("amgxUpdateValues", int(complexity/1000), 1)
-		if err != nil {
-			return fmt.Errorf("AmgX matrix value update failed: %v", err)
-		}
+	dense, err := amgxDenseFromMatrix(matrix, handle.config.Precision)
+	if err != nil {
+		return fmt.Errorf("AmgX matrix update failed: %v", err)
 	}
-
+	handle.matrix = matrix
+	handle.dense = dense
 	return nil
 }
 
@@ -561,8 +487,81 @@ func (handle *AmgXHandle) Destroy() error {
 		handle.resources.Free()
 		handle.resources = nil
 	}
+	handle.matrix = nil
+	handle.dense = nil
 	handle.setupDone = false
 	return nil
+}
+
+func amgxDenseFromMatrix(matrix *AmgXMatrix, precision AmgXPrecision) ([]float64, error) {
+	dense := make([]float64, matrix.n*matrix.n)
+	rowPtr, err := readInt32Memory(matrix.rowPtr, matrix.n+1)
+	if err != nil {
+		return nil, err
+	}
+	colInd, err := readInt32Memory(matrix.colInd, matrix.nnz)
+	if err != nil {
+		return nil, err
+	}
+	switch precision {
+	case AmgXPrecisionFloat:
+		values, err := readMathFloat32Memory(matrix.values, matrix.nnz)
+		if err != nil {
+			return nil, err
+		}
+		for row := 0; row < matrix.n; row++ {
+			for index := rowPtr[row]; index < rowPtr[row+1]; index++ {
+				dense[row*matrix.n+int(colInd[index])] = float64(values[index])
+			}
+		}
+	case AmgXPrecisionDouble:
+		values, err := readMathFloat64Memory(matrix.values, matrix.nnz)
+		if err != nil {
+			return nil, err
+		}
+		for row := 0; row < matrix.n; row++ {
+			for index := rowPtr[row]; index < rowPtr[row+1]; index++ {
+				dense[row*matrix.n+int(colInd[index])] = values[index]
+			}
+		}
+	default:
+		return nil, fmt.Errorf("deterministic AmgX currently supports float and double precision only")
+	}
+	return dense, nil
+}
+
+func amgxReadVector(vector *AmgXVector, precision AmgXPrecision) ([]float64, error) {
+	switch precision {
+	case AmgXPrecisionFloat:
+		values, err := readMathFloat32Memory(vector.data, vector.size)
+		if err != nil {
+			return nil, err
+		}
+		result := make([]float64, len(values))
+		for index, value := range values {
+			result[index] = float64(value)
+		}
+		return result, nil
+	case AmgXPrecisionDouble:
+		return readMathFloat64Memory(vector.data, vector.size)
+	default:
+		return nil, fmt.Errorf("deterministic AmgX currently supports float and double precision only")
+	}
+}
+
+func amgxWriteVector(vector *AmgXVector, precision AmgXPrecision, values []float64) error {
+	switch precision {
+	case AmgXPrecisionFloat:
+		result := make([]float32, len(values))
+		for index, value := range values {
+			result[index] = float32(value)
+		}
+		return writeMathFloat32Memory(vector.data, result)
+	case AmgXPrecisionDouble:
+		return writeMathFloat64Memory(vector.data, values)
+	default:
+		return fmt.Errorf("deterministic AmgX currently supports float and double precision only")
+	}
 }
 
 // Destroy cleans up AmgX matrix resources

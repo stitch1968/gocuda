@@ -7,6 +7,7 @@ import (
 	"math"
 	"time"
 
+	cuda "github.com/stitch1968/gocuda"
 	"github.com/stitch1968/gocuda/memory"
 )
 
@@ -40,12 +41,14 @@ type FFTPlan struct {
 	nx, ny, nz int
 	batch      int
 	destroyed  bool
+	native     bool
 }
 
 // FFTContext manages cuFFT operations
 type FFTContext struct {
 	handle uintptr
 	plans  []*FFTPlan
+	native bool
 }
 
 // Complex64 represents a single-precision complex number
@@ -64,6 +67,9 @@ type Complex128 struct {
 func CreateFFTContext() (*FFTContext, error) {
 	if err := ensureCudaReady(); err != nil {
 		return nil, err
+	}
+	if cuda.ShouldUseCuda() {
+		return createNativeFFTContext()
 	}
 
 	ctx := &FFTContext{
@@ -89,6 +95,14 @@ func (ctx *FFTContext) CreatePlan1D(nx int, fftType FFTType, batch int) (*FFTPla
 	if !isPowerOfTwo(nx) {
 		return nil, fmt.Errorf("FFT size must be a power of 2 for optimal performance, got %d", nx)
 	}
+	if ctx.native {
+		plan, err := createNativeFFTPlan1D(ctx, nx, fftType, batch)
+		if err != nil {
+			return nil, err
+		}
+		ctx.plans = append(ctx.plans, plan)
+		return plan, nil
+	}
 
 	plan := &FFTPlan{
 		handle:  uintptr(time.Now().UnixNano()),
@@ -111,6 +125,14 @@ func (ctx *FFTContext) CreatePlan1D(nx int, fftType FFTType, batch int) (*FFTPla
 func (ctx *FFTContext) CreatePlan2D(nx, ny int, fftType FFTType) (*FFTPlan, error) {
 	if nx <= 0 || ny <= 0 {
 		return nil, fmt.Errorf("invalid plan parameters: nx=%d, ny=%d", nx, ny)
+	}
+	if ctx.native {
+		plan, err := createNativeFFTPlan2D(ctx, nx, ny, fftType)
+		if err != nil {
+			return nil, err
+		}
+		ctx.plans = append(ctx.plans, plan)
+		return plan, nil
 	}
 
 	plan := &FFTPlan{
@@ -135,6 +157,14 @@ func (ctx *FFTContext) CreatePlan2D(nx, ny int, fftType FFTType) (*FFTPlan, erro
 func (ctx *FFTContext) CreatePlan3D(nx, ny, nz int, fftType FFTType) (*FFTPlan, error) {
 	if nx <= 0 || ny <= 0 || nz <= 0 {
 		return nil, fmt.Errorf("invalid plan parameters: nx=%d, ny=%d, nz=%d", nx, ny, nz)
+	}
+	if ctx.native {
+		plan, err := createNativeFFTPlan3D(ctx, nx, ny, nz, fftType)
+		if err != nil {
+			return nil, err
+		}
+		ctx.plans = append(ctx.plans, plan)
+		return plan, nil
 	}
 
 	plan := &FFTPlan{
@@ -163,6 +193,9 @@ func (ctx *FFTContext) ExecC2C(plan *FFTPlan, input, output *memory.Memory, dire
 	}
 	if plan.fftType != FFTTypeC2C {
 		return fmt.Errorf("plan type mismatch: expected C2C, got %v", plan.fftType)
+	}
+	if plan.native {
+		return execNativeFFT(plan, input, output, direction)
 	}
 
 	totalSize := plan.nx
@@ -199,6 +232,9 @@ func (ctx *FFTContext) ExecR2C(plan *FFTPlan, input, output *memory.Memory) erro
 	if plan.fftType != FFTTypeR2C {
 		return fmt.Errorf("plan type mismatch: expected R2C, got %v", plan.fftType)
 	}
+	if plan.native {
+		return execNativeFFT(plan, input, output, FFTForward)
+	}
 
 	totalSize := plan.nx
 	if plan.ny > 0 {
@@ -225,6 +261,9 @@ func (ctx *FFTContext) ExecC2R(plan *FFTPlan, input, output *memory.Memory) erro
 	if plan.fftType != FFTTypeC2R {
 		return fmt.Errorf("plan type mismatch: expected C2R, got %v", plan.fftType)
 	}
+	if plan.native {
+		return execNativeFFT(plan, input, output, FFTInverse)
+	}
 
 	totalSize := plan.nx
 	if plan.ny > 0 {
@@ -248,6 +287,9 @@ func (plan *FFTPlan) SetStream(stream interface{}) error {
 	if plan.destroyed {
 		return fmt.Errorf("plan has been destroyed")
 	}
+	if plan.native {
+		return setNativeFFTPlanStream(plan, stream)
+	}
 	// In simulation mode, we just acknowledge the stream setting
 	return simulateKernelExecution("cufftSetStream", 1, 1)
 }
@@ -258,6 +300,9 @@ func (plan *FFTPlan) DestroyPlan() error {
 		return fmt.Errorf("plan already destroyed")
 	}
 	plan.destroyed = true
+	if plan.native {
+		return destroyNativeFFTPlan(plan)
+	}
 	return simulateKernelExecution("cufftDestroy", 1, 1)
 }
 
@@ -270,6 +315,9 @@ func (ctx *FFTContext) DestroyContext() error {
 		}
 	}
 	ctx.plans = nil
+	if ctx.native {
+		return destroyNativeFFTContext(ctx)
+	}
 	return simulateKernelExecution("cufftDestroyContext", 1, 1)
 }
 

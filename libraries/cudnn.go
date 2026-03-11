@@ -164,11 +164,6 @@ func CreateDNNHandle() (*DNNHandle, error) {
 		handle: uintptr(time.Now().UnixNano()),
 	}
 
-	err := simulateKernelExecution("cudnnCreate", 1, 1)
-	if err != nil {
-		return nil, err
-	}
-
 	return handle, nil
 }
 
@@ -178,7 +173,7 @@ func (h *DNNHandle) DestroyHandle() error {
 		return fmt.Errorf("handle already destroyed")
 	}
 	h.destroyed = true
-	return simulateKernelExecution("cudnnDestroy", 1, 1)
+	return nil
 }
 
 // Tensor Descriptor Operations
@@ -191,11 +186,6 @@ func CreateTensorDescriptor() (*TensorDescriptor, error) {
 
 	desc := &TensorDescriptor{
 		handle: uintptr(time.Now().UnixNano()),
-	}
-
-	err := simulateKernelExecution("cudnnCreateTensorDescriptor", 1, 1)
-	if err != nil {
-		return nil, err
 	}
 
 	return desc, nil
@@ -216,7 +206,7 @@ func (desc *TensorDescriptor) SetTensorNdDescriptor(dataType DNNDataType, dimens
 	copy(desc.dimensions, dimensions)
 	copy(desc.strides, strides)
 
-	return simulateKernelExecution("cudnnSetTensorNdDescriptor", len(dimensions), 1)
+	return nil
 }
 
 // SetTensor4dDescriptor sets the tensor descriptor for 4D tensors
@@ -236,7 +226,7 @@ func (desc *TensorDescriptor) SetTensor4dDescriptor(format DNNTensorFormat, data
 		desc.strides = []int{h * w * c, 1, w * c, c}
 	}
 
-	return simulateKernelExecution("cudnnSetTensor4dDescriptor", 1, 1)
+	return nil
 }
 
 // DestroyTensorDescriptor destroys a tensor descriptor
@@ -245,7 +235,7 @@ func (desc *TensorDescriptor) DestroyTensorDescriptor() error {
 		return fmt.Errorf("descriptor already destroyed")
 	}
 	desc.destroyed = true
-	return simulateKernelExecution("cudnnDestroyTensorDescriptor", 1, 1)
+	return nil
 }
 
 // Filter Descriptor Operations
@@ -258,11 +248,6 @@ func CreateFilterDescriptor() (*FilterDescriptor, error) {
 
 	desc := &FilterDescriptor{
 		handle: uintptr(time.Now().UnixNano()),
-	}
-
-	err := simulateKernelExecution("cudnnCreateFilterDescriptor", 1, 1)
-	if err != nil {
-		return nil, err
 	}
 
 	return desc, nil
@@ -279,7 +264,7 @@ func (desc *FilterDescriptor) SetFilterNdDescriptor(dataType DNNDataType, format
 	desc.dimensions = make([]int, len(dimensions))
 	copy(desc.dimensions, dimensions)
 
-	return simulateKernelExecution("cudnnSetFilterNdDescriptor", len(dimensions), 1)
+	return nil
 }
 
 // SetFilter4dDescriptor sets the filter descriptor for 4D filters
@@ -292,7 +277,7 @@ func (desc *FilterDescriptor) SetFilter4dDescriptor(dataType DNNDataType, format
 	desc.format = format
 	desc.dimensions = []int{k, c, h, w}
 
-	return simulateKernelExecution("cudnnSetFilter4dDescriptor", 1, 1)
+	return nil
 }
 
 // DestroyFilterDescriptor destroys a filter descriptor
@@ -301,7 +286,7 @@ func (desc *FilterDescriptor) DestroyFilterDescriptor() error {
 		return fmt.Errorf("descriptor already destroyed")
 	}
 	desc.destroyed = true
-	return simulateKernelExecution("cudnnDestroyFilterDescriptor", 1, 1)
+	return nil
 }
 
 // Convolution Operations
@@ -316,11 +301,6 @@ func CreateConvolutionDescriptor() (*ConvolutionDescriptor, error) {
 		handle:    uintptr(time.Now().UnixNano()),
 		dilationH: 1,
 		dilationW: 1,
-	}
-
-	err := simulateKernelExecution("cudnnCreateConvolutionDescriptor", 1, 1)
-	if err != nil {
-		return nil, err
 	}
 
 	return desc, nil
@@ -341,7 +321,7 @@ func (desc *ConvolutionDescriptor) SetConvolution2dDescriptor(padH, padW, stride
 	desc.mode = mode
 	desc.dataType = dataType
 
-	return simulateKernelExecution("cudnnSetConvolution2dDescriptor", 1, 1)
+	return nil
 }
 
 // GetConvolution2dForwardOutputDim calculates output dimensions for convolution
@@ -379,23 +359,7 @@ func (h *DNNHandle) ConvolutionForward(alpha float32, inputDesc *TensorDescripto
 		return fmt.Errorf("one or more descriptors have been destroyed")
 	}
 
-	// Calculate operation complexity
-	inputSize := 1
-	for _, dim := range inputDesc.dimensions {
-		inputSize *= dim
-	}
-	filterSize := 1
-	for _, dim := range filterDesc.dimensions {
-		filterSize *= dim
-	}
-
-	// Simulate convolution computation
-	err := h.performConvolution(inputData, filterData, outputData, inputDesc, filterDesc, convDesc, alpha, beta)
-	if err != nil {
-		return err
-	}
-
-	return simulateKernelExecution("cudnnConvolutionForward", inputSize*filterSize, 4)
+	return h.performConvolution(inputData, filterData, outputData, inputDesc, filterDesc, outputDesc, convDesc, alpha, beta)
 }
 
 // DestroyConvolutionDescriptor destroys a convolution descriptor
@@ -404,7 +368,7 @@ func (desc *ConvolutionDescriptor) DestroyConvolutionDescriptor() error {
 		return fmt.Errorf("descriptor already destroyed")
 	}
 	desc.destroyed = true
-	return simulateKernelExecution("cudnnDestroyConvolutionDescriptor", 1, 1)
+	return nil
 }
 
 // Pooling Operations
@@ -417,11 +381,6 @@ func CreatePoolingDescriptor() (*PoolingDescriptor, error) {
 
 	desc := &PoolingDescriptor{
 		handle: uintptr(time.Now().UnixNano()),
-	}
-
-	err := simulateKernelExecution("cudnnCreatePoolingDescriptor", 1, 1)
-	if err != nil {
-		return nil, err
 	}
 
 	return desc, nil
@@ -441,7 +400,7 @@ func (desc *PoolingDescriptor) SetPooling2dDescriptor(mode DNNPoolingMode, windo
 	desc.strideH = strideH
 	desc.strideW = strideW
 
-	return simulateKernelExecution("cudnnSetPooling2dDescriptor", 1, 1)
+	return nil
 }
 
 // PoolingForward performs forward pooling
@@ -452,19 +411,7 @@ func (h *DNNHandle) PoolingForward(poolingDesc *PoolingDescriptor, alpha float32
 		return fmt.Errorf("one or more descriptors have been destroyed")
 	}
 
-	// Calculate operation complexity
-	inputSize := 1
-	for _, dim := range inputDesc.dimensions {
-		inputSize *= dim
-	}
-
-	// Simulate pooling computation
-	err := h.performPooling(inputData, outputData, inputDesc, outputDesc, poolingDesc, alpha, beta)
-	if err != nil {
-		return err
-	}
-
-	return simulateKernelExecution("cudnnPoolingForward", inputSize, 2)
+	return h.performPooling(inputData, outputData, inputDesc, outputDesc, poolingDesc, alpha, beta)
 }
 
 // DestroyPoolingDescriptor destroys a pooling descriptor
@@ -473,7 +420,7 @@ func (desc *PoolingDescriptor) DestroyPoolingDescriptor() error {
 		return fmt.Errorf("descriptor already destroyed")
 	}
 	desc.destroyed = true
-	return simulateKernelExecution("cudnnDestroyPoolingDescriptor", 1, 1)
+	return nil
 }
 
 // Activation Operations
@@ -486,11 +433,6 @@ func CreateActivationDescriptor() (*ActivationDescriptor, error) {
 
 	desc := &ActivationDescriptor{
 		handle: uintptr(time.Now().UnixNano()),
-	}
-
-	err := simulateKernelExecution("cudnnCreateActivationDescriptor", 1, 1)
-	if err != nil {
-		return nil, err
 	}
 
 	return desc, nil
@@ -506,7 +448,7 @@ func (desc *ActivationDescriptor) SetActivationDescriptor(mode DNNActivationMode
 	desc.nanOpt = nanOpt
 	desc.coeff = coeff
 
-	return simulateKernelExecution("cudnnSetActivationDescriptor", 1, 1)
+	return nil
 }
 
 // ActivationForward performs forward activation
@@ -517,19 +459,7 @@ func (h *DNNHandle) ActivationForward(activationDesc *ActivationDescriptor, alph
 		return fmt.Errorf("one or more descriptors have been destroyed")
 	}
 
-	// Calculate operation complexity
-	inputSize := 1
-	for _, dim := range inputDesc.dimensions {
-		inputSize *= dim
-	}
-
-	// Simulate activation computation
-	err := h.performActivation(inputData, outputData, inputDesc, outputDesc, activationDesc, alpha, beta)
-	if err != nil {
-		return err
-	}
-
-	return simulateKernelExecution("cudnnActivationForward", inputSize, 1)
+	return h.performActivation(inputData, outputData, inputDesc, outputDesc, activationDesc, alpha, beta)
 }
 
 // DestroyActivationDescriptor destroys an activation descriptor
@@ -538,7 +468,7 @@ func (desc *ActivationDescriptor) DestroyActivationDescriptor() error {
 		return fmt.Errorf("descriptor already destroyed")
 	}
 	desc.destroyed = true
-	return simulateKernelExecution("cudnnDestroyActivationDescriptor", 1, 1)
+	return nil
 }
 
 // Batch Normalization Operations
@@ -553,11 +483,6 @@ func CreateBatchNormDescriptor() (*BatchNormDescriptor, error) {
 		handle: uintptr(time.Now().UnixNano()),
 	}
 
-	err := simulateKernelExecution("cudnnCreateBatchNormDescriptor", 1, 1)
-	if err != nil {
-		return nil, err
-	}
-
 	return desc, nil
 }
 
@@ -570,19 +495,7 @@ func (h *DNNHandle) BatchNormalizationForwardInference(mode DNNBatchNormMode, al
 		return fmt.Errorf("handle has been destroyed")
 	}
 
-	// Calculate operation complexity
-	inputSize := 1
-	for _, dim := range inputDesc.dimensions {
-		inputSize *= dim
-	}
-
-	// Simulate batch normalization computation
-	err := h.performBatchNorm(input, output, bnScale, bnBias, estimatedMean, estimatedVariance, inputDesc, outputDesc, alpha, beta, epsilon)
-	if err != nil {
-		return err
-	}
-
-	return simulateKernelExecution("cudnnBatchNormalizationForwardInference", inputSize, 3)
+	return h.performBatchNorm(input, output, bnScale, bnBias, estimatedMean, estimatedVariance, inputDesc, outputDesc, bnScaleBiasDesc, mode, alpha, beta, epsilon)
 }
 
 // DestroyBatchNormDescriptor destroys a batch normalization descriptor
@@ -591,38 +504,62 @@ func (desc *BatchNormDescriptor) DestroyBatchNormDescriptor() error {
 		return fmt.Errorf("descriptor already destroyed")
 	}
 	desc.destroyed = true
-	return simulateKernelExecution("cudnnDestroyBatchNormDescriptor", 1, 1)
+	return nil
 }
 
 // Helper functions for computation simulation
 
-func (h *DNNHandle) performConvolution(input, filter, output *memory.Memory, inputDesc *TensorDescriptor, filterDesc *FilterDescriptor, convDesc *ConvolutionDescriptor, alpha, beta float32) error {
+func (h *DNNHandle) performConvolution(input, filter, output *memory.Memory, inputDesc *TensorDescriptor, filterDesc *FilterDescriptor, outputDesc *TensorDescriptor, convDesc *ConvolutionDescriptor, alpha, beta float32) error {
 	if input == nil || filter == nil || output == nil {
 		return fmt.Errorf("input, filter, and output cannot be nil")
 	}
 
-	// In a real implementation, this would perform actual convolution
-	// For simulation, we just initialize output with realistic values
-	outputSize := 1
-	for _, dim := range inputDesc.dimensions {
-		outputSize *= dim
+	if inputDesc.dataType != DNNDataFloat || filterDesc.dataType != DNNDataFloat || outputDesc.dataType != DNNDataFloat {
+		return fmt.Errorf("deterministic cuDNN convolution currently supports DNNDataFloat only")
 	}
-
-	outputData, err := memory.View[float32](output, outputSize)
+	inVals, err := readMathFloat32Memory(input, tensorElementCount(inputDesc))
 	if err != nil {
 		return err
 	}
-	inputData, err := memory.View[float32](input, outputSize)
+	filterVals, err := readMathFloat32Memory(filter, filterElementCount(filterDesc))
 	if err != nil {
 		return err
 	}
-
-	// Simulate convolution by applying a simple transformation
-	for i := 0; i < len(outputData) && i < len(inputData); i++ {
-		outputData[i] = alpha*inputData[i]*1.1 + beta*outputData[i] // Simple simulation
+	outVals, err := readMathFloat32Memory(output, tensorElementCount(outputDesc))
+	if err != nil {
+		return err
 	}
-
-	return nil
+	outputN, outputC, outputH, outputW := outputDesc.dimensions[0], outputDesc.dimensions[1], outputDesc.dimensions[2], outputDesc.dimensions[3]
+	inputN, inputC, inputH, inputW := inputDesc.dimensions[0], inputDesc.dimensions[1], inputDesc.dimensions[2], inputDesc.dimensions[3]
+	filterK, _, filterH, filterW := filterDesc.dimensions[0], filterDesc.dimensions[1], filterDesc.dimensions[2], filterDesc.dimensions[3]
+	for n := 0; n < outputN; n++ {
+		for k := 0; k < outputC; k++ {
+			for oh := 0; oh < outputH; oh++ {
+				for ow := 0; ow < outputW; ow++ {
+					sum := float32(0)
+					for c := 0; c < inputC; c++ {
+						for fh := 0; fh < filterH; fh++ {
+							for fw := 0; fw < filterW; fw++ {
+								ih := oh*convDesc.strideH - convDesc.padH + fh*maxInt(convDesc.dilationH, 1)
+								iw := ow*convDesc.strideW - convDesc.padW + fw*maxInt(convDesc.dilationW, 1)
+								if ih < 0 || ih >= inputH || iw < 0 || iw >= inputW {
+									continue
+								}
+								inputIndex := tensor4DIndex(inputDesc, n, c, ih, iw)
+								filterIndex := ((k*inputC+c)*filterH+fh)*filterW + fw
+								sum += inVals[inputIndex] * filterVals[filterIndex]
+							}
+						}
+					}
+					outputIndex := tensor4DIndex(outputDesc, n, k, oh, ow)
+					outVals[outputIndex] = alpha*sum + beta*outVals[outputIndex]
+				}
+			}
+		}
+	}
+	_ = inputN
+	_ = filterK
+	return writeMathFloat32Memory(output, outVals)
 }
 
 func (h *DNNHandle) performPooling(input, output *memory.Memory, inputDesc, outputDesc *TensorDescriptor, poolDesc *PoolingDescriptor, alpha, beta float32) error {
@@ -630,31 +567,61 @@ func (h *DNNHandle) performPooling(input, output *memory.Memory, inputDesc, outp
 		return fmt.Errorf("input and output cannot be nil")
 	}
 
-	outputSize := 1
-	for _, dim := range outputDesc.dimensions {
-		outputSize *= dim
+	if inputDesc.dataType != DNNDataFloat || outputDesc.dataType != DNNDataFloat {
+		return fmt.Errorf("deterministic cuDNN pooling currently supports DNNDataFloat only")
 	}
-
-	outputData, err := memory.View[float32](output, outputSize)
+	inVals, err := readMathFloat32Memory(input, tensorElementCount(inputDesc))
 	if err != nil {
 		return err
 	}
-	inputData, err := memory.View[float32](input, outputSize)
+	outVals, err := readMathFloat32Memory(output, tensorElementCount(outputDesc))
 	if err != nil {
 		return err
 	}
-
-	// Simulate pooling operation
-	poolingFactor := 0.8 // Simulate max pooling reducing values slightly
-	if poolDesc.mode == DNNPoolingAverageCountIncludePadding || poolDesc.mode == DNNPoolingAverageCountExcludePadding {
-		poolingFactor = 0.5 // Average pooling
+	for n := 0; n < outputDesc.dimensions[0]; n++ {
+		for c := 0; c < outputDesc.dimensions[1]; c++ {
+			for oh := 0; oh < outputDesc.dimensions[2]; oh++ {
+				for ow := 0; ow < outputDesc.dimensions[3]; ow++ {
+					accum := float32(0)
+					count := 0
+					maxValue := float32(math.Inf(-1))
+					for wh := 0; wh < poolDesc.windowH; wh++ {
+						for ww := 0; ww < poolDesc.windowW; ww++ {
+							ih := oh*poolDesc.strideH - poolDesc.padH + wh
+							iw := ow*poolDesc.strideW - poolDesc.padW + ww
+							inside := ih >= 0 && ih < inputDesc.dimensions[2] && iw >= 0 && iw < inputDesc.dimensions[3]
+							if !inside && poolDesc.mode == DNNPoolingAverageCountExcludePadding {
+								continue
+							}
+							value := float32(0)
+							if inside {
+								value = inVals[tensor4DIndex(inputDesc, n, c, ih, iw)]
+							}
+							if poolDesc.mode == DNNPoolingMax || poolDesc.mode == DNNPoolingMaxDeterministic {
+								if value > maxValue {
+									maxValue = value
+								}
+							} else {
+								accum += value
+								count++
+							}
+						}
+					}
+					result := maxValue
+					if poolDesc.mode != DNNPoolingMax && poolDesc.mode != DNNPoolingMaxDeterministic {
+						if count > 0 {
+							result = accum / float32(count)
+						} else {
+							result = 0
+						}
+					}
+					outIndex := tensor4DIndex(outputDesc, n, c, oh, ow)
+					outVals[outIndex] = alpha*result + beta*outVals[outIndex]
+				}
+			}
+		}
 	}
-
-	for i := 0; i < len(outputData) && i < len(inputData); i++ {
-		outputData[i] = alpha*inputData[i]*float32(poolingFactor) + beta*outputData[i]
-	}
-
-	return nil
+	return writeMathFloat32Memory(output, outVals)
 }
 
 func (h *DNNHandle) performActivation(input, output *memory.Memory, inputDesc, outputDesc *TensorDescriptor, activDesc *ActivationDescriptor, alpha, beta float32) error {
@@ -662,16 +629,15 @@ func (h *DNNHandle) performActivation(input, output *memory.Memory, inputDesc, o
 		return fmt.Errorf("input and output cannot be nil")
 	}
 
-	outputSize := 1
-	for _, dim := range outputDesc.dimensions {
-		outputSize *= dim
+	if inputDesc.dataType != DNNDataFloat || outputDesc.dataType != DNNDataFloat {
+		return fmt.Errorf("deterministic cuDNN activation currently supports DNNDataFloat only")
 	}
-
-	outputData, err := memory.View[float32](output, outputSize)
+	outputSize := tensorElementCount(outputDesc)
+	outputData, err := readMathFloat32Memory(output, outputSize)
 	if err != nil {
 		return err
 	}
-	inputData, err := memory.View[float32](input, outputSize)
+	inputData, err := readMathFloat32Memory(input, tensorElementCount(inputDesc))
 	if err != nil {
 		return err
 	}
@@ -703,35 +669,81 @@ func (h *DNNHandle) performActivation(input, output *memory.Memory, inputDesc, o
 		outputData[i] = alpha*activated + beta*outputData[i]
 	}
 
-	return nil
+	return writeMathFloat32Memory(output, outputData)
 }
 
-func (h *DNNHandle) performBatchNorm(input, output, scale, bias, mean, variance *memory.Memory, inputDesc, outputDesc *TensorDescriptor, alpha, beta float32, epsilon float64) error {
+func (h *DNNHandle) performBatchNorm(input, output, scale, bias, mean, variance *memory.Memory, inputDesc, outputDesc, bnScaleBiasDesc *TensorDescriptor, mode DNNBatchNormMode, alpha, beta float32, epsilon float64) error {
 	if input == nil || output == nil {
 		return fmt.Errorf("input and output cannot be nil")
 	}
 
-	outputSize := 1
-	for _, dim := range outputDesc.dimensions {
-		outputSize *= dim
+	if inputDesc.dataType != DNNDataFloat || outputDesc.dataType != DNNDataFloat {
+		return fmt.Errorf("deterministic cuDNN batch norm currently supports DNNDataFloat only")
 	}
-
-	outputData, err := memory.View[float32](output, outputSize)
+	outputSize := tensorElementCount(outputDesc)
+	outputData, err := readMathFloat32Memory(output, outputSize)
 	if err != nil {
 		return err
 	}
-	inputData, err := memory.View[float32](input, outputSize)
+	inputData, err := readMathFloat32Memory(input, tensorElementCount(inputDesc))
 	if err != nil {
 		return err
 	}
-
-	// Simulate batch normalization: (x - mean) / sqrt(variance + epsilon) * scale + bias
-	for i := 0; i < len(outputData) && i < len(inputData); i++ {
-		// Simplified batch norm simulation
-		normalized := (inputData[i] - 0.0) / float32(math.Sqrt(1.0+epsilon)) // Assume mean=0, var=1
-		scaled := normalized*1.0 + 0.0                                       // Assume scale=1, bias=0
-		outputData[i] = alpha*scaled + beta*outputData[i]
+	scaleData, err := readMathFloat32Memory(scale, tensorElementCount(bnScaleBiasDesc))
+	if err != nil {
+		return err
 	}
+	biasData, err := readMathFloat32Memory(bias, tensorElementCount(bnScaleBiasDesc))
+	if err != nil {
+		return err
+	}
+	meanData, err := readMathFloat32Memory(mean, tensorElementCount(bnScaleBiasDesc))
+	if err != nil {
+		return err
+	}
+	varData, err := readMathFloat32Memory(variance, tensorElementCount(bnScaleBiasDesc))
+	if err != nil {
+		return err
+	}
+	channels := inputDesc.dimensions[1]
+	for n := 0; n < inputDesc.dimensions[0]; n++ {
+		for c := 0; c < channels; c++ {
+			for hIndex := 0; hIndex < inputDesc.dimensions[2]; hIndex++ {
+				for wIndex := 0; wIndex < inputDesc.dimensions[3]; wIndex++ {
+					index := tensor4DIndex(inputDesc, n, c, hIndex, wIndex)
+					paramIndex := c
+					if mode == DNNBatchNormPerActivation {
+						paramIndex = (c*inputDesc.dimensions[2]+hIndex)*inputDesc.dimensions[3] + wIndex
+					}
+					normalized := (inputData[index] - meanData[paramIndex]) / float32(math.Sqrt(float64(varData[paramIndex])+epsilon))
+					scaled := normalized*scaleData[paramIndex] + biasData[paramIndex]
+					outputData[index] = alpha*scaled + beta*outputData[index]
+				}
+			}
+		}
+	}
+	return writeMathFloat32Memory(output, outputData)
+}
 
-	return nil
+func tensorElementCount(desc *TensorDescriptor) int {
+	total := 1
+	for _, dim := range desc.dimensions {
+		total *= dim
+	}
+	return total
+}
+
+func filterElementCount(desc *FilterDescriptor) int {
+	total := 1
+	for _, dim := range desc.dimensions {
+		total *= dim
+	}
+	return total
+}
+
+func tensor4DIndex(desc *TensorDescriptor, n, c, h, w int) int {
+	if desc.format == DNNTensorNHWC {
+		return ((n*desc.dimensions[2]+h)*desc.dimensions[3]+w)*desc.dimensions[1] + c
+	}
+	return ((n*desc.dimensions[1]+c)*desc.dimensions[2]+h)*desc.dimensions[3] + w
 }

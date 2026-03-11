@@ -4,6 +4,7 @@ package libraries
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/stitch1968/gocuda/memory"
 )
@@ -146,6 +147,12 @@ type TensorPlan struct {
 	workspaceSize int64
 	executionTime float64
 	memoryReq     int64
+	descA         *CuTensorDescriptor
+	descB         *CuTensorDescriptor
+	descC         *CuTensorDescriptor
+	modesA        []int
+	modesB        []int
+	modesC        []int
 }
 
 // CreateCuTensorHandle creates a new cuTENSOR handle
@@ -276,17 +283,7 @@ func (handle *CuTensorHandle) TensorContraction(
 		Workspace: handle.workspace,
 	}
 
-	// Calculate operation complexity
-	complexity := calculateContractionComplexity(contractionDesc)
-
-	// Execute contraction
-	kernelName := getContractionKernelName(algorithm)
-	err := simulateKernelExecution(kernelName, complexity, 4)
-	if err != nil {
-		return fmt.Errorf("tensor contraction failed: %v", err)
-	}
-
-	return nil
+	return executeTensorContraction(contractionDesc, tensorA, tensorB, tensorC)
 }
 
 // BatchedTensorContraction performs batched tensor contractions
@@ -334,15 +331,7 @@ func (handle *CuTensorHandle) TensorElementwiseAdd(
 		return fmt.Errorf("tensor dimensions are not compatible for element-wise operations")
 	}
 
-	elements := calculateTensorElements(descA)
-	complexity := elements * 2 // Add and scale operations
-
-	err := simulateKernelExecution("tensorElementwiseAdd", complexity/1000, 2)
-	if err != nil {
-		return fmt.Errorf("tensor elementwise add failed: %v", err)
-	}
-
-	return nil
+	return executeTensorElementwise(descA, tensorA, descB, tensorB, descC, tensorC, alpha, beta, gamma, false)
 }
 
 // TensorElementwiseMul performs element-wise multiplication
@@ -355,15 +344,7 @@ func (handle *CuTensorHandle) TensorElementwiseMul(
 		return fmt.Errorf("tensor dimensions are not compatible for element-wise operations")
 	}
 
-	elements := calculateTensorElements(descA)
-	complexity := elements * 2 // Multiply and scale operations
-
-	err := simulateKernelExecution("tensorElementwiseMul", complexity/1000, 2)
-	if err != nil {
-		return fmt.Errorf("tensor elementwise multiply failed: %v", err)
-	}
-
-	return nil
+	return executeTensorElementwise(descA, tensorA, descB, tensorB, descC, tensorC, alpha, beta, gamma, true)
 }
 
 // Tensor Reduction Operations
@@ -389,31 +370,7 @@ func (handle *CuTensorHandle) TensorReduce(
 		}
 	}
 
-	inputElements := calculateTensorElements(descA)
-	outputElements := calculateTensorElements(descC)
-	_ = inputElements / outputElements // reductionRatio for future use
-
-	// Calculate complexity based on reduction type
-	var complexity int
-	switch reductionOp {
-	case TensorReduceSum, TensorReduceMean:
-		complexity = inputElements
-	case TensorReduceMax, TensorReduceMin:
-		complexity = inputElements
-	case TensorReduceNorm1, TensorReduceNorm2:
-		complexity = inputElements * 2
-	case TensorReduceNormInf:
-		complexity = inputElements
-	default:
-		complexity = inputElements
-	}
-
-	err := simulateKernelExecution("tensorReduce", complexity/1000, 3)
-	if err != nil {
-		return fmt.Errorf("tensor reduction failed: %v", err)
-	}
-
-	return nil
+	return executeTensorReduce(descA, tensorA, descC, tensorC, reduceModes, reductionOp, alpha, beta)
 }
 
 // Tensor Transformation Operations
@@ -437,15 +394,7 @@ func (handle *CuTensorHandle) TensorPermute(
 		used[p] = true
 	}
 
-	elements := calculateTensorElements(descA)
-	complexity := elements * 2 // Read and write with different access patterns
-
-	err := simulateKernelExecution("tensorPermute", complexity/1000, 3)
-	if err != nil {
-		return fmt.Errorf("tensor permutation failed: %v", err)
-	}
-
-	return nil
+	return executeTensorPermute(descA, tensorA, descC, tensorC, perm, alpha)
 }
 
 // TensorCopy performs tensor copy with potential layout conversion
@@ -457,20 +406,7 @@ func (handle *CuTensorHandle) TensorCopy(
 		return fmt.Errorf("tensors must have the same total size for copy operation")
 	}
 
-	elements := calculateTensorElements(descA)
-	complexity := elements
-
-	// Add complexity if layout conversion is needed
-	if descA.layout != descC.layout {
-		complexity *= 2
-	}
-
-	err := simulateKernelExecution("tensorCopy", complexity/1000, 2)
-	if err != nil {
-		return fmt.Errorf("tensor copy failed: %v", err)
-	}
-
-	return nil
+	return executeTensorCopy(descA, tensorA, descC, tensorC, alpha)
 }
 
 // Plan-based Execution for Optimization
@@ -500,6 +436,12 @@ func (handle *CuTensorHandle) CreateContractionPlan(
 		handle:    planHandle,
 		operation: TensorOpContraction,
 		algorithm: algorithm,
+		descA:     descA,
+		descB:     descB,
+		descC:     descC,
+		modesA:    append([]int(nil), modesA...),
+		modesB:    append([]int(nil), modesB...),
+		modesC:    append([]int(nil), modesC...),
 	}
 
 	// Calculate optimal workspace size
@@ -538,16 +480,19 @@ func (handle *CuTensorHandle) ExecuteContractionPlan(
 		handle.workspace = newWorkspace
 	}
 
-	// Execute the planned operation
-	complexity := int(plan.executionTime * 1000) // Convert to complexity units
-	kernelName := getContractionKernelName(plan.algorithm)
-
-	err := simulateKernelExecution(kernelName, complexity, 4)
-	if err != nil {
-		return fmt.Errorf("plan execution failed: %v", err)
+	contractionDesc := &ContractionDescriptor{
+		TensorA:   plan.descA,
+		TensorB:   plan.descB,
+		TensorC:   plan.descC,
+		ModesA:    plan.modesA,
+		ModesB:    plan.modesB,
+		ModesC:    plan.modesC,
+		Alpha:     alpha,
+		Beta:      beta,
+		Algorithm: plan.algorithm,
+		Workspace: handle.workspace,
 	}
-
-	return nil
+	return executeTensorContraction(contractionDesc, tensorA, tensorB, tensorC)
 }
 
 // Utility Functions
@@ -743,6 +688,432 @@ func (handle *CuTensorHandle) Destroy() error {
 	}
 
 	return nil
+}
+
+func executeTensorElementwise(descA *CuTensorDescriptor, tensorA *memory.Memory, descB *CuTensorDescriptor, tensorB *memory.Memory, descC *CuTensorDescriptor, tensorC *memory.Memory, alpha, beta, gamma float64, multiply bool) error {
+	switch descA.dataType {
+	case TensorFloat32:
+		valuesA, err := readMathFloat32Memory(tensorA, calculateTensorElements(descA))
+		if err != nil {
+			return err
+		}
+		valuesB, err := readMathFloat32Memory(tensorB, calculateTensorElements(descB))
+		if err != nil {
+			return err
+		}
+		valuesC, err := readMathFloat32Memory(tensorC, calculateTensorElements(descC))
+		if err != nil {
+			return err
+		}
+		for index := range valuesC {
+			result := alpha * float64(valuesA[index])
+			if multiply {
+				result *= beta * float64(valuesB[index])
+			} else {
+				result += beta * float64(valuesB[index])
+			}
+			result += gamma * float64(valuesC[index])
+			valuesC[index] = float32(result)
+		}
+		return writeMathFloat32Memory(tensorC, valuesC)
+	case TensorFloat64:
+		valuesA, err := readMathFloat64Memory(tensorA, calculateTensorElements(descA))
+		if err != nil {
+			return err
+		}
+		valuesB, err := readMathFloat64Memory(tensorB, calculateTensorElements(descB))
+		if err != nil {
+			return err
+		}
+		valuesC, err := readMathFloat64Memory(tensorC, calculateTensorElements(descC))
+		if err != nil {
+			return err
+		}
+		for index := range valuesC {
+			result := alpha * valuesA[index]
+			if multiply {
+				result *= beta * valuesB[index]
+			} else {
+				result += beta * valuesB[index]
+			}
+			result += gamma * valuesC[index]
+			valuesC[index] = result
+		}
+		return writeMathFloat64Memory(tensorC, valuesC)
+	default:
+		return fmt.Errorf("cuTENSOR deterministic path supports TensorFloat32 and TensorFloat64, got %d", descA.dataType)
+	}
+}
+
+func executeTensorReduce(descA *CuTensorDescriptor, tensorA *memory.Memory, descC *CuTensorDescriptor, tensorC *memory.Memory, reduceModes []int, reductionOp TensorReduction, alpha, beta float64) error {
+	if descA.dataType != TensorFloat32 && descA.dataType != TensorFloat64 {
+		return fmt.Errorf("cuTENSOR deterministic reduction supports TensorFloat32 and TensorFloat64, got %d", descA.dataType)
+	}
+	modeSet := make(map[int]bool, len(reduceModes))
+	for _, mode := range reduceModes {
+		modeSet[mode] = true
+	}
+	keptDims := make([]int, 0, len(descA.dimensions))
+	for index, dim := range descA.dimensions {
+		if !modeSet[index] {
+			keptDims = append(keptDims, dim)
+		}
+	}
+	if len(keptDims) == 0 {
+		keptDims = []int{1}
+	}
+	if descA.dataType == TensorFloat32 {
+		input, err := readMathFloat32Memory(tensorA, calculateTensorElements(descA))
+		if err != nil {
+			return err
+		}
+		output, err := readMathFloat32Memory(tensorC, calculateTensorElements(descC))
+		if err != nil {
+			return err
+		}
+		accum := make([]float64, len(output))
+		counts := make([]int, len(output))
+		seedReduction(accum, reductionOp)
+		for linear := range input {
+			coords := tensorCoordsFromLinear(descA, linear)
+			outCoords := make([]int, 0, len(keptDims))
+			for index, coord := range coords {
+				if !modeSet[index] {
+					outCoords = append(outCoords, coord)
+				}
+			}
+			if len(outCoords) == 0 {
+				outCoords = []int{0}
+			}
+			outIndex := linearIndexForCoords(descC, outCoords)
+			applyReductionValue(accum, counts, outIndex, float64(input[linear]), reductionOp)
+		}
+		finalizeReduction(accum, counts, reductionOp)
+		for index := range output {
+			output[index] = float32(alpha*accum[index] + beta*float64(output[index]))
+		}
+		return writeMathFloat32Memory(tensorC, output)
+	}
+	input, err := readMathFloat64Memory(tensorA, calculateTensorElements(descA))
+	if err != nil {
+		return err
+	}
+	output, err := readMathFloat64Memory(tensorC, calculateTensorElements(descC))
+	if err != nil {
+		return err
+	}
+	accum := make([]float64, len(output))
+	counts := make([]int, len(output))
+	seedReduction(accum, reductionOp)
+	for linear := range input {
+		coords := tensorCoordsFromLinear(descA, linear)
+		outCoords := make([]int, 0, len(descC.dimensions))
+		for index, coord := range coords {
+			if !modeSet[index] {
+				outCoords = append(outCoords, coord)
+			}
+		}
+		if len(outCoords) == 0 {
+			outCoords = []int{0}
+		}
+		outIndex := linearIndexForCoords(descC, outCoords)
+		applyReductionValue(accum, counts, outIndex, input[linear], reductionOp)
+	}
+	finalizeReduction(accum, counts, reductionOp)
+	for index := range output {
+		output[index] = alpha*accum[index] + beta*output[index]
+	}
+	return writeMathFloat64Memory(tensorC, output)
+}
+
+func executeTensorPermute(descA *CuTensorDescriptor, tensorA *memory.Memory, descC *CuTensorDescriptor, tensorC *memory.Memory, perm []int, alpha float64) error {
+	if descA.dataType == TensorFloat32 {
+		input, err := readMathFloat32Memory(tensorA, calculateTensorElements(descA))
+		if err != nil {
+			return err
+		}
+		output := make([]float32, calculateTensorElements(descC))
+		for linear := range input {
+			coords := tensorCoordsFromLinear(descA, linear)
+			outCoords := make([]int, len(perm))
+			for index, target := range perm {
+				outCoords[target] = coords[index]
+			}
+			outIndex := linearIndexForCoords(descC, outCoords)
+			output[outIndex] = float32(alpha * float64(input[linear]))
+		}
+		return writeMathFloat32Memory(tensorC, output)
+	}
+	if descA.dataType == TensorFloat64 {
+		input, err := readMathFloat64Memory(tensorA, calculateTensorElements(descA))
+		if err != nil {
+			return err
+		}
+		output := make([]float64, calculateTensorElements(descC))
+		for linear := range input {
+			coords := tensorCoordsFromLinear(descA, linear)
+			outCoords := make([]int, len(perm))
+			for index, target := range perm {
+				outCoords[target] = coords[index]
+			}
+			outIndex := linearIndexForCoords(descC, outCoords)
+			output[outIndex] = alpha * input[linear]
+		}
+		return writeMathFloat64Memory(tensorC, output)
+	}
+	return fmt.Errorf("cuTENSOR deterministic permutation supports TensorFloat32 and TensorFloat64, got %d", descA.dataType)
+}
+
+func executeTensorCopy(descA *CuTensorDescriptor, tensorA *memory.Memory, descC *CuTensorDescriptor, tensorC *memory.Memory, alpha float64) error {
+	identity := make([]int, len(descA.dimensions))
+	for index := range identity {
+		identity[index] = index
+	}
+	return executeTensorPermute(descA, tensorA, descC, tensorC, identity, alpha)
+}
+
+func executeTensorContraction(desc *ContractionDescriptor, tensorA, tensorB, tensorC *memory.Memory) error {
+	if desc.TensorA.dataType != desc.TensorB.dataType || desc.TensorA.dataType != desc.TensorC.dataType {
+		return fmt.Errorf("tensor contraction requires matching data types")
+	}
+	if desc.TensorA.dataType == TensorFloat32 {
+		valuesA, err := readMathFloat32Memory(tensorA, calculateTensorElements(desc.TensorA))
+		if err != nil {
+			return err
+		}
+		valuesB, err := readMathFloat32Memory(tensorB, calculateTensorElements(desc.TensorB))
+		if err != nil {
+			return err
+		}
+		valuesC, err := readMathFloat32Memory(tensorC, calculateTensorElements(desc.TensorC))
+		if err != nil {
+			return err
+		}
+		result := executeTensorContractionFloat32(desc, valuesA, valuesB, valuesC)
+		return writeMathFloat32Memory(tensorC, result)
+	}
+	if desc.TensorA.dataType == TensorFloat64 {
+		valuesA, err := readMathFloat64Memory(tensorA, calculateTensorElements(desc.TensorA))
+		if err != nil {
+			return err
+		}
+		valuesB, err := readMathFloat64Memory(tensorB, calculateTensorElements(desc.TensorB))
+		if err != nil {
+			return err
+		}
+		valuesC, err := readMathFloat64Memory(tensorC, calculateTensorElements(desc.TensorC))
+		if err != nil {
+			return err
+		}
+		result := executeTensorContractionFloat64(desc, valuesA, valuesB, valuesC)
+		return writeMathFloat64Memory(tensorC, result)
+	}
+	return fmt.Errorf("cuTENSOR deterministic contraction supports TensorFloat32 and TensorFloat64, got %d", desc.TensorA.dataType)
+}
+
+func executeTensorContractionFloat32(desc *ContractionDescriptor, valuesA, valuesB, valuesC []float32) []float32 {
+	result := make([]float32, len(valuesC))
+	copy(result, valuesC)
+	contraction := tensorContractionIndices(desc)
+	for outIndex := range result {
+		coordsC := tensorCoordsFromLinear(desc.TensorC, outIndex)
+		accum := 0.0
+		tensorIterate(contraction.dims, func(contractCoords []int) {
+			coordsA := buildTensorCoords(desc.ModesA, contraction.modeToDim, contraction.modesC, coordsC, contraction.contractModes, contractCoords)
+			coordsB := buildTensorCoords(desc.ModesB, contraction.modeToDim, contraction.modesC, coordsC, contraction.contractModes, contractCoords)
+			indexA := linearIndexForCoords(desc.TensorA, coordsA)
+			indexB := linearIndexForCoords(desc.TensorB, coordsB)
+			accum += float64(valuesA[indexA]) * float64(valuesB[indexB])
+		})
+		result[outIndex] = float32(desc.Alpha*accum + desc.Beta*float64(valuesC[outIndex]))
+	}
+	return result
+}
+
+func executeTensorContractionFloat64(desc *ContractionDescriptor, valuesA, valuesB, valuesC []float64) []float64 {
+	result := make([]float64, len(valuesC))
+	copy(result, valuesC)
+	contraction := tensorContractionIndices(desc)
+	for outIndex := range result {
+		coordsC := tensorCoordsFromLinear(desc.TensorC, outIndex)
+		accum := 0.0
+		tensorIterate(contraction.dims, func(contractCoords []int) {
+			coordsA := buildTensorCoords(desc.ModesA, contraction.modeToDim, contraction.modesC, coordsC, contraction.contractModes, contractCoords)
+			coordsB := buildTensorCoords(desc.ModesB, contraction.modeToDim, contraction.modesC, coordsC, contraction.contractModes, contractCoords)
+			indexA := linearIndexForCoords(desc.TensorA, coordsA)
+			indexB := linearIndexForCoords(desc.TensorB, coordsB)
+			accum += valuesA[indexA] * valuesB[indexB]
+		})
+		result[outIndex] = desc.Alpha*accum + desc.Beta*valuesC[outIndex]
+	}
+	return result
+}
+
+type contractionIndexData struct {
+	modeToDim     map[int]int
+	modesC        []int
+	contractModes []int
+	dims          []int
+}
+
+func tensorContractionIndices(desc *ContractionDescriptor) contractionIndexData {
+	modeToDim := make(map[int]int)
+	for index, mode := range desc.ModesA {
+		modeToDim[mode] = desc.TensorA.dimensions[index]
+	}
+	modesC := append([]int(nil), desc.ModesC...)
+	contractModes := make([]int, 0)
+	seenC := make(map[int]bool, len(desc.ModesC))
+	for _, mode := range desc.ModesC {
+		seenC[mode] = true
+	}
+	for _, mode := range desc.ModesA {
+		if containsInt(desc.ModesB, mode) && !seenC[mode] {
+			contractModes = append(contractModes, mode)
+		}
+	}
+	dims := make([]int, len(contractModes))
+	for index, mode := range contractModes {
+		dims[index] = modeToDim[mode]
+	}
+	return contractionIndexData{modeToDim: modeToDim, modesC: modesC, contractModes: contractModes, dims: dims}
+}
+
+func buildTensorCoords(modes []int, modeToDim map[int]int, modesC []int, coordsC []int, contractModes []int, contractCoords []int) []int {
+	coordByMode := make(map[int]int, len(modesC)+len(contractModes))
+	for index, mode := range modesC {
+		coordByMode[mode] = coordsC[index]
+	}
+	for index, mode := range contractModes {
+		coordByMode[mode] = contractCoords[index]
+	}
+	coords := make([]int, len(modes))
+	for index, mode := range modes {
+		coords[index] = coordByMode[mode]
+		_ = modeToDim[mode]
+	}
+	return coords
+}
+
+func tensorCoordsFromLinear(desc *CuTensorDescriptor, linear int) []int {
+	coords := make([]int, len(desc.dimensions))
+	remaining := linear
+	if desc.layout == TensorLayoutColMajor {
+		for index := 0; index < len(desc.dimensions); index++ {
+			coords[index] = remaining % desc.dimensions[index]
+			remaining /= desc.dimensions[index]
+		}
+		return coords
+	}
+	for index := len(desc.dimensions) - 1; index >= 0; index-- {
+		coords[index] = remaining % desc.dimensions[index]
+		remaining /= desc.dimensions[index]
+	}
+	return coords
+}
+
+func linearIndexForCoords(desc *CuTensorDescriptor, coords []int) int {
+	elementSize := getTensorDataTypeSize(desc.dataType)
+	byteOffset := 0
+	for index, coord := range coords {
+		byteOffset += coord * desc.strides[index]
+	}
+	return byteOffset / elementSize
+}
+
+func tensorIterate(dimensions []int, fn func([]int)) {
+	if len(dimensions) == 0 {
+		fn([]int{})
+		return
+	}
+	coords := make([]int, len(dimensions))
+	for {
+		current := append([]int(nil), coords...)
+		fn(current)
+		index := len(coords) - 1
+		for index >= 0 {
+			coords[index]++
+			if coords[index] < dimensions[index] {
+				break
+			}
+			coords[index] = 0
+			index--
+		}
+		if index < 0 {
+			return
+		}
+	}
+}
+
+func seedReduction(accum []float64, reductionOp TensorReduction) {
+	for index := range accum {
+		switch reductionOp {
+		case TensorReduceMax, TensorReduceNormInf:
+			accum[index] = -math.MaxFloat64
+		case TensorReduceMin:
+			accum[index] = math.MaxFloat64
+		default:
+			accum[index] = 0
+		}
+	}
+}
+
+func applyReductionValue(accum []float64, counts []int, index int, value float64, reductionOp TensorReduction) {
+	counts[index]++
+	switch reductionOp {
+	case TensorReduceSum, TensorReduceMean:
+		accum[index] += value
+	case TensorReduceMax:
+		if value > accum[index] {
+			accum[index] = value
+		}
+	case TensorReduceMin:
+		if value < accum[index] {
+			accum[index] = value
+		}
+	case TensorReduceNorm1:
+		accum[index] += math.Abs(value)
+	case TensorReduceNorm2:
+		accum[index] += value * value
+	case TensorReduceNormInf:
+		absValue := math.Abs(value)
+		if absValue > accum[index] {
+			accum[index] = absValue
+		}
+	case TensorReduceAny:
+		if value != 0 {
+			accum[index] = 1
+		}
+	case TensorReduceAll:
+		if counts[index] == 1 {
+			accum[index] = 1
+		}
+		if value == 0 {
+			accum[index] = 0
+		}
+	}
+}
+
+func finalizeReduction(accum []float64, counts []int, reductionOp TensorReduction) {
+	for index := range accum {
+		switch reductionOp {
+		case TensorReduceMean:
+			if counts[index] > 0 {
+				accum[index] /= float64(counts[index])
+			}
+		case TensorReduceNorm2:
+			accum[index] = math.Sqrt(accum[index])
+		}
+	}
+}
+
+func containsInt(values []int, target int) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
 
 // Destroy destroys a tensor plan and frees its resources

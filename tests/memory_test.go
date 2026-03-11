@@ -88,8 +88,12 @@ func TestMemoryProperties(t *testing.T) {
 	}
 
 	data := mem.Data()
-	if data == nil {
-		t.Error("Expected non-nil data slice")
+	if internal.ShouldUseCuda() {
+		if data != nil {
+			t.Error("Expected CUDA-backed device allocation to hide host-visible data slice")
+		}
+	} else if data == nil {
+		t.Error("Expected simulation allocation to expose data slice")
 	}
 
 	memType := mem.GetType()

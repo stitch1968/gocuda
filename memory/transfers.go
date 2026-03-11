@@ -33,11 +33,9 @@ func CopyHostToDeviceWithStream(stream *internal.Stream, dst *Memory, src []byte
 	}
 
 	// Use simulation
-	stream.Execute(func() {
-		if dst.data != nil {
-			copy(dst.data[:copySize], src[:copySize])
-		}
-	})
+	if dst.data != nil {
+		copy(dst.data[:copySize], src[:copySize])
+	}
 
 	return nil
 }
@@ -65,11 +63,9 @@ func CopyDeviceToHostWithStream(stream *internal.Stream, dst []byte, src *Memory
 	}
 
 	// Use simulation
-	stream.Execute(func() {
-		if src.data != nil {
-			copy(dst, src.data[:copySize])
-		}
-	})
+	if src.data != nil {
+		copy(dst, src.data[:copySize])
+	}
 
 	return nil
 }
@@ -97,11 +93,9 @@ func CopyDeviceToDeviceWithStream(stream *internal.Stream, dst, src *Memory) err
 	}
 
 	// Use simulation
-	stream.Execute(func() {
-		if dst.data != nil && src.data != nil {
-			copy(dst.data[:copySize], src.data[:copySize])
-		}
-	})
+	if dst.data != nil && src.data != nil {
+		copy(dst.data[:copySize], src.data[:copySize])
+	}
 
 	return nil
 }

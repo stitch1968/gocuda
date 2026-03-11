@@ -4,7 +4,11 @@ package libraries
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 
 	"github.com/stitch1968/gocuda/memory"
 )
@@ -107,6 +111,9 @@ func CreateJpeg2000Decoder(codec Jpeg2000Codec) (*Jpeg2000DecoderState, error) {
 	if err := ensureCudaReady(); err != nil {
 		return nil, err
 	}
+	if err := requireJpeg2000Tooling(); err != nil {
+		return nil, err
+	}
 
 	decoder := &Jpeg2000DecoderState{
 		codec: codec,
@@ -132,6 +139,9 @@ func CreateJpeg2000Decoder(codec Jpeg2000Codec) (*Jpeg2000DecoderState, error) {
 // CreateJpeg2000Encoder creates a new JPEG2000 encoder
 func CreateJpeg2000Encoder(codec Jpeg2000Codec) (*Jpeg2000EncoderState, error) {
 	if err := ensureCudaReady(); err != nil {
+		return nil, err
+	}
+	if err := requireJpeg2000Tooling(); err != nil {
 		return nil, err
 	}
 
@@ -165,7 +175,6 @@ func (decoder *Jpeg2000DecoderState) DecodeJpeg2000(j2kData []byte, params Jpeg2
 		return nil, 0, 0, fmt.Errorf("empty JPEG2000 data")
 	}
 
-	// Simulate JPEG2000 header parsing
 	info, err := parseJpeg2000Header(j2kData)
 	if err != nil {
 		return nil, 0, 0, fmt.Errorf("failed to parse JPEG2000 header: %v", err)
@@ -188,28 +197,19 @@ func (decoder *Jpeg2000DecoderState) DecodeJpeg2000(j2kData []byte, params Jpeg2
 		height = params.CropHeight
 	}
 
-	// Calculate output size based on format
-	var channels int
-	switch params.OutputFormat {
-	case Jpeg2000FormatGrayscale:
-		channels = 1
-	case Jpeg2000FormatRGB, Jpeg2000FormatBGR:
-		channels = 3
-	case Jpeg2000FormatRGBA, Jpeg2000FormatBGRA:
-		channels = 4
-	default:
-		channels = info.Components
+	pixelFormat, err := jpeg2000PixelFormat(params.OutputFormat)
+	if err != nil {
+		return nil, 0, 0, err
 	}
-
-	outputSize := width * height * channels
-	outputMem, err := memory.Alloc(int64(outputSize * 2)) // 16-bit depth support
+	rawData, err := runJpeg2000Decode(j2kData, width, height, pixelFormat, params)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	outputMem, err := memory.Alloc(int64(len(rawData)))
 	if err != nil {
 		return nil, 0, 0, fmt.Errorf("failed to allocate output memory: %v", err)
 	}
-
-	// Simulate GPU JPEG2000 decoding kernel execution (more complex than JPEG)
-	err = simulateKernelExecution("nvjpeg2000Decode", width*height, 8)
-	if err != nil {
+	if err := memory.CopyHostToDevice(outputMem, rawData); err != nil {
 		outputMem.Free()
 		return nil, 0, 0, err
 	}
@@ -243,17 +243,6 @@ func (decoder *Jpeg2000DecoderState) DecodeJpeg2000Batch(j2kDataList [][]byte, p
 		heights[i] = height
 	}
 
-	// Simulate batch processing overhead
-	err := simulateKernelExecution("nvjpeg2000DecodeBatch", len(j2kDataList)*2000, 4)
-	if err != nil {
-		for _, output := range outputs {
-			if output != nil {
-				output.Free()
-			}
-		}
-		return nil, nil, nil, err
-	}
-
 	return outputs, widths, heights, nil
 }
 
@@ -266,42 +255,16 @@ func (encoder *Jpeg2000EncoderState) EncodeJpeg2000(imageData *memory.Memory, wi
 		return nil, fmt.Errorf("invalid image dimensions: %dx%d", width, height)
 	}
 
-	// Calculate expected input size
-	var channels int
-	switch params.InputFormat {
-	case Jpeg2000FormatGrayscale:
-		channels = 1
-	case Jpeg2000FormatRGB, Jpeg2000FormatBGR:
-		channels = 3
-	case Jpeg2000FormatRGBA, Jpeg2000FormatBGRA:
-		channels = 4
-	default:
-		channels = 3
-	}
-
-	expectedSize := width * height * channels
-
-	// Simulate GPU JPEG2000 encoding kernel execution (very complex)
-	err := simulateKernelExecution("nvjpeg2000Encode", expectedSize, 12)
+	pixelFormat, err := jpeg2000PixelFormat(params.InputFormat)
 	if err != nil {
 		return nil, err
 	}
-
-	// Simulate JPEG2000 encoding - create dummy data
-	// Real implementation would perform wavelet transform, quantization, and entropy coding
-	var buf bytes.Buffer
-
-	// Write JPEG2000 magic number and basic header
-	buf.Write([]byte{0x00, 0x00, 0x00, 0x0C}) // Box length
-	buf.Write([]byte("jP  "))                 // Box type
-	buf.Write([]byte{0x0D, 0x0A, 0x87, 0x0A}) // Magic signature
-
-	// Simulate compressed data based on compression ratio
-	compressedSize := int(float32(expectedSize) / params.CompressionRatio)
-	dummyData := make([]byte, compressedSize)
-	buf.Write(dummyData)
-
-	return buf.Bytes(), nil
+	expectedSize := jpeg2000RawImageSize(width, height, params.InputFormat)
+	hostData := make([]byte, expectedSize)
+	if err := memory.CopyDeviceToHost(hostData, imageData); err != nil {
+		return nil, err
+	}
+	return runJpeg2000Encode(hostData, width, height, pixelFormat, params)
 }
 
 // SetCompressionRatio sets the JPEG2000 compression ratio
@@ -345,24 +308,235 @@ func parseJpeg2000Header(j2kData []byte) (*Jpeg2000ImageInfo, error) {
 	if len(j2kData) < 12 {
 		return nil, fmt.Errorf("invalid JPEG2000 data: too short")
 	}
+	if err := requireJpeg2000Tooling(); err != nil {
+		return nil, err
+	}
+	return runJpeg2000Probe(j2kData)
+}
 
-	// Simulate header parsing - in real implementation this would parse actual J2K/JP2 headers
-	info := &Jpeg2000ImageInfo{
-		Width:      1920, // Default values for simulation
-		Height:     1080,
-		Components: 3,
-		BitDepth:   8,
+type jpeg2000ProbeResponse struct {
+	Streams []struct {
+		Width            int    `json:"width"`
+		Height           int    `json:"height"`
+		PixFmt           string `json:"pix_fmt"`
+		BitsPerRawSample string `json:"bits_per_raw_sample"`
+	} `json:"streams"`
+}
+
+func requireJpeg2000Tooling() error {
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		return fmt.Errorf("ffmpeg is required for nvJPEG2000 operations: %w", err)
+	}
+	if _, err := exec.LookPath("ffprobe"); err != nil {
+		return fmt.Errorf("ffprobe is required for nvJPEG2000 operations: %w", err)
+	}
+	return nil
+}
+
+func runJpeg2000Probe(j2kData []byte) (*Jpeg2000ImageInfo, error) {
+	inputPath, cleanup, err := writeJpeg2000TempFile(j2kData, codecExtensionFromBytes(j2kData))
+	if err != nil {
+		return nil, err
+	}
+	defer cleanup()
+	cmd := exec.Command("ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height,pix_fmt,bits_per_raw_sample", "-of", "json", inputPath)
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("ffprobe failed: %w", err)
+	}
+	var response jpeg2000ProbeResponse
+	if err := json.Unmarshal(output, &response); err != nil {
+		return nil, err
+	}
+	if len(response.Streams) == 0 {
+		return nil, fmt.Errorf("ffprobe returned no video streams")
+	}
+	stream := response.Streams[0]
+	bitDepth := 8
+	if stream.BitsPerRawSample == "16" {
+		bitDepth = 16
+	}
+	return &Jpeg2000ImageInfo{
+		Width:      stream.Width,
+		Height:     stream.Height,
+		Components: componentsForPixelFormat(stream.PixFmt),
+		BitDepth:   bitDepth,
 		NumLayers:  1,
-		NumLevels:  5,
-		Codec:      Jpeg2000CodecJ2K,
-	}
+		NumLevels:  0,
+		Codec:      codecFromBytes(j2kData),
+	}, nil
+}
 
-	// Check for JP2 signature
+func runJpeg2000Decode(j2kData []byte, width, height int, pixelFormat string, params Jpeg2000DecodeParams) ([]byte, error) {
+	inputPath, cleanup, err := writeJpeg2000TempFile(j2kData, codecExtensionFromBytes(j2kData))
+	if err != nil {
+		return nil, err
+	}
+	defer cleanup()
+	args := []string{"-v", "error", "-i", inputPath}
+	filter := jpeg2000Filter(params, width, height)
+	if filter != "" {
+		args = append(args, "-vf", filter)
+	}
+	args = append(args, "-frames:v", "1", "-pix_fmt", pixelFormat, "-f", "rawvideo", "pipe:1")
+	cmd := exec.Command("ffmpeg", args...)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("ffmpeg decode failed: %s: %w", stderr.String(), err)
+	}
+	return stdout.Bytes(), nil
+}
+
+func runJpeg2000Encode(rawData []byte, width, height int, pixelFormat string, params Jpeg2000EnodeParams) ([]byte, error) {
+	inputFile, err := os.CreateTemp("", "gocuda-j2k-input-*.raw")
+	if err != nil {
+		return nil, err
+	}
+	inputPath := inputFile.Name()
+	defer os.Remove(inputPath)
+	defer inputFile.Close()
+	if _, err := inputFile.Write(rawData); err != nil {
+		return nil, err
+	}
+	outputFile, err := os.CreateTemp("", "gocuda-j2k-output-*"+codecExtension(params.Codec))
+	if err != nil {
+		return nil, err
+	}
+	outputPath := outputFile.Name()
+	outputFile.Close()
+	defer os.Remove(outputPath)
+	args := []string{"-v", "error", "-y", "-f", "rawvideo", "-pixel_format", pixelFormat, "-video_size", fmt.Sprintf("%dx%d", width, height), "-i", inputPath, "-frames:v", "1", "-c:v", "jpeg2000"}
+	if params.Lossless {
+		args = append(args, "-pred", "1")
+	}
+	if params.CompressionRatio > 0 {
+		args = append(args, "-q:v", fmt.Sprintf("%.2f", params.CompressionRatio))
+	}
+	args = append(args, outputPath)
+	cmd := exec.Command("ffmpeg", args...)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("ffmpeg encode failed: %s: %w", stderr.String(), err)
+	}
+	return os.ReadFile(outputPath)
+}
+
+func writeJpeg2000TempFile(data []byte, extension string) (string, func(), error) {
+	file, err := os.CreateTemp("", "gocuda-j2k-*"+extension)
+	if err != nil {
+		return "", nil, err
+	}
+	if _, err := file.Write(data); err != nil {
+		file.Close()
+		os.Remove(file.Name())
+		return "", nil, err
+	}
+	if err := file.Close(); err != nil {
+		os.Remove(file.Name())
+		return "", nil, err
+	}
+	return file.Name(), func() { _ = os.Remove(file.Name()) }, nil
+}
+
+func jpeg2000Filter(params Jpeg2000DecodeParams, width, height int) string {
+	filters := make([]string, 0, 2)
+	if params.ReduceFactor > 0 {
+		scaleDivisor := 1 << params.ReduceFactor
+		filters = append(filters, fmt.Sprintf("scale=%d:%d", maxInt(width/scaleDivisor, 1), maxInt(height/scaleDivisor, 1)))
+	}
+	if params.CropWidth > 0 && params.CropHeight > 0 {
+		filters = append(filters, fmt.Sprintf("crop=%d:%d:%d:%d", params.CropWidth, params.CropHeight, params.CropX, params.CropY))
+	}
+	if len(filters) == 0 {
+		return ""
+	}
+	return filepath.ToSlash(filters[0] + func() string {
+		if len(filters) == 1 {
+			return ""
+		}
+		return "," + filters[1]
+	}())
+}
+
+func jpeg2000PixelFormat(format Jpeg2000Format) (string, error) {
+	switch format {
+	case Jpeg2000FormatRGB:
+		return "rgb24", nil
+	case Jpeg2000FormatBGR:
+		return "bgr24", nil
+	case Jpeg2000FormatRGBA:
+		return "rgba", nil
+	case Jpeg2000FormatBGRA:
+		return "bgra", nil
+	case Jpeg2000FormatGrayscale:
+		return "gray", nil
+	case Jpeg2000FormatYUV420:
+		return "yuv420p", nil
+	case Jpeg2000FormatYUV422:
+		return "yuv422p", nil
+	case Jpeg2000FormatYUV444:
+		return "yuv444p", nil
+	default:
+		return "", fmt.Errorf("unsupported JPEG2000 format: %d", format)
+	}
+}
+
+func jpeg2000RawImageSize(width, height int, format Jpeg2000Format) int {
+	switch format {
+	case Jpeg2000FormatGrayscale:
+		return width * height
+	case Jpeg2000FormatRGB, Jpeg2000FormatBGR:
+		return width * height * 3
+	case Jpeg2000FormatRGBA, Jpeg2000FormatBGRA:
+		return width * height * 4
+	case Jpeg2000FormatYUV420:
+		return width * height * 3 / 2
+	case Jpeg2000FormatYUV422:
+		return width * height * 2
+	case Jpeg2000FormatYUV444:
+		return width * height * 3
+	default:
+		return width * height * 3
+	}
+}
+
+func componentsForPixelFormat(pixelFormat string) int {
+	switch pixelFormat {
+	case "gray", "gray16le":
+		return 1
+	case "rgba", "bgra", "argb", "abgr":
+		return 4
+	default:
+		return 3
+	}
+}
+
+func codecFromBytes(j2kData []byte) Jpeg2000Codec {
 	if len(j2kData) >= 12 && string(j2kData[4:8]) == "jP  " {
-		info.Codec = Jpeg2000CodecJP2
+		return Jpeg2000CodecJP2
 	}
+	return Jpeg2000CodecJ2K
+}
 
-	return info, nil
+func codecExtension(codec Jpeg2000Codec) string {
+	switch codec {
+	case Jpeg2000CodecJP2:
+		return ".jp2"
+	case Jpeg2000CodecJPT:
+		return ".jpt"
+	case Jpeg2000CodecJPX:
+		return ".jpx"
+	default:
+		return ".j2k"
+	}
+}
+
+func codecExtensionFromBytes(j2kData []byte) string {
+	return codecExtension(codecFromBytes(j2kData))
 }
 
 // Destroy cleans up decoder resources

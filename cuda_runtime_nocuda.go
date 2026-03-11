@@ -112,6 +112,11 @@ func SetCudaDevice(deviceID int) error {
 	return nil // No-op for simulation
 }
 
+// CurrentCudaDeviceID returns the simulated current device ID.
+func CurrentCudaDeviceID() (int, error) {
+	return 0, nil
+}
+
 // GetCudaDeviceProperties returns an error in simulation mode
 func GetCudaDeviceProperties(deviceID int) (*RealDeviceProperties, error) {
 	return nil, fmt.Errorf("CUDA not available - compiled without CUDA support")
