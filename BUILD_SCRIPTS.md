@@ -139,6 +139,8 @@ setup_windows_cuda_import_libs.bat "C:\Program Files\NVIDIA GPU Computing Toolki
 
 This prepares the Windows-side `lib_mingw` inputs for CUDA runtime, cuDNN, nvJPEG, nvJPEG2000, cuBLAS-backed CUTLASS GEMM, cuDSS, AmgX, and cuTENSOR work. After `lib_mingw\libcudnn.a`, `lib_mingw\libnvjpeg.a`, `lib_mingw\libnvjpeg2k.a`, `lib_mingw\libcublas.a`, `lib_mingw\libcudss.a`, `lib_mingw\libamgxsh.a`, and `lib_mingw\libcutensor.a` are generated, CUDA-tagged Windows builds can link those native backends.
 
+Use `powershell -ExecutionPolicy Bypass -File verify_windows_cuda_native_env.ps1` before CUDA-tagged builds to see which headers, DLLs, and import libraries are actually installed locally. The script checks the default CUDA toolkit path, the repository's existing fallback path `D:\NVIDIA\include`, and optional override variables `GOCUDA_EXTRA_INCLUDE_DIRS`, `GOCUDA_EXTRA_BIN_DIRS`, and `GOCUDA_EXTRA_LIB_DIRS`.
+
 ## Troubleshooting
 
 ### Common Issues

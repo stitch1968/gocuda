@@ -46,6 +46,8 @@ This file is the execution tracker for moving GoCUDA from a dual-mode developmen
 - [ ] AmgX: add native CUDA-tagged bindings to complement the current deterministic production-ready implementation (in progress: native dispatch, CUDA-tagged setup/solve backend, CUDA-tagged native tests, and Windows import-lib setup path added)
 - [ ] cuTENSOR: add native CUDA-tagged bindings to complement the current deterministic production-ready implementation (in progress: native handle creation, native contraction/elementwise/reduction/permutation dispatch, cached native contraction plans, CUDA-tagged native tests, and Windows import-lib setup path added; pending hardware validation)
 
+- [x] Add Windows-native verification for optional CUDA backlog headers, DLLs, and import libs so hardware-mode validation failures surface as actionable environment gaps instead of first-error compile failures
+
 ## Operational Hardening
 
 - [x] Add concurrency and lifecycle tests for contexts, streams, and memory ownership under load
