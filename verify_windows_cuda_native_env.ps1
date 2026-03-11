@@ -60,6 +60,7 @@ $includeRoots = Resolve-SearchRoots -Candidates @(
 ) -ExtraEnvVar 'GOCUDA_EXTRA_INCLUDE_DIRS'
 $binRoots = Resolve-SearchRoots -Candidates @(
     (Join-Path $cudaPath 'bin'),
+    (Join-Path $cudaPath 'bin\x64'),
     'D:\NVIDIA\bin'
 ) -ExtraEnvVar 'GOCUDA_EXTRA_BIN_DIRS'
 $libRoots = Resolve-SearchRoots -Candidates @(
@@ -156,6 +157,7 @@ Write-Host '  2. Re-run this script after installation.'
 if ($helperArgs.Count -ge 2) {
     Write-Host ("  3. Regenerate MinGW import libs with: setup_windows_cuda_import_libs.bat {0}" -f ($helperArgs -join ' '))
 }
+Write-Host '  4. Or auto-detect available DLLs with: powershell -ExecutionPolicy Bypass -File setup_windows_cuda_import_libs_auto.ps1'
 
 if ($Strict -and $missingRequired.Count -gt 0) {
     exit 1

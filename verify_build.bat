@@ -95,6 +95,12 @@ if exist "verify_windows_cuda_native_env.ps1" (
 ) else (
     echo ❌ verify_windows_cuda_native_env.ps1: NOT FOUND
 )
+if exist "setup_windows_cuda_import_libs_auto.ps1" (
+    echo ✅ setup_windows_cuda_import_libs_auto.ps1: EXISTS
+    echo    Run: powershell -ExecutionPolicy Bypass -File setup_windows_cuda_import_libs_auto.ps1
+) else (
+    echo ❌ setup_windows_cuda_import_libs_auto.ps1: NOT FOUND
+)
 echo.
 
 REM Test Makefile

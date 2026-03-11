@@ -47,6 +47,10 @@ This file is the execution tracker for moving GoCUDA from a dual-mode developmen
 - [ ] cuTENSOR: add native CUDA-tagged bindings to complement the current deterministic production-ready implementation (in progress: native handle creation, native contraction/elementwise/reduction/permutation dispatch, cached native contraction plans, CUDA-tagged native tests, and Windows import-lib setup path added; pending hardware validation)
 
 - [x] Add Windows-native verification for optional CUDA backlog headers, DLLs, and import libs so hardware-mode validation failures surface as actionable environment gaps instead of first-error compile failures
+- [x] Add a machine-specific Windows SDK installation checklist keyed to the exact missing native backlog files reported by the verifier
+- [ ] Install the missing optional Windows vendor SDK headers, DLLs, and import libs for cuDNN, nvJPEG2000, cuTENSOR, and cuDSS on the primary validation machine
+- [ ] Regenerate MinGW import libs from the locally discovered DLL set and rerun CUDA-tagged validation after the missing vendor SDKs are installed (in progress: auto-detected PowerShell import-lib helper added alongside the manual batch helper)
+- [ ] Broaden the bounded native Thrust slice beyond context/copy/fill/generate once the Windows validation environment can exercise additional native algorithm coverage
 
 ## Operational Hardening
 

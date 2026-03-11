@@ -3,7 +3,7 @@ REM Generate MinGW import libraries for CUDA runtime DLLs used by GoCUDA.
 REM Usage:
 REM   setup_windows_cuda_import_libs.bat <cudart_dll> <cudnn_dll> [nvjpeg_dll] [nvjpeg2k_dll] [cublas_dll] [cudss_dll] [amgx_dll] [cutensor_dll] [cuda_driver_dll]
 REM Example:
-REM   setup_windows_cuda_import_libs.bat "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\cudart64_13.dll" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\cudnn64_9.dll" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\nvjpeg64_13.dll" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\nvjpeg2k64_0.dll" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\cublas64_13.dll" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\cudss64_0.dll" "C:\amgx\bin\amgxsh.dll" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\cutensor64_2.dll" "C:\Windows\System32\nvcuda.dll"
+REM   setup_windows_cuda_import_libs.bat "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\x64\cudart64_13.dll" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\x64\cudnn64_9.dll" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\x64\nvjpeg64_13.dll" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\x64\nvjpeg2k64_0.dll" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\x64\cublas64_13.dll" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\x64\cudss64_0.dll" "C:\amgx\bin\amgxsh.dll" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\x64\cutensor64_2.dll" "C:\Windows\System32\nvcuda.dll"
 
 setlocal
 setlocal EnableDelayedExpansion
@@ -109,5 +109,5 @@ exit /b 0
 :usage
 echo Usage: %~n0 ^<cudart_dll^> ^<cudnn_dll^> [nvjpeg_dll] [nvjpeg2k_dll] [cublas_dll] [cudss_dll] [amgx_dll] [cutensor_dll] [cuda_driver_dll]
 echo Example:
-echo   %~n0 "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\cudart64_13.dll" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\cudnn64_9.dll" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\nvjpeg64_13.dll" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\nvjpeg2k64_0.dll" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\cublas64_13.dll" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\cudss64_0.dll" "C:\amgx\bin\amgxsh.dll" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\cutensor64_2.dll" "C:\Windows\System32\nvcuda.dll"
+echo   %~n0 "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\x64\cudart64_13.dll" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\x64\cudnn64_9.dll" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\x64\nvjpeg64_13.dll" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\x64\nvjpeg2k64_0.dll" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\x64\cublas64_13.dll" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\x64\cudss64_0.dll" "C:\amgx\bin\amgxsh.dll" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\x64\cutensor64_2.dll" "C:\Windows\System32\nvcuda.dll"
 exit /b 1

@@ -134,12 +134,16 @@ go run demos/missing_features/main.go
 GoCUDA includes `generate_mingw_import_lib.py` to build MinGW import libraries from installed CUDA DLLs. The convenience wrapper below generates the current Windows link inputs used by the repository:
 
 ```cmd
-setup_windows_cuda_import_libs.bat "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\cudart64_13.dll" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\cudnn64_9.dll" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\nvjpeg64_13.dll" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\nvjpeg2k64_0.dll" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\cublas64_13.dll" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\cudss64_0.dll" "C:\amgx\bin\amgxsh.dll" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\cutensor64_2.dll" "C:\Windows\System32\nvcuda.dll"
+setup_windows_cuda_import_libs.bat "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\x64\cudart64_13.dll" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\x64\cudnn64_9.dll" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\x64\nvjpeg64_13.dll" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\x64\nvjpeg2k64_0.dll" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\x64\cublas64_13.dll" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\x64\cudss64_0.dll" "C:\amgx\bin\amgxsh.dll" "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\x64\cutensor64_2.dll" "C:\Windows\System32\nvcuda.dll"
 ```
 
 This prepares the Windows-side `lib_mingw` inputs for CUDA runtime, cuDNN, nvJPEG, nvJPEG2000, cuBLAS-backed CUTLASS GEMM, cuDSS, AmgX, and cuTENSOR work. After `lib_mingw\libcudnn.a`, `lib_mingw\libnvjpeg.a`, `lib_mingw\libnvjpeg2k.a`, `lib_mingw\libcublas.a`, `lib_mingw\libcudss.a`, `lib_mingw\libamgxsh.a`, and `lib_mingw\libcutensor.a` are generated, CUDA-tagged Windows builds can link those native backends.
 
 Use `powershell -ExecutionPolicy Bypass -File verify_windows_cuda_native_env.ps1` before CUDA-tagged builds to see which headers, DLLs, and import libraries are actually installed locally. The script checks the default CUDA toolkit path, the repository's existing fallback path `D:\NVIDIA\include`, and optional override variables `GOCUDA_EXTRA_INCLUDE_DIRS`, `GOCUDA_EXTRA_BIN_DIRS`, and `GOCUDA_EXTRA_LIB_DIRS`.
+
+If you want to generate import libraries for whatever DLLs are already installed without manually collecting every path first, run `powershell -ExecutionPolicy Bypass -File setup_windows_cuda_import_libs_auto.ps1`. It searches the CUDA toolkit `bin` and `bin\x64` directories, `D:\NVIDIA\bin`, `C:\amgx\bin`, `PATH`, and `GOCUDA_EXTRA_BIN_DIRS`, then generates import libraries for the DLLs it finds and skips the missing optional backends.
+
+For a machine-specific checklist of which NVIDIA SDK files are still missing and how to bring Windows CUDA validation to a runnable state, use [docs/WINDOWS_NATIVE_SDK_SETUP.md](docs/WINDOWS_NATIVE_SDK_SETUP.md).
 
 ## Troubleshooting
 
