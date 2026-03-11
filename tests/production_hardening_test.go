@@ -47,11 +47,9 @@ func TestConcurrentStreamAndMemoryLifecycle(t *testing.T) {
 	const iterations = 16
 
 	var wg sync.WaitGroup
-	for worker := 0; worker < goroutines; worker++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for i := 0; i < iterations; i++ {
+	for range goroutines {
+		wg.Go(func() {
+			for range iterations {
 				stream, err := streams.CreateStream()
 				if err != nil {
 					t.Errorf("failed to create stream: %v", err)
@@ -88,7 +86,7 @@ func TestConcurrentStreamAndMemoryLifecycle(t *testing.T) {
 					t.Errorf("failed to destroy stream: %v", err)
 				}
 			}
-		}()
+		})
 	}
 
 	wg.Wait()

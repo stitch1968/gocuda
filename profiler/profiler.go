@@ -6,6 +6,7 @@ package profiler
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -19,7 +20,7 @@ type Event struct {
 	Duration  time.Duration
 	StreamID  int
 	DeviceID  int
-	Metadata  map[string]interface{}
+	Metadata  map[string]any
 }
 
 // EventType defines the type of profiling event
@@ -173,7 +174,7 @@ func (p *Profiler) EndEvent(name string, eventType EventType) {
 			Duration:  duration,
 			StreamID:  0, // Default stream
 			DeviceID:  0, // Default device
-			Metadata:  make(map[string]interface{}),
+			Metadata:  make(map[string]any),
 		}
 		p.events = append(p.events, event)
 		delete(p.startTimes, name)
@@ -365,7 +366,7 @@ func (p *Profiler) TrackAllocation(ptr uintptr, size int64) {
 			StartTime: time.Now(),
 			EndTime:   time.Now(),
 			Duration:  0,
-			Metadata: map[string]interface{}{
+			Metadata: map[string]any{
 				"size": size,
 				"ptr":  ptr,
 			},
@@ -394,7 +395,7 @@ func (p *Profiler) TrackDeallocation(ptr uintptr) {
 				StartTime: time.Now(),
 				EndTime:   time.Now(),
 				Duration:  0,
-				Metadata: map[string]interface{}{
+				Metadata: map[string]any{
 					"size": info.Size,
 					"ptr":  ptr,
 				},
@@ -483,45 +484,46 @@ func GenerateReport() string {
 	stats := profiler.GetStatistics()
 	kernelProfiles := profiler.GetKernelProfiles()
 
-	report := fmt.Sprintf("GoCUDA Profiling Report\n")
-	report += fmt.Sprintf("======================\n\n")
+	var report strings.Builder
+	report.WriteString(fmt.Sprintf("GoCUDA Profiling Report\n"))
+	report.WriteString(fmt.Sprintf("======================\n\n"))
 
-	report += fmt.Sprintf("Summary:\n")
-	report += fmt.Sprintf("  Total Events: %d\n", stats.TotalEvents)
-	report += fmt.Sprintf("  Total Duration: %v\n", stats.TotalDuration)
-	report += fmt.Sprintf("  Average Duration: %v\n", stats.AverageDuration)
-	report += fmt.Sprintf("  Memory Peak: %d bytes (%.2f MB)\n", stats.MemoryPeak, float64(stats.MemoryPeak)/(1024*1024))
-	report += fmt.Sprintf("  Memory Current: %d bytes (%.2f MB)\n\n", stats.MemoryCurrent, float64(stats.MemoryCurrent)/(1024*1024))
+	report.WriteString(fmt.Sprintf("Summary:\n"))
+	report.WriteString(fmt.Sprintf("  Total Events: %d\n", stats.TotalEvents))
+	report.WriteString(fmt.Sprintf("  Total Duration: %v\n", stats.TotalDuration))
+	report.WriteString(fmt.Sprintf("  Average Duration: %v\n", stats.AverageDuration))
+	report.WriteString(fmt.Sprintf("  Memory Peak: %d bytes (%.2f MB)\n", stats.MemoryPeak, float64(stats.MemoryPeak)/(1024*1024)))
+	report.WriteString(fmt.Sprintf("  Memory Current: %d bytes (%.2f MB)\n\n", stats.MemoryCurrent, float64(stats.MemoryCurrent)/(1024*1024)))
 
-	report += fmt.Sprintf("Events by Type:\n")
+	report.WriteString(fmt.Sprintf("Events by Type:\n"))
 	for eventType, count := range stats.EventsByType {
-		report += fmt.Sprintf("  %s: %d\n", eventType.String(), count)
+		report.WriteString(fmt.Sprintf("  %s: %d\n", eventType.String(), count))
 	}
-	report += fmt.Sprintf("\n")
+	report.WriteString(fmt.Sprintf("\n"))
 
 	if len(kernelProfiles) > 0 {
-		report += fmt.Sprintf("Kernel Profiles:\n")
+		report.WriteString(fmt.Sprintf("Kernel Profiles:\n"))
 		for i, profile := range kernelProfiles {
 			if i >= 10 { // Limit to top 10
 				break
 			}
-			report += fmt.Sprintf("  %s:\n", profile.Name)
-			report += fmt.Sprintf("    Calls: %d\n", profile.CallCount)
-			report += fmt.Sprintf("    Total Time: %v\n", profile.TotalTime)
-			report += fmt.Sprintf("    Average Time: %v\n", profile.AverageTime)
-			report += fmt.Sprintf("    Min/Max Time: %v / %v\n", profile.MinTime, profile.MaxTime)
-			report += fmt.Sprintf("\n")
+			report.WriteString(fmt.Sprintf("  %s:\n", profile.Name))
+			report.WriteString(fmt.Sprintf("    Calls: %d\n", profile.CallCount))
+			report.WriteString(fmt.Sprintf("    Total Time: %v\n", profile.TotalTime))
+			report.WriteString(fmt.Sprintf("    Average Time: %v\n", profile.AverageTime))
+			report.WriteString(fmt.Sprintf("    Min/Max Time: %v / %v\n", profile.MinTime, profile.MaxTime))
+			report.WriteString(fmt.Sprintf("\n"))
 		}
 	}
 
 	if len(stats.Recommendations) > 0 {
-		report += fmt.Sprintf("Recommendations:\n")
+		report.WriteString(fmt.Sprintf("Recommendations:\n"))
 		for _, rec := range stats.Recommendations {
-			report += fmt.Sprintf("  - %s\n", rec)
+			report.WriteString(fmt.Sprintf("  - %s\n", rec))
 		}
 	}
 
-	return report
+	return report.String()
 }
 
 // WriteReport writes a profiling report to a file

@@ -21,7 +21,7 @@ This document defines the currently supported environments and the parts of the 
 
 | Component | Supported Range | Notes |
 | --- | --- | --- |
-| Go | 1.21+ | Module currently targets Go 1.21 in `go.mod`. |
+| Go | 1.26+ | Module currently targets Go 1.26 in `go.mod`. |
 | CUDA Toolkit | 12.x to 13.x target | Build paths and verification logic assume standard CUDA Toolkit layouts. |
 | GPU Architecture | NVIDIA CUDA-capable GPUs supported by installed toolkit | Real coverage depends on vendor library availability and toolkit compatibility. |
 

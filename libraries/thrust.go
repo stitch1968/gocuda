@@ -5,6 +5,7 @@ package libraries
 import (
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"time"
 
@@ -44,9 +45,7 @@ func (ctx *ThrustContext) Sort(data *memory.Memory, n int, policy ExecutionPolic
 	if err != nil {
 		return err
 	}
-	sort.Slice(values, func(i, j int) bool {
-		return values[i] < values[j]
-	})
+	slices.Sort(values)
 	return thrustWriteValues(data, values)
 }
 
@@ -122,7 +121,7 @@ func (ctx *ThrustContext) TransformBinary(input1, input2, output *memory.Memory,
 		return err
 	}
 	outputValues := make([]float32, n)
-	for index := 0; index < n; index++ {
+	for index := range n {
 		result, transformErr := applyThrustBinaryOperation(operation, leftValues[index], rightValues[index])
 		if transformErr != nil {
 			return transformErr

@@ -242,7 +242,7 @@ type CoalescedGroup struct {
 func NewCoalescedGroup(activeMask uint32, threadLane int) *CoalescedGroup {
 	// Count active threads
 	size := 0
-	for i := 0; i < 32; i++ {
+	for i := range 32 {
 		if activeMask&(1<<i) != 0 {
 			size++
 		}
@@ -250,7 +250,7 @@ func NewCoalescedGroup(activeMask uint32, threadLane int) *CoalescedGroup {
 
 	// Calculate rank within coalesced group
 	rank := 0
-	for i := 0; i < threadLane; i++ {
+	for i := range threadLane {
 		if activeMask&(1<<i) != 0 {
 			rank++
 		}

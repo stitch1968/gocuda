@@ -204,13 +204,13 @@ func (handle *CutlassGemmHandle) CutlassGemmBatched(A, B, C []*memory.Memory, ba
 	}
 
 	// Validate all matrices
-	for i := 0; i < batchCount; i++ {
+	for i := range batchCount {
 		if A[i] == nil || B[i] == nil || C[i] == nil {
 			return fmt.Errorf("batch matrix %d cannot be nil", i)
 		}
 	}
 
-	for index := 0; index < batchCount; index++ {
+	for index := range batchCount {
 		if err := executeCutlassGemm(handle.descriptor, A[index], B[index], C[index]); err != nil {
 			return fmt.Errorf("CUTLASS batched GEMM execution failed at %d: %v", index, err)
 		}
@@ -480,8 +480,8 @@ func executeCutlassConv(desc CutlassConvDesc, input, filter, output *memory.Memo
 		}
 		outValues := make([]float32, desc.N*outputH*outputW*desc.K)
 		for n := 0; n < desc.N; n++ {
-			for oh := 0; oh < outputH; oh++ {
-				for ow := 0; ow < outputW; ow++ {
+			for oh := range outputH {
+				for ow := range outputW {
 					for k := 0; k < desc.K; k++ {
 						sum := float32(0)
 						for r := 0; r < desc.R; r++ {
@@ -516,8 +516,8 @@ func executeCutlassConv(desc CutlassConvDesc, input, filter, output *memory.Memo
 		}
 		gradIn := make([]float32, desc.N*desc.H*desc.W*desc.C)
 		for n := 0; n < desc.N; n++ {
-			for oh := 0; oh < outputH; oh++ {
-				for ow := 0; ow < outputW; ow++ {
+			for oh := range outputH {
+				for ow := range outputW {
 					for k := 0; k < desc.K; k++ {
 						grad := gradOut[(((n*outputH)+oh)*outputW+ow)*desc.K+k]
 						for r := 0; r < desc.R; r++ {
@@ -548,8 +548,8 @@ func executeCutlassConv(desc CutlassConvDesc, input, filter, output *memory.Memo
 		}
 		gradW := make([]float32, desc.K*desc.R*desc.S*desc.C)
 		for n := 0; n < desc.N; n++ {
-			for oh := 0; oh < outputH; oh++ {
-				for ow := 0; ow < outputW; ow++ {
+			for oh := range outputH {
+				for ow := range outputW {
 					for k := 0; k < desc.K; k++ {
 						grad := gradOut[(((n*outputH)+oh)*outputW+ow)*desc.K+k]
 						for r := 0; r < desc.R; r++ {
@@ -584,10 +584,10 @@ func executeCutlassSpmm(sparseA, denseB, denseC *memory.Memory, M, N, K int) err
 		return err
 	}
 	cValues := make([]float32, M*N)
-	for row := 0; row < M; row++ {
-		for col := 0; col < N; col++ {
+	for row := range M {
+		for col := range N {
 			sum := float32(0)
-			for inner := 0; inner < K; inner++ {
+			for inner := range K {
 				sum += aValues[row*K+inner] * bValues[inner*N+col]
 			}
 			cValues[row*N+col] = sum
@@ -609,10 +609,10 @@ func executeCutlassRank2k(A, B, C *memory.Memory, N, K int, alpha, beta float32)
 	if err != nil {
 		return err
 	}
-	for row := 0; row < N; row++ {
-		for col := 0; col < N; col++ {
+	for row := range N {
+		for col := range N {
 			sum := float32(0)
-			for inner := 0; inner < K; inner++ {
+			for inner := range K {
 				sum += aValues[row*K+inner]*bValues[col*K+inner] + bValues[row*K+inner]*aValues[col*K+inner]
 			}
 			cValues[row*N+col] = alpha*sum + beta*cValues[row*N+col]
@@ -633,10 +633,10 @@ func executeCutlassTrmm(A, B *memory.Memory, M, N int, side, uplo, trans, diag s
 	result := make([]float32, len(bValues))
 	copy(result, bValues)
 	if side == "Left" {
-		for row := 0; row < M; row++ {
-			for col := 0; col < N; col++ {
+		for row := range M {
+			for col := range N {
 				sum := float32(0)
-				for inner := 0; inner < M; inner++ {
+				for inner := range M {
 					if !cutlassTriangularAllowed(row, inner, uplo) {
 						continue
 					}
@@ -647,10 +647,10 @@ func executeCutlassTrmm(A, B *memory.Memory, M, N int, side, uplo, trans, diag s
 			}
 		}
 	} else {
-		for row := 0; row < M; row++ {
-			for col := 0; col < N; col++ {
+		for row := range M {
+			for col := range N {
 				sum := float32(0)
-				for inner := 0; inner < N; inner++ {
+				for inner := range N {
 					if !cutlassTriangularAllowed(col, inner, uplo) {
 						continue
 					}

@@ -1,5 +1,4 @@
 //go:build !cuda
-// +build !cuda
 
 package libraries
 
@@ -29,7 +28,7 @@ func execNativeFFT(plan *FFTPlan, input, output *memory.Memory, direction FFTDir
 	return fmt.Errorf("cuFFT native backend requires a CUDA-tagged build")
 }
 
-func setNativeFFTPlanStream(plan *FFTPlan, stream interface{}) error {
+func setNativeFFTPlanStream(plan *FFTPlan, stream any) error {
 	return fmt.Errorf("cuFFT native backend requires a CUDA-tagged build")
 }
 

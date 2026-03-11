@@ -389,9 +389,9 @@ func denseToSparseFromHost(dense *memory.Memory, rows, cols int, format MatrixFo
 		rowPtrs := make([]int32, rows+1)
 		colInds := make([]int32, 0)
 		nonZeroValues := make([]float32, 0)
-		for row := 0; row < rows; row++ {
+		for row := range rows {
 			rowPtrs[row] = int32(len(nonZeroValues))
-			for col := 0; col < cols; col++ {
+			for col := range cols {
 				value := values[row*cols+col]
 				if float32(math.Abs(float64(value))) <= tolerance {
 					continue
@@ -406,8 +406,8 @@ func denseToSparseFromHost(dense *memory.Memory, rows, cols int, format MatrixFo
 		rowIdx := make([]int32, 0)
 		colInds := make([]int32, 0)
 		nonZeroValues := make([]float32, 0)
-		for row := 0; row < rows; row++ {
-			for col := 0; col < cols; col++ {
+		for row := range rows {
+			for col := range cols {
 				value := values[row*cols+col]
 				if float32(math.Abs(float64(value))) <= tolerance {
 					continue

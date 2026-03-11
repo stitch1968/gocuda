@@ -23,19 +23,22 @@ const (
 
 // Memory allocation functions (excluding Alloc which conflicts with simple_api.go)
 var (
-	Malloc                       = memory.Alloc
-	MallocWithTypeAndStream      = memory.AllocWithTypeAndStream
-	AllocWithStream              = memory.AllocWithStream
-	AllocWithTypeAndStream       = memory.AllocWithTypeAndStream
-	CopyHostToDevice             = memory.CopyHostToDevice
-	CopyDeviceToHost             = memory.CopyDeviceToHost
-	CopyDeviceToDevice           = memory.CopyDeviceToDevice
-	CopyHostToDeviceWithStream   = memory.CopyHostToDeviceWithStream
-	CopyDeviceToHostWithStream   = memory.CopyDeviceToHostWithStream
-	CopyDeviceToDeviceWithStream = memory.CopyDeviceToDeviceWithStream
-	NewPool                      = memory.NewPool
-	GetInfo                      = memory.GetInfo
-	GetMemoryInfo                = memory.GetInfo // Alias for backward compatibility
+	Malloc                           = memory.Alloc
+	MallocOnDevice                   = memory.AllocOnDevice
+	MallocWithTypeAndStream          = memory.AllocWithTypeAndStream
+	AllocWithStream                  = memory.AllocWithStream
+	AllocWithTypeAndStream           = memory.AllocWithTypeAndStream
+	CopyHostToDevice                 = memory.CopyHostToDevice
+	CopyDeviceToHost                 = memory.CopyDeviceToHost
+	CopyDeviceToDevice               = memory.CopyDeviceToDevice
+	CopyDeviceToDevicePeer           = memory.CopyDeviceToDevicePeer
+	CopyHostToDeviceWithStream       = memory.CopyHostToDeviceWithStream
+	CopyDeviceToHostWithStream       = memory.CopyDeviceToHostWithStream
+	CopyDeviceToDeviceWithStream     = memory.CopyDeviceToDeviceWithStream
+	CopyDeviceToDevicePeerWithStream = memory.CopyDeviceToDevicePeerWithStream
+	NewPool                          = memory.NewPool
+	GetInfo                          = memory.GetInfo
+	GetMemoryInfo                    = memory.GetInfo // Alias for backward compatibility
 )
 
 // View returns a typed slice over an allocation after validating bounds.

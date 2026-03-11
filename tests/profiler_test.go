@@ -100,7 +100,7 @@ func TestProfilerMemoryTracking(t *testing.T) {
 
 	// Track memory allocations
 	var memories []*memory.Memory
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		mem, err := memory.Alloc(1024)
 		if err != nil {
 			t.Fatalf("Memory allocation %d failed: %v", i, err)
@@ -213,7 +213,7 @@ func TestKernelProfiles(t *testing.T) {
 	p.Clear()
 
 	// Create multiple kernel events
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		profiler.ProfileKernel("test_kernel", func() {
 			time.Sleep(2 * time.Millisecond)
 		})

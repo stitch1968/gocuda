@@ -231,7 +231,7 @@ func (decoder *Jpeg2000DecoderState) DecodeJpeg2000Batch(j2kDataList [][]byte, p
 		output, width, height, err := decoder.DecodeJpeg2000(j2kData, params)
 		if err != nil {
 			// Clean up previously allocated memory
-			for j := 0; j < i; j++ {
+			for j := range i {
 				if outputs[j] != nil {
 					outputs[j].Free()
 				}

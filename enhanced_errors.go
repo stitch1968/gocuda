@@ -11,7 +11,7 @@ type EnhancedError struct {
 	Operation   string
 	Cause       string
 	Suggestion  string
-	Details     map[string]interface{}
+	Details     map[string]any
 	Recoverable bool
 }
 
@@ -29,7 +29,7 @@ func (e *EnhancedError) IsRecoverable() bool {
 }
 
 // GetDetails returns additional error context
-func (e *EnhancedError) GetDetails() map[string]interface{} {
+func (e *EnhancedError) GetDetails() map[string]any {
 	return e.Details
 }
 
@@ -52,7 +52,7 @@ func NewMemoryError(operation, cause string, requestedSize, availableSize int64)
 		Cause:       cause,
 		Suggestion:  suggestion,
 		Recoverable: recoverable,
-		Details: map[string]interface{}{
+		Details: map[string]any{
 			"requested_bytes": requestedSize,
 			"available_bytes": availableSize,
 			"usage_percent":   float64(requestedSize) / float64(availableSize) * 100,
@@ -74,7 +74,7 @@ func NewKernelError(operation, cause string, gridDim, blockDim Dim3) *EnhancedEr
 		Cause:       cause,
 		Suggestion:  suggestion,
 		Recoverable: true,
-		Details: map[string]interface{}{
+		Details: map[string]any{
 			"grid_dim":      fmt.Sprintf("%dx%dx%d", gridDim.X, gridDim.Y, gridDim.Z),
 			"block_dim":     fmt.Sprintf("%dx%dx%d", blockDim.X, blockDim.Y, blockDim.Z),
 			"total_threads": totalThreads,
@@ -98,7 +98,7 @@ func NewDeviceError(operation, cause string, deviceID int) *EnhancedError {
 		Cause:       cause,
 		Suggestion:  suggestion,
 		Recoverable: true,
-		Details: map[string]interface{}{
+		Details: map[string]any{
 			"requested_device":  deviceID,
 			"available_devices": GetCudaDeviceCount(),
 			"cuda_available":    IsCudaAvailable(),
@@ -113,7 +113,7 @@ func WrapError(operation string, originalError error, suggestion string) *Enhanc
 		Cause:       originalError.Error(),
 		Suggestion:  suggestion,
 		Recoverable: true,
-		Details: map[string]interface{}{
+		Details: map[string]any{
 			"original_error": originalError.Error(),
 		},
 	}
@@ -135,7 +135,7 @@ func CheckMemoryAllocation(size int64) error {
 			Cause:       fmt.Sprintf("Invalid size: %d", size),
 			Suggestion:  "Use a positive size value",
 			Recoverable: false,
-			Details: map[string]interface{}{
+			Details: map[string]any{
 				"requested_size": size,
 			},
 		}

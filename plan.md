@@ -57,11 +57,11 @@ This file is the execution tracker for moving GoCUDA from a dual-mode developmen
 - [x] Expose explicit initialization-state APIs so callers can detect successful runtime setup without relying on panics or implicit side effects
 - [x] Make memory freeing idempotent and race-safe against finalizer-triggered cleanup paths
 - [x] Add device-aware internal CUDA wrapper execution and a context-bound execution helper for locked-thread device selection
-- [x] Guard zero-length transfer operations and reject implicit cross-device copies until explicit peer-copy support exists
+- [x] Guard zero-length transfer operations and keep same-device copies strict while introducing explicit peer-copy APIs for cross-device transfers
 
 ## Runtime Safety Backlog
 
-- [ ] Add explicit peer-copy support for cross-device transfers and multi-GPU memory ownership
+- [x] Add explicit peer-copy support for cross-device transfers and multi-GPU memory ownership primitives
 - [ ] Expand context-bound execution across more high-level APIs so native CUDA mode consistently inherits device/thread affinity
 - [ ] Add CUDA-tagged validation covering the locked-thread device wrapper paths under real hardware mode
 

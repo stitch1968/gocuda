@@ -17,13 +17,13 @@ type Dim3 struct {
 
 // Kernel interface for CUDA kernels
 type Kernel interface {
-	Execute(gridDim, blockDim Dim3, sharedMem int, stream *internal.Stream, args ...interface{}) error
+	Execute(gridDim, blockDim Dim3, sharedMem int, stream *internal.Stream, args ...any) error
 }
 
 // VectorAdd performs vector addition
 type VectorAdd struct{}
 
-func (k *VectorAdd) Execute(gridDim, blockDim Dim3, sharedMem int, stream *internal.Stream, args ...interface{}) error {
+func (k *VectorAdd) Execute(gridDim, blockDim Dim3, sharedMem int, stream *internal.Stream, args ...any) error {
 	if len(args) != 4 {
 		return fmt.Errorf("vector add requires 4 arguments: a, b, c, n")
 	}
@@ -50,7 +50,7 @@ func (k *VectorAdd) Execute(gridDim, blockDim Dim3, sharedMem int, stream *inter
 		return err
 	}
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		cData[i] = aData[i] + bData[i]
 	}
 
@@ -60,7 +60,7 @@ func (k *VectorAdd) Execute(gridDim, blockDim Dim3, sharedMem int, stream *inter
 // MatrixMultiply performs matrix multiplication
 type MatrixMultiply struct{}
 
-func (mk *MatrixMultiply) Execute(gridDim, blockDim Dim3, sharedMem int, stream *internal.Stream, args ...interface{}) error {
+func (mk *MatrixMultiply) Execute(gridDim, blockDim Dim3, sharedMem int, stream *internal.Stream, args ...any) error {
 	if len(args) != 6 {
 		return fmt.Errorf("matrix multiply requires 6 arguments: a, b, c, m, n, k")
 	}
@@ -89,10 +89,10 @@ func (mk *MatrixMultiply) Execute(gridDim, blockDim Dim3, sharedMem int, stream 
 		return err
 	}
 
-	for i := 0; i < m; i++ {
-		for j := 0; j < n; j++ {
+	for i := range m {
+		for j := range n {
 			sum := float32(0)
-			for l := 0; l < k; l++ {
+			for l := range k {
 				sum += aData[i*k+l] * bData[l*n+j]
 			}
 			cData[i*n+j] = sum
@@ -105,7 +105,7 @@ func (mk *MatrixMultiply) Execute(gridDim, blockDim Dim3, sharedMem int, stream 
 // Convolution2D performs 2D convolution
 type Convolution2D struct{}
 
-func (conv *Convolution2D) Execute(gridDim, blockDim Dim3, sharedMem int, stream *internal.Stream, args ...interface{}) error {
+func (conv *Convolution2D) Execute(gridDim, blockDim Dim3, sharedMem int, stream *internal.Stream, args ...any) error {
 	if len(args) != 9 {
 		return fmt.Errorf("convolution2D requires 9 arguments: input, filter, output, inputWidth, inputHeight, filterWidth, filterHeight, outputWidth, outputHeight")
 	}
@@ -138,11 +138,11 @@ func (conv *Convolution2D) Execute(gridDim, blockDim Dim3, sharedMem int, stream
 	}
 
 	// Perform 2D convolution
-	for y := 0; y < outputHeight; y++ {
-		for x := 0; x < outputWidth; x++ {
+	for y := range outputHeight {
+		for x := range outputWidth {
 			sum := float32(0)
-			for fy := 0; fy < filterHeight; fy++ {
-				for fx := 0; fx < filterWidth; fx++ {
+			for fy := range filterHeight {
+				for fx := range filterWidth {
 					inputY := y + fy
 					inputX := x + fx
 					if inputY < inputHeight && inputX < inputWidth {
@@ -160,7 +160,7 @@ func (conv *Convolution2D) Execute(gridDim, blockDim Dim3, sharedMem int, stream
 // SAXPY performs single-precision A*X plus Y operation
 type SAXPY struct{}
 
-func (saxpy *SAXPY) Execute(gridDim, blockDim Dim3, sharedMem int, stream *internal.Stream, args ...interface{}) error {
+func (saxpy *SAXPY) Execute(gridDim, blockDim Dim3, sharedMem int, stream *internal.Stream, args ...any) error {
 	if len(args) != 4 {
 		return fmt.Errorf("SAXPY requires 4 arguments: a, x, y, n")
 	}
@@ -183,7 +183,7 @@ func (saxpy *SAXPY) Execute(gridDim, blockDim Dim3, sharedMem int, stream *inter
 		return err
 	}
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		yData[i] = a*xData[i] + yData[i]
 	}
 
@@ -193,7 +193,7 @@ func (saxpy *SAXPY) Execute(gridDim, blockDim Dim3, sharedMem int, stream *inter
 // Reduction performs parallel reduction (sum)
 type Reduction struct{}
 
-func (red *Reduction) Execute(gridDim, blockDim Dim3, sharedMem int, stream *internal.Stream, args ...interface{}) error {
+func (red *Reduction) Execute(gridDim, blockDim Dim3, sharedMem int, stream *internal.Stream, args ...any) error {
 	if len(args) != 3 {
 		return fmt.Errorf("reduction requires 3 arguments: input, output, n")
 	}
@@ -216,7 +216,7 @@ func (red *Reduction) Execute(gridDim, blockDim Dim3, sharedMem int, stream *int
 	}
 
 	sum := float32(0)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		sum += inputData[i]
 	}
 	outputData[0] = sum
@@ -301,7 +301,7 @@ func FillVector(mem *memory.Memory, size int, value float32) error {
 	if err != nil {
 		return err
 	}
-	for i := 0; i < size; i++ {
+	for i := range size {
 		data[i] = value
 	}
 	return nil
@@ -356,15 +356,15 @@ func SetVectorValue(mem *memory.Memory, index int, value float32) {
 // CustomKernel allows users to define custom GPU kernels
 type CustomKernel struct {
 	Name     string
-	Function func(gridDim, blockDim Dim3, sharedMem int, stream *internal.Stream, args ...interface{}) error
+	Function func(gridDim, blockDim Dim3, sharedMem int, stream *internal.Stream, args ...any) error
 }
 
-func (ck *CustomKernel) Execute(gridDim, blockDim Dim3, sharedMem int, stream *internal.Stream, args ...interface{}) error {
+func (ck *CustomKernel) Execute(gridDim, blockDim Dim3, sharedMem int, stream *internal.Stream, args ...any) error {
 	return ck.Function(gridDim, blockDim, sharedMem, stream, args...)
 }
 
 // NewCustomKernel creates a new custom kernel
-func NewCustomKernel(name string, function func(gridDim, blockDim Dim3, sharedMem int, stream *internal.Stream, args ...interface{}) error) *CustomKernel {
+func NewCustomKernel(name string, function func(gridDim, blockDim Dim3, sharedMem int, stream *internal.Stream, args ...any) error) *CustomKernel {
 	return &CustomKernel{
 		Name:     name,
 		Function: function,
@@ -380,7 +380,7 @@ func ElementwiseAdd(a, b, c *memory.Memory, n int) error {
 
 // ElementwiseMultiply performs element-wise multiplication
 func ElementwiseMultiply(a, b, c *memory.Memory, n int) error {
-	kernel := NewCustomKernel("ElementwiseMultiply", func(gridDim, blockDim Dim3, sharedMem int, stream *internal.Stream, args ...interface{}) error {
+	kernel := NewCustomKernel("ElementwiseMultiply", func(gridDim, blockDim Dim3, sharedMem int, stream *internal.Stream, args ...any) error {
 		aData, err := memory.View[float32](a, n)
 		if err != nil {
 			return err
@@ -394,7 +394,7 @@ func ElementwiseMultiply(a, b, c *memory.Memory, n int) error {
 			return err
 		}
 
-		for i := 0; i < n; i++ {
+		for i := range n {
 			cData[i] = aData[i] * bData[i]
 		}
 		return nil
@@ -406,7 +406,7 @@ func ElementwiseMultiply(a, b, c *memory.Memory, n int) error {
 
 // ScalarMultiply performs scalar multiplication: c = a * scalar
 func ScalarMultiply(a, c *memory.Memory, scalar float32, n int) error {
-	kernel := NewCustomKernel("ScalarMultiply", func(gridDim, blockDim Dim3, sharedMem int, stream *internal.Stream, args ...interface{}) error {
+	kernel := NewCustomKernel("ScalarMultiply", func(gridDim, blockDim Dim3, sharedMem int, stream *internal.Stream, args ...any) error {
 		aData, err := memory.View[float32](a, n)
 		if err != nil {
 			return err
@@ -416,7 +416,7 @@ func ScalarMultiply(a, c *memory.Memory, scalar float32, n int) error {
 			return err
 		}
 
-		for i := 0; i < n; i++ {
+		for i := range n {
 			cData[i] = aData[i] * scalar
 		}
 		return nil

@@ -27,10 +27,7 @@ func CopyHostToDeviceWithStream(stream *internal.Stream, dst *Memory, src []byte
 		return nil
 	}
 
-	copySize := dst.size
-	if int64(len(src)) < copySize {
-		copySize = int64(len(src))
-	}
+	copySize := min(int64(len(src)), dst.size)
 
 	// Check if we should use real CUDA or simulation
 	if internal.ShouldUseCuda() && dst.memType == TypeDevice && dst.data == nil {
@@ -63,10 +60,7 @@ func CopyDeviceToHostWithStream(stream *internal.Stream, dst []byte, src *Memory
 		return nil
 	}
 
-	copySize := src.size
-	if int64(len(dst)) < copySize {
-		copySize = int64(len(dst))
-	}
+	copySize := min(int64(len(dst)), src.size)
 
 	// Check if we should use real CUDA or simulation
 	if internal.ShouldUseCuda() && src.memType == TypeDevice && src.data == nil {
@@ -87,6 +81,54 @@ func CopyDeviceToDevice(dst, src *Memory) error {
 	return CopyDeviceToDeviceWithStream(internal.GetDefaultStream(), dst, src)
 }
 
+// CopyDeviceToDevicePeer performs an explicit device-to-device copy across
+// devices using peer access when available or a host bounce buffer in simulation.
+func CopyDeviceToDevicePeer(dst, src *Memory) error {
+	return CopyDeviceToDevicePeerWithStream(internal.GetDefaultStream(), dst, src)
+}
+
+// CopyDeviceToDevicePeerWithStream performs an explicit cross-device copy.
+func CopyDeviceToDevicePeerWithStream(stream *internal.Stream, dst, src *Memory) error {
+	if dst == nil || src == nil {
+		return fmt.Errorf("null pointer")
+	}
+	if stream == nil {
+		stream = internal.GetDefaultStream()
+	}
+
+	copySize := src.size
+	if dst.size < copySize {
+		copySize = dst.size
+	}
+	if copySize == 0 {
+		return nil
+	}
+
+	if src.deviceID == dst.deviceID {
+		return CopyDeviceToDeviceWithStream(stream, dst, src)
+	}
+
+	if internal.ShouldUseCuda() && dst.memType == TypeDevice && src.memType == TypeDevice && dst.data == nil && src.data == nil {
+		canAccess, err := internal.CanAccessPeer(dst.deviceID, src.deviceID)
+		if err != nil {
+			return err
+		}
+		if !canAccess {
+			return fmt.Errorf("peer access unavailable between devices %d and %d", src.deviceID, dst.deviceID)
+		}
+		if err := internal.EnablePeerAccess(dst.deviceID, src.deviceID); err != nil {
+			return err
+		}
+		return internal.CudaMemcpyPeer(dst.ptr, dst.deviceID, src.ptr, src.deviceID, copySize)
+	}
+
+	buffer := make([]byte, copySize)
+	if err := CopyDeviceToHostWithStream(stream, buffer, src); err != nil {
+		return err
+	}
+	return CopyHostToDeviceWithStream(stream, dst, buffer)
+}
+
 // CopyDeviceToDeviceWithStream copies data between devices with a specific stream
 func CopyDeviceToDeviceWithStream(stream *internal.Stream, dst, src *Memory) error {
 	if dst == nil || src == nil {
@@ -99,15 +141,12 @@ func CopyDeviceToDeviceWithStream(stream *internal.Stream, dst, src *Memory) err
 		return nil
 	}
 
-	copySize := src.size
-	if dst.size < copySize {
-		copySize = dst.size
-	}
+	copySize := min(dst.size, src.size)
 
 	// Check if we should use real CUDA or simulation
 	if internal.ShouldUseCuda() && dst.memType == TypeDevice && src.memType == TypeDevice {
 		if dst.deviceID != src.deviceID {
-			return fmt.Errorf("cross-device memcpy requires explicit peer-copy support: src device %d dst device %d", src.deviceID, dst.deviceID)
+			return fmt.Errorf("cross-device memcpy requires CopyDeviceToDevicePeer: src device %d dst device %d", src.deviceID, dst.deviceID)
 		}
 		// Use real CUDA memcpy
 		return internal.CudaMemcpyOnDevice(dst.ptr, src.ptr, copySize, internal.MemcpyKindDeviceToDevice, dst.deviceID)

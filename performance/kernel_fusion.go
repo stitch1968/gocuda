@@ -4,6 +4,7 @@ package performance
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/stitch1968/gocuda/memory"
@@ -28,7 +29,7 @@ type FusedKernel struct {
 // Operation represents a single GPU operation that can be fused
 type Operation struct {
 	Type     OperationType
-	Params   map[string]interface{}
+	Params   map[string]any
 	Priority int // Higher priority operations are scheduled first
 }
 
@@ -66,9 +67,9 @@ func NewKernelFusion(device int) *KernelFusion {
 func (kf *KernelFusion) FusedVectorSaxpyAdd(alpha float32, x, y, z, result *memory.Memory, n int) error {
 	// Create operation sequence
 	ops := []Operation{
-		{Type: OpVectorScale, Params: map[string]interface{}{"alpha": alpha, "input": x}, Priority: 3},
-		{Type: OpVectorAdd, Params: map[string]interface{}{"input1": "scaled_x", "input2": y}, Priority: 2},
-		{Type: OpVectorAdd, Params: map[string]interface{}{"input1": "temp_result", "input2": z}, Priority: 1},
+		{Type: OpVectorScale, Params: map[string]any{"alpha": alpha, "input": x}, Priority: 3},
+		{Type: OpVectorAdd, Params: map[string]any{"input1": "scaled_x", "input2": y}, Priority: 2},
+		{Type: OpVectorAdd, Params: map[string]any{"input1": "temp_result", "input2": z}, Priority: 1},
 	}
 
 	// Generate fusion key
@@ -86,7 +87,7 @@ func (kf *KernelFusion) FusedVectorSaxpyAdd(alpha float32, x, y, z, result *memo
 		"y":      y,
 		"z":      z,
 		"result": result,
-	}, map[string]interface{}{
+	}, map[string]any{
 		"alpha": alpha,
 		"n":     n,
 	})
@@ -95,8 +96,8 @@ func (kf *KernelFusion) FusedVectorSaxpyAdd(alpha float32, x, y, z, result *memo
 // FusedMatrixMultiplyAdd performs fused matrix operations: D = A * B + C
 func (kf *KernelFusion) FusedMatrixMultiplyAdd(A, B, C, D *memory.Memory, m, n, k int) error {
 	ops := []Operation{
-		{Type: OpMatrixMultiply, Params: map[string]interface{}{"A": A, "B": B, "m": m, "n": n, "k": k}, Priority: 2},
-		{Type: OpMatrixAdd, Params: map[string]interface{}{"input1": "gemm_result", "input2": C}, Priority: 1},
+		{Type: OpMatrixMultiply, Params: map[string]any{"A": A, "B": B, "m": m, "n": n, "k": k}, Priority: 2},
+		{Type: OpMatrixAdd, Params: map[string]any{"input1": "gemm_result", "input2": C}, Priority: 1},
 	}
 
 	fusionKey := fmt.Sprintf("gemm_add_%dx%dx%d", m, n, k)
@@ -111,7 +112,7 @@ func (kf *KernelFusion) FusedMatrixMultiplyAdd(A, B, C, D *memory.Memory, m, n, 
 		"B": B,
 		"C": C,
 		"D": D,
-	}, map[string]interface{}{
+	}, map[string]any{
 		"m": m,
 		"n": n,
 		"k": k,
@@ -128,7 +129,7 @@ func (kf *KernelFusion) FusedElementwiseOperations(inputs []*memory.Memory, resu
 	for i, opStr := range operations {
 		ops[i] = Operation{
 			Type:     OpElementWise,
-			Params:   map[string]interface{}{"operation": opStr, "stage": i},
+			Params:   map[string]any{"operation": opStr, "stage": i},
 			Priority: len(operations) - i,
 		}
 	}
@@ -145,7 +146,7 @@ func (kf *KernelFusion) FusedElementwiseOperations(inputs []*memory.Memory, resu
 		memoryMap[fmt.Sprintf("input%d", i)] = input
 	}
 
-	return kf.executeFusedKernel(fusedKernel, memoryMap, map[string]interface{}{
+	return kf.executeFusedKernel(fusedKernel, memoryMap, map[string]any{
 		"n":          n,
 		"operations": operations,
 	})
@@ -199,7 +200,8 @@ func (kf *KernelFusion) generateFusedKernelSource(ops []Operation) (string, erro
 	}
 
 	// Start building the kernel source
-	source := `extern "C" __global__ void fused_kernel(
+	var source strings.Builder
+	source.WriteString(`extern "C" __global__ void fused_kernel(
     float* inputs[], 
     float* result, 
     int n,
@@ -213,50 +215,50 @@ func (kf *KernelFusion) generateFusedKernelSource(ops []Operation) (string, erro
     
     float temp_result = 0.0f;
     
-`
+`)
 
 	// Generate code for each operation in priority order
 	for i, op := range ops {
 		switch op.Type {
 		case OpVectorScale:
-			source += fmt.Sprintf(`    // Operation %d: Vector Scale
+			source.WriteString(fmt.Sprintf(`    // Operation %d: Vector Scale
     temp_result = alpha * inputs[0][tid];
-`, i)
+`, i))
 
 		case OpVectorAdd:
-			source += fmt.Sprintf(`    // Operation %d: Vector Add
+			source.WriteString(fmt.Sprintf(`    // Operation %d: Vector Add
     temp_result += inputs[%d][tid];
-`, i, i+1)
+`, i, i+1))
 
 		case OpVectorMultiply:
-			source += fmt.Sprintf(`    // Operation %d: Vector Multiply
+			source.WriteString(fmt.Sprintf(`    // Operation %d: Vector Multiply
     temp_result *= inputs[%d][tid];
-`, i, i+1)
+`, i, i+1))
 
 		case OpElementWise:
-			source += fmt.Sprintf(`    // Operation %d: Element-wise operation
+			source.WriteString(fmt.Sprintf(`    // Operation %d: Element-wise operation
     temp_result = fmaxf(temp_result, 0.0f); // Example: ReLU
-`, i)
+`, i))
 
 		case OpMatrixMultiply:
-			source += `    // Matrix multiply operation would be more complex
+			source.WriteString(`    // Matrix multiply operation would be more complex
     // This is a simplified version
     temp_result = inputs[0][tid] * inputs[1][tid];
-`
+`)
 
 		case OpMatrixAdd:
-			source += `    // Matrix add operation
+			source.WriteString(`    // Matrix add operation
     temp_result += inputs[2][tid];
-`
+`)
 		}
 	}
 
-	source += `
+	source.WriteString(`
     // Store final result
     result[tid] = temp_result;
-}`
+}`)
 
-	return source, nil
+	return source.String(), nil
 }
 
 // compileKernel compiles the CUDA kernel (simplified simulation)
@@ -281,7 +283,7 @@ func (kf *KernelFusion) compileKernel(kernel *FusedKernel) error {
 }
 
 // executeFusedKernel executes the compiled fused kernel
-func (kf *KernelFusion) executeFusedKernel(kernel *FusedKernel, memoryMap map[string]*memory.Memory, params map[string]interface{}) error {
+func (kf *KernelFusion) executeFusedKernel(kernel *FusedKernel, memoryMap map[string]*memory.Memory, params map[string]any) error {
 	if !kernel.Compiled {
 		return fmt.Errorf("kernel %s is not compiled", kernel.Name)
 	}
@@ -420,7 +422,7 @@ func (kf *KernelFusion) findCompatibleOperations(operations []Operation) [][]int
 	groups := make([][]int, 0)
 	used := make([]bool, len(operations))
 
-	for i := 0; i < len(operations); i++ {
+	for i := range operations {
 		if used[i] {
 			continue
 		}

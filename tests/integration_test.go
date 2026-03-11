@@ -58,7 +58,7 @@ func TestIntegrationWorkflow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create input view 2: %v", err)
 	}
-	for i := 0; i < 1024; i++ {
+	for i := range 1024 {
 		data1[i] = float32(i)
 		data2[i] = float32(i * 2)
 	}
@@ -89,7 +89,7 @@ func TestIntegrationWorkflow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create sort input view: %v", err)
 	}
-	for i := 0; i < 1024; i++ {
+	for i := range 1024 {
 		sortArray[i] = uint32(1024 - i)
 	}
 
@@ -121,7 +121,7 @@ func TestIntegrationWorkflow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create FFT input view: %v", err)
 	}
-	for i := 0; i < fftSize; i++ {
+	for i := range fftSize {
 		fftData[i] = advanced.Complex64{Real: float32(i), Imag: 0.0}
 	}
 
@@ -147,7 +147,7 @@ func TestIntegrationWorkflow(t *testing.T) {
 	}
 
 	// Verify vector addition results
-	for i := 0; i < 10; i++ { // Check first 10 elements
+	for i := range 10 { // Check first 10 elements
 		expected := float32(i + i*2) // i + 2*i = 3*i
 		if resultData[i] != expected {
 			t.Errorf("Vector add result mismatch at index %d: expected %f, got %f", i, expected, resultData[i])
@@ -191,7 +191,7 @@ func TestConcurrentOperations(t *testing.T) {
 	memories := make([]*memory.Memory, numStreams)
 
 	// Create multiple streams and memories
-	for i := 0; i < numStreams; i++ {
+	for i := range numStreams {
 		stream, err := streams.CreateStream()
 		if err != nil {
 			t.Fatalf("Failed to create stream %d: %v", i, err)
@@ -211,7 +211,7 @@ func TestConcurrentOperations(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create concurrent buffer view %d: %v", i, err)
 		}
-		for j := 0; j < 1024; j++ {
+		for j := range 1024 {
 			data[j] = float32(j * (i + 1))
 		}
 	}
@@ -261,7 +261,7 @@ func TestMemoryPoolingWorkflow(t *testing.T) {
 	var memories []*memory.Memory
 
 	// First allocation batch
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		mem, err := memory.Alloc(1024)
 		if err != nil {
 			t.Fatalf("Allocation %d failed: %v", i, err)
@@ -281,7 +281,7 @@ func TestMemoryPoolingWorkflow(t *testing.T) {
 	memories = nil
 
 	// Second allocation batch (should potentially reuse memory)
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		mem, err := memory.Alloc(2048) // Different size
 		if err != nil {
 			t.Fatalf("Second allocation %d failed: %v", i, err)

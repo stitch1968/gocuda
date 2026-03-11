@@ -199,6 +199,45 @@ func TestZeroLengthTransfersAreNoOps(t *testing.T) {
 	}
 }
 
+func TestAllocOnDeviceAndPeerCopy(t *testing.T) {
+	src, err := memory.AllocOnDevice(4, 0)
+	if err != nil {
+		t.Fatalf("Failed to allocate source memory: %v", err)
+	}
+	defer src.Free()
+
+	dst, err := memory.AllocOnDevice(4, 1)
+	if err != nil {
+		t.Fatalf("Failed to allocate destination memory: %v", err)
+	}
+	defer dst.Free()
+
+	if src.GetDeviceID() != 0 {
+		t.Fatalf("expected source memory on device 0, got %d", src.GetDeviceID())
+	}
+	if dst.GetDeviceID() != 1 {
+		t.Fatalf("expected destination memory on device 1, got %d", dst.GetDeviceID())
+	}
+
+	hostData := []byte{1, 2, 3, 4}
+	if err := memory.CopyHostToDevice(src, hostData); err != nil {
+		t.Fatalf("Failed to copy host data to source device: %v", err)
+	}
+	if err := memory.CopyDeviceToDevicePeer(dst, src); err != nil {
+		t.Fatalf("Expected peer copy to succeed: %v", err)
+	}
+
+	out := make([]byte, 4)
+	if err := memory.CopyDeviceToHost(out, dst); err != nil {
+		t.Fatalf("Failed to read destination device data: %v", err)
+	}
+	for i, want := range hostData {
+		if out[i] != want {
+			t.Fatalf("unexpected copied byte at %d: got %d want %d", i, out[i], want)
+		}
+	}
+}
+
 // TestMemoryInfo tests global memory info
 func TestMemoryInfo(t *testing.T) {
 	t.Log("Testing memory info...")

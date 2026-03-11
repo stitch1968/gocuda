@@ -34,13 +34,13 @@ type ProfilingConfig struct {
 
 // PerformanceMetric represents a single performance measurement
 type PerformanceMetric struct {
-	Timestamp      time.Time              `json:"timestamp"`
-	MetricType     MetricType             `json:"metric_type"`
-	Value          float64                `json:"value"`
-	Unit           string                 `json:"unit"`
-	DeviceID       int                    `json:"device_id"`
-	KernelName     string                 `json:"kernel_name,omitempty"`
-	AdditionalData map[string]interface{} `json:"additional_data,omitempty"`
+	Timestamp      time.Time      `json:"timestamp"`
+	MetricType     MetricType     `json:"metric_type"`
+	Value          float64        `json:"value"`
+	Unit           string         `json:"unit"`
+	DeviceID       int            `json:"device_id"`
+	KernelName     string         `json:"kernel_name,omitempty"`
+	AdditionalData map[string]any `json:"additional_data,omitempty"`
 }
 
 // MetricType defines types of performance metrics
@@ -92,18 +92,18 @@ type KernelTracker struct {
 
 // KernelExecution represents a single kernel execution
 type KernelExecution struct {
-	Name            string                 `json:"name"`
-	DeviceID        int                    `json:"device_id"`
-	GridSize        [3]int                 `json:"grid_size"`
-	BlockSize       [3]int                 `json:"block_size"`
-	SharedMemSize   int                    `json:"shared_mem_size"`
-	StartTime       time.Time              `json:"start_time"`
-	EndTime         time.Time              `json:"end_time"`
-	Duration        time.Duration          `json:"duration"`
-	Registers       int                    `json:"registers"`
-	Occupancy       float32                `json:"occupancy"`
-	MemoryTransfers []MemoryTransfer       `json:"memory_transfers"`
-	Parameters      map[string]interface{} `json:"parameters"`
+	Name            string           `json:"name"`
+	DeviceID        int              `json:"device_id"`
+	GridSize        [3]int           `json:"grid_size"`
+	BlockSize       [3]int           `json:"block_size"`
+	SharedMemSize   int              `json:"shared_mem_size"`
+	StartTime       time.Time        `json:"start_time"`
+	EndTime         time.Time        `json:"end_time"`
+	Duration        time.Duration    `json:"duration"`
+	Registers       int              `json:"registers"`
+	Occupancy       float32          `json:"occupancy"`
+	MemoryTransfers []MemoryTransfer `json:"memory_transfers"`
+	Parameters      map[string]any   `json:"parameters"`
 }
 
 // MemoryTransfer represents a memory transfer operation
@@ -210,7 +210,7 @@ type ProfilingReport struct {
 	KernelReport      *KernelReport                `json:"kernel_report"`
 	TimelineReport    *TimelineReport              `json:"timeline_report"`
 	Recommendations   []OptimizationRecommendation `json:"recommendations"`
-	Summary           map[string]interface{}       `json:"summary"`
+	Summary           map[string]any               `json:"summary"`
 }
 
 // MemoryReport contains memory usage analysis
@@ -228,12 +228,12 @@ type MemoryReport struct {
 
 // KernelReport contains kernel execution analysis
 type KernelReport struct {
-	TotalLaunches      int64                  `json:"total_launches"`
-	TotalExecutionTime time.Duration          `json:"total_execution_time"`
-	AverageOccupancy   float32                `json:"average_occupancy"`
-	TopKernels         []KernelExecution      `json:"top_kernels"`
-	BottleneckAnalysis map[string]interface{} `json:"bottleneck_analysis"`
-	OptimizationHints  []string               `json:"optimization_hints"`
+	TotalLaunches      int64             `json:"total_launches"`
+	TotalExecutionTime time.Duration     `json:"total_execution_time"`
+	AverageOccupancy   float32           `json:"average_occupancy"`
+	TopKernels         []KernelExecution `json:"top_kernels"`
+	BottleneckAnalysis map[string]any    `json:"bottleneck_analysis"`
+	OptimizationHints  []string          `json:"optimization_hints"`
 }
 
 // TimelineReport contains execution timeline analysis
@@ -529,7 +529,7 @@ func (gp *GPUProfiler) GenerateReport() *ProfilingReport {
 		GeneratedAt:       time.Now(),
 		ProfilingDuration: endTime.Sub(startTime),
 		Metrics:           make([]PerformanceMetric, len(gp.metrics)),
-		Summary:           make(map[string]interface{}),
+		Summary:           make(map[string]any),
 	}
 
 	// Copy metrics
@@ -622,7 +622,7 @@ func (gp *GPUProfiler) generateKernelReport() *KernelReport {
 		TotalExecutionTime: gp.kernelTracker.totalTime,
 		AverageOccupancy:   avgOccupancy,
 		TopKernels:         topKernels,
-		BottleneckAnalysis: map[string]interface{}{
+		BottleneckAnalysis: map[string]any{
 			"memory_bound":    "35%",
 			"compute_bound":   "45%",
 			"launch_overhead": "20%",

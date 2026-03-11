@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	cuda "github.com/stitch1968/gocuda"
@@ -125,12 +126,7 @@ func ExperimentalHelpersEnabled() bool {
 }
 
 func libraryIsHelperBacked(name string) bool {
-	for _, candidate := range helperBackedLibraries {
-		if candidate == name {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(helperBackedLibraries, name)
 }
 
 func helperBackedLibraryError(name string) error {

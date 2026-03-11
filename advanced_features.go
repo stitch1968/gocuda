@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 	"unsafe"
+
+	"github.com/stitch1968/gocuda/internal"
 )
 
 // CudaArray represents a CUDA array (similar to cudaArray_t)
@@ -219,7 +221,7 @@ type GraphNode struct {
 	id       int64
 	nodeType GraphNodeType
 	kernel   Kernel
-	args     []interface{}
+	args     []any
 }
 
 // GraphNodeType represents the type of graph node
@@ -254,7 +256,7 @@ func CreateGraph() (*CudaGraph, error) {
 }
 
 // AddKernelNode adds a kernel node to the graph
-func (g *CudaGraph) AddKernelNode(kernel Kernel, dependencies []*GraphNode, args ...interface{}) (*GraphNode, error) {
+func (g *CudaGraph) AddKernelNode(kernel Kernel, dependencies []*GraphNode, args ...any) (*GraphNode, error) {
 	graphNodeIDCounter++
 
 	node := &GraphNode{
@@ -360,14 +362,15 @@ func GetDevice(deviceID int) (*Device, error) {
 
 // SetDevice sets the current device (like cudaSetDevice)
 func SetDevice(deviceID int) error {
-	_, err := GetDevice(deviceID)
-	return err
+	if _, err := GetDevice(deviceID); err != nil {
+		return err
+	}
+	return internal.SetDevice(deviceID)
 }
 
 // GetCurrentDevice returns the current device ID (like cudaGetDevice)
 func GetCurrentDevice() (int, error) {
-	// In simulation, always return device 0
-	return 0, nil
+	return internal.GetDevice(), nil
 }
 
 // DeviceSynchronize synchronizes the current device (like cudaDeviceSynchronize)

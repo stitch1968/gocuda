@@ -72,7 +72,7 @@ type Memory = memory.Memory
 // SimpleKernel is a basic kernel implementation
 type SimpleKernel struct {
 	Name string
-	Func func(args ...interface{}) error
+	Func func(args ...any) error
 }
 
 var (
@@ -249,6 +249,6 @@ func DefaultContext() (*Context, error) {
 }
 
 // Execute implements the Kernel interface for SimpleKernel
-func (k *SimpleKernel) Execute(gridDim, blockDim Dim3, sharedMem int, stream *Stream, args ...interface{}) error {
+func (k *SimpleKernel) Execute(gridDim, blockDim Dim3, sharedMem int, stream *Stream, args ...any) error {
 	return k.Func(args...)
 }

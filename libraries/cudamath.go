@@ -192,7 +192,7 @@ func CreateMathContext(config MathConfig) (*MathContext, error) {
 	// Create execution streams for parallel operations
 	numStreams := 4
 	ctx.streams = make([]*memory.Memory, numStreams)
-	for i := 0; i < numStreams; i++ {
+	for i := range numStreams {
 		ctx.streams[i], err = memory.Alloc(1024)
 		if err != nil {
 			// Clean up previously allocated streams

@@ -283,7 +283,7 @@ func (ctx *FFTContext) ExecC2R(plan *FFTPlan, input, output *memory.Memory) erro
 }
 
 // SetStream sets the CUDA stream for the plan
-func (plan *FFTPlan) SetStream(stream interface{}) error {
+func (plan *FFTPlan) SetStream(stream any) error {
 	if plan.destroyed {
 		return fmt.Errorf("plan has been destroyed")
 	}
@@ -339,7 +339,7 @@ func (ctx *FFTContext) performComplexFFT(input, output *memory.Memory, size int,
 
 	// Perform FFT using Go's complex number support
 	complexInput := make([]complex64, size)
-	for i := 0; i < size; i++ {
+	for i := range size {
 		complexInput[i] = complex(inputData[i].Real, inputData[i].Imag)
 	}
 
@@ -380,7 +380,7 @@ func (ctx *FFTContext) performRealToComplexFFT(input, output *memory.Memory, siz
 
 	// Convert to complex for DFT
 	complexInput := make([]complex64, size)
-	for i := 0; i < size; i++ {
+	for i := range size {
 		complexInput[i] = complex(inputData[i], 0)
 	}
 
@@ -412,7 +412,7 @@ func (ctx *FFTContext) performComplexToRealFFT(input, output *memory.Memory, siz
 
 	// Convert to Go complex format
 	complexInput := make([]complex64, size)
-	for i := 0; i < size; i++ {
+	for i := range size {
 		complexInput[i] = complex(inputData[i].Real, inputData[i].Imag)
 	}
 
@@ -478,20 +478,20 @@ func performDFT2D(data []complex64, nx, ny int, forward bool) []complex64 {
 	copy(result, data)
 
 	// Transform rows
-	for y := 0; y < ny; y++ {
+	for y := range ny {
 		row := result[y*nx : (y+1)*nx]
 		transformedRow := performDFT1D(row, forward)
 		copy(result[y*nx:(y+1)*nx], transformedRow)
 	}
 
 	// Transform columns
-	for x := 0; x < nx; x++ {
+	for x := range nx {
 		col := make([]complex64, ny)
-		for y := 0; y < ny; y++ {
+		for y := range ny {
 			col[y] = result[y*nx+x]
 		}
 		transformedCol := performDFT1D(col, forward)
-		for y := 0; y < ny; y++ {
+		for y := range ny {
 			result[y*nx+x] = transformedCol[y]
 		}
 	}

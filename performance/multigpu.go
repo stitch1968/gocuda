@@ -4,6 +4,8 @@ package performance
 
 import (
 	"fmt"
+	"maps"
+	"math"
 	"sync"
 	"time"
 
@@ -89,7 +91,7 @@ const (
 
 // Kernel represents a GPU kernel that can be executed on multiple devices
 type Kernel interface {
-	Execute(deviceID int, input *memory.Memory, params map[string]interface{}) (*memory.Memory, error)
+	Execute(deviceID int, input *memory.Memory, params map[string]any) (*memory.Memory, error)
 	GetName() string
 	GetRequiredMemory(inputSize int64) int64
 }
@@ -97,12 +99,12 @@ type Kernel interface {
 // MultiGPUKernel is a kernel that can be executed across multiple GPUs
 type MultiGPUKernel struct {
 	Name           string
-	Implementation func(int, *memory.Memory, map[string]interface{}) (*memory.Memory, error)
+	Implementation func(int, *memory.Memory, map[string]any) (*memory.Memory, error)
 	MemoryRequired func(int64) int64
 }
 
 // Execute implements the Kernel interface
-func (mk *MultiGPUKernel) Execute(deviceID int, input *memory.Memory, params map[string]interface{}) (*memory.Memory, error) {
+func (mk *MultiGPUKernel) Execute(deviceID int, input *memory.Memory, params map[string]any) (*memory.Memory, error) {
 	return mk.Implementation(deviceID, input, params)
 }
 
@@ -187,7 +189,7 @@ func (mg *MultiGPU) discoverDevices() error {
 	// Initialize streams for each device
 	for _, device := range mg.devices {
 		mg.streams[device.ID] = make([]*StreamInfo, 4) // 4 streams per device
-		for i := 0; i < 4; i++ {
+		for i := range 4 {
 			mg.streams[device.ID][i] = &StreamInfo{
 				ID:       i,
 				Name:     fmt.Sprintf("Device%d_Stream%d", device.ID, i),
@@ -277,7 +279,7 @@ func (mg *MultiGPU) DistributeData(data []float32, strategy DistributionStrategy
 		}
 
 		// Allocate memory on device
-		deviceMem, err := memory.Alloc(int64(chunkSize * 4)) // float32 = 4 bytes
+		deviceMem, err := memory.AllocOnDevice(int64(chunkSize*4), deviceID) // float32 = 4 bytes
 		if err != nil {
 			return fmt.Errorf("failed to allocate memory on device %d: %v", deviceID, err)
 		}
@@ -375,7 +377,7 @@ func (mg *MultiGPU) calculateDistribution(dataSize int, devices []int, strategy 
 }
 
 // ParallelExecute executes a kernel on all active GPUs
-func (mg *MultiGPU) ParallelExecute(kernel Kernel, params map[string]interface{}) (map[int]*memory.Memory, error) {
+func (mg *MultiGPU) ParallelExecute(kernel Kernel, params map[string]any) (map[int]*memory.Memory, error) {
 	mg.mutex.RLock()
 	activeDevices := mg.getActiveDevices()
 	mg.mutex.RUnlock()
@@ -489,12 +491,17 @@ func (mg *MultiGPU) P2PCopy(srcDevice, dstDevice int, src, dst *memory.Memory, s
 	if !exists || !enabled {
 		return fmt.Errorf("P2P not enabled between devices %d and %d", srcDevice, dstDevice)
 	}
+	if src == nil || dst == nil {
+		return fmt.Errorf("source and destination memory cannot be nil")
+	}
+	if src.GetDeviceID() != srcDevice || dst.GetDeviceID() != dstDevice {
+		return fmt.Errorf("memory device ownership mismatch: src on %d dst on %d", src.GetDeviceID(), dst.GetDeviceID())
+	}
+	if size <= 0 {
+		return nil
+	}
 
-	// In real implementation, would use cudaMemcpyPeer
-	// For simulation, just record the operation
-	time.Sleep(time.Duration(size/1024/1024) * time.Millisecond) // Simulate transfer time
-
-	return nil
+	return memory.CopyDeviceToDevicePeer(dst, src)
 }
 
 // Helper functions
@@ -522,17 +529,29 @@ func (mg *MultiGPU) getDeviceByID(deviceID int) *DeviceInfo {
 
 // copyToDevice simulates copying data to GPU device
 func (mg *MultiGPU) copyToDevice(deviceMem *memory.Memory, data []float32, deviceID int) error {
-	// Simulate GPU memory copy
-	copyTime := time.Duration(len(data)) * time.Nanosecond
-	time.Sleep(copyTime)
-	return nil
+	buffer := make([]byte, len(data)*4)
+	for i, value := range data {
+		bits := math.Float32bits(value)
+		buffer[i*4] = byte(bits)
+		buffer[i*4+1] = byte(bits >> 8)
+		buffer[i*4+2] = byte(bits >> 16)
+		buffer[i*4+3] = byte(bits >> 24)
+	}
+	return memory.CopyHostToDevice(deviceMem, buffer)
 }
 
 // copyFromDevice simulates copying data from GPU device
 func (mg *MultiGPU) copyFromDevice(deviceMem *memory.Memory, hostData []float32, deviceID int) error {
-	// Simulate GPU memory copy
-	copyTime := time.Duration(len(hostData)) * time.Nanosecond
-	time.Sleep(copyTime)
+	buffer := make([]byte, len(hostData)*4)
+	if err := memory.CopyDeviceToHost(buffer, deviceMem); err != nil {
+		return err
+	}
+	for i := range hostData {
+		hostData[i] = math.Float32frombits(uint32(buffer[i*4]) |
+			(uint32(buffer[i*4+1]) << 8) |
+			(uint32(buffer[i*4+2]) << 16) |
+			(uint32(buffer[i*4+3]) << 24))
+	}
 	return nil
 }
 
@@ -589,12 +608,8 @@ func (mg *MultiGPU) GetMetrics() *MultiGPUMetrics {
 	}
 
 	// Copy maps
-	for k, v := range mg.metrics.Throughput {
-		metrics.Throughput[k] = v
-	}
-	for k, v := range mg.metrics.MemoryUtilization {
-		metrics.MemoryUtilization[k] = v
-	}
+	maps.Copy(metrics.Throughput, mg.metrics.Throughput)
+	maps.Copy(metrics.MemoryUtilization, mg.metrics.MemoryUtilization)
 
 	return metrics
 }

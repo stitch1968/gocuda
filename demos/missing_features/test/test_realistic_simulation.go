@@ -89,10 +89,3 @@ func main() {
 	fmt.Println("\n✅ All improved implementations working correctly!")
 	fmt.Println("🎯 Placeholders eliminated, realistic simulations active!")
 }
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}

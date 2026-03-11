@@ -532,14 +532,14 @@ func (h *DNNHandle) performConvolution(input, filter, output *memory.Memory, inp
 	outputN, outputC, outputH, outputW := outputDesc.dimensions[0], outputDesc.dimensions[1], outputDesc.dimensions[2], outputDesc.dimensions[3]
 	inputN, inputC, inputH, inputW := inputDesc.dimensions[0], inputDesc.dimensions[1], inputDesc.dimensions[2], inputDesc.dimensions[3]
 	filterK, _, filterH, filterW := filterDesc.dimensions[0], filterDesc.dimensions[1], filterDesc.dimensions[2], filterDesc.dimensions[3]
-	for n := 0; n < outputN; n++ {
-		for k := 0; k < outputC; k++ {
-			for oh := 0; oh < outputH; oh++ {
-				for ow := 0; ow < outputW; ow++ {
+	for n := range outputN {
+		for k := range outputC {
+			for oh := range outputH {
+				for ow := range outputW {
 					sum := float32(0)
-					for c := 0; c < inputC; c++ {
-						for fh := 0; fh < filterH; fh++ {
-							for fw := 0; fw < filterW; fw++ {
+					for c := range inputC {
+						for fh := range filterH {
+							for fw := range filterW {
 								ih := oh*convDesc.strideH - convDesc.padH + fh*maxInt(convDesc.dilationH, 1)
 								iw := ow*convDesc.strideW - convDesc.padW + fw*maxInt(convDesc.dilationW, 1)
 								if ih < 0 || ih >= inputH || iw < 0 || iw >= inputW {
@@ -707,7 +707,7 @@ func (h *DNNHandle) performBatchNorm(input, output, scale, bias, mean, variance 
 	}
 	channels := inputDesc.dimensions[1]
 	for n := 0; n < inputDesc.dimensions[0]; n++ {
-		for c := 0; c < channels; c++ {
+		for c := range channels {
 			for hIndex := 0; hIndex < inputDesc.dimensions[2]; hIndex++ {
 				for wIndex := 0; wIndex < inputDesc.dimensions[3]; wIndex++ {
 					index := tensor4DIndex(inputDesc, n, c, hIndex, wIndex)

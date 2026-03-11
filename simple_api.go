@@ -82,7 +82,7 @@ func NewSimpleContext() (*SimpleContext, error) {
 			Operation:  "Context Creation",
 			Cause:      err.Error(),
 			Suggestion: "Ensure CUDA drivers are installed or use CPU simulation mode",
-			Details: map[string]interface{}{
+			Details: map[string]any{
 				"cuda_available": IsCudaAvailable(),
 				"device_count":   GetCudaDeviceCount(),
 			},
@@ -124,7 +124,7 @@ func NewVector(data []float32) (*Vector, error) {
 			Operation:  "Vector Creation",
 			Cause:      err.Error(),
 			Suggestion: "Try reducing vector size or use CPU simulation mode",
-			Details: map[string]interface{}{
+			Details: map[string]any{
 				"requested_size":   size * 4,
 				"available_memory": func() int64 { free, _ := GetMemoryInfo(); return free }(),
 			},
@@ -172,7 +172,7 @@ func (v *Vector) Add(other *Vector) (*Vector, error) {
 			Operation:  "Vector Addition",
 			Cause:      "Vector size mismatch",
 			Suggestion: "Ensure both vectors have the same size",
-			Details: map[string]interface{}{
+			Details: map[string]any{
 				"vector1_size": v.size,
 				"vector2_size": other.size,
 			},
@@ -320,7 +320,7 @@ func NewMatrix(rows, cols int, data []float32) (*Matrix, error) {
 			Operation:  "Matrix Creation",
 			Cause:      "Data size doesn't match matrix dimensions",
 			Suggestion: fmt.Sprintf("Provide exactly %d elements for a %dx%d matrix", rows*cols, rows, cols),
-			Details: map[string]interface{}{
+			Details: map[string]any{
 				"expected_size": rows * cols,
 				"actual_size":   len(data),
 				"matrix_dims":   fmt.Sprintf("%dx%d", rows, cols),
@@ -376,7 +376,7 @@ func (m *Matrix) Multiply(other *Matrix) (*Matrix, error) {
 			Operation:  "Matrix Multiplication",
 			Cause:      "Matrix dimensions incompatible for multiplication",
 			Suggestion: fmt.Sprintf("Left matrix columns (%d) must equal right matrix rows (%d)", m.cols, other.rows),
-			Details: map[string]interface{}{
+			Details: map[string]any{
 				"left_matrix":  fmt.Sprintf("%dx%d", m.rows, m.cols),
 				"right_matrix": fmt.Sprintf("%dx%d", other.rows, other.cols),
 			},
@@ -494,14 +494,14 @@ func SimpleMatrixMultiply(a, b [][]float32) ([][]float32, error) {
 	flatA := make([]float32, rows*common)
 	flatB := make([]float32, common*cols)
 
-	for i := 0; i < rows; i++ {
-		for j := 0; j < common; j++ {
+	for i := range rows {
+		for j := range common {
 			flatA[i*common+j] = a[i][j]
 		}
 	}
 
-	for i := 0; i < common; i++ {
-		for j := 0; j < cols; j++ {
+	for i := range common {
+		for j := range cols {
 			flatB[i*cols+j] = b[i][j]
 		}
 	}
@@ -555,9 +555,9 @@ func SimpleMatrixMultiply(a, b [][]float32) ([][]float32, error) {
 	}
 
 	output := make([][]float32, rows)
-	for i := 0; i < rows; i++ {
+	for i := range rows {
 		output[i] = make([]float32, cols)
-		for j := 0; j < cols; j++ {
+		for j := range cols {
 			output[i][j] = flatResult[i*cols+j]
 		}
 	}

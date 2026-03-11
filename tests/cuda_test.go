@@ -100,7 +100,7 @@ func TestBasicGo(t *testing.T) {
 	cuda.Initialize()
 
 	executed := false
-	err := cuda.Go(func(ctx context.Context, args ...interface{}) error {
+	err := cuda.Go(func(ctx context.Context, args ...any) error {
 		executed = true
 		if len(args) != 2 {
 			t.Errorf("Expected 2 args, got %d", len(args))
@@ -207,7 +207,7 @@ func TestParallelFor(t *testing.T) {
 	}
 
 	// Verify results
-	for i := 0; i < 100; i++ { // Check first 100 elements
+	for i := range 100 { // Check first 100 elements
 		expected := i * i
 		if results[i] != expected {
 			t.Fatalf("Result mismatch at index %d: expected %d, got %d", i, expected, results[i])
@@ -224,9 +224,9 @@ func TestCudaChannel(t *testing.T) {
 	defer ch.Close()
 
 	// Send data from kernel
-	err := cuda.Go(func(ctx context.Context, args ...interface{}) error {
+	err := cuda.Go(func(ctx context.Context, args ...any) error {
 		channel := args[0].(*cuda.CudaChannel)
-		for i := 0; i < 3; i++ {
+		for i := range 3 {
 			channel.Send(i)
 		}
 		return nil
@@ -239,7 +239,7 @@ func TestCudaChannel(t *testing.T) {
 	cuda.Synchronize()
 
 	// Receive data
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		val := ch.Receive()
 		if val.(int) != i {
 			t.Fatalf("Expected %d, got %v", i, val)
@@ -273,7 +273,7 @@ func TestMultipleStreams(t *testing.T) {
 	executed1 := false
 	executed2 := false
 
-	err = cuda.GoWithStream(stream1, func(ctx context.Context, args ...interface{}) error {
+	err = cuda.GoWithStream(stream1, func(ctx context.Context, args ...any) error {
 		time.Sleep(10 * time.Millisecond)
 		executed1 = true
 		return nil
@@ -283,7 +283,7 @@ func TestMultipleStreams(t *testing.T) {
 		t.Fatalf("Failed to execute on stream1: %v", err)
 	}
 
-	err = cuda.GoWithStream(stream2, func(ctx context.Context, args ...interface{}) error {
+	err = cuda.GoWithStream(stream2, func(ctx context.Context, args ...any) error {
 		time.Sleep(10 * time.Millisecond)
 		executed2 = true
 		return nil
@@ -310,9 +310,9 @@ func TestCudaWaitGroup(t *testing.T) {
 	var wg cuda.CudaWaitGroup
 	count := 0
 
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		wg.Add(1)
-		cuda.Go(func(ctx context.Context, args ...interface{}) error {
+		cuda.Go(func(ctx context.Context, args ...any) error {
 			defer wg.Done()
 			count++
 			return nil

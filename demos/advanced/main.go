@@ -214,7 +214,7 @@ func multiStreamPerformance() {
 	workPerStream := workloadSize / numStreams
 
 	streams := make([]*cuda.Stream, numStreams)
-	for i := 0; i < numStreams; i++ {
+	for i := range numStreams {
 		stream, err := ctx.NewStream()
 		if err != nil {
 			log.Fatal(err)
@@ -223,11 +223,11 @@ func multiStreamPerformance() {
 	}
 
 	// Launch work on multiple streams
-	for i := 0; i < numStreams; i++ {
+	for i := range numStreams {
 		start := i * workPerStream
 		end := start + workPerStream
 
-		err := cuda.GoWithStream(streams[i], func(ctx context.Context, args ...interface{}) error {
+		err := cuda.GoWithStream(streams[i], func(ctx context.Context, args ...any) error {
 			start := args[0].(int)
 			end := args[1].(int)
 			for j := start; j < end; j++ {

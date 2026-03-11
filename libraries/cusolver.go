@@ -416,18 +416,3 @@ func (ctx *SolverContext) DestroyContext() error {
 	ctx.handle = nil
 	return nil
 }
-
-// Utility functions
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}

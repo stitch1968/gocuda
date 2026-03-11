@@ -5,6 +5,7 @@ package libraries
 import (
 	"fmt"
 	"math"
+	"slices"
 
 	"github.com/stitch1968/gocuda/memory"
 )
@@ -305,7 +306,7 @@ func (handle *CuTensorHandle) BatchedTensorContraction(
 	}
 
 	// Execute each contraction in the batch
-	for i := 0; i < batchCount; i++ {
+	for i := range batchCount {
 		err := handle.TensorContraction(
 			alpha, tensorA[i], descA, modesA,
 			tensorB[i], descB, modesB,
@@ -1108,12 +1109,7 @@ func finalizeReduction(accum []float64, counts []int, reductionOp TensorReductio
 }
 
 func containsInt(values []int, target int) bool {
-	for _, value := range values {
-		if value == target {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(values, target)
 }
 
 // Destroy destroys a tensor plan and frees its resources

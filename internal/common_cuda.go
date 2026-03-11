@@ -1,5 +1,4 @@
 //go:build cuda
-// +build cuda
 
 package internal
 
@@ -55,6 +54,18 @@ cudaError_t cudaSetDevice_Internal(int device) {
 
 cudaError_t cudaGetDevice_Internal(int* device) {
 	return cudaGetDevice(device);
+}
+
+cudaError_t cudaDeviceCanAccessPeer_Internal(int* canAccessPeer, int device, int peerDevice) {
+	return cudaDeviceCanAccessPeer(canAccessPeer, device, peerDevice);
+}
+
+cudaError_t cudaDeviceEnablePeerAccess_Internal(int peerDevice) {
+	return cudaDeviceEnablePeerAccess(peerDevice, 0);
+}
+
+cudaError_t cudaMemcpyPeer_Internal(void* dst, int dstDevice, void* src, int srcDevice, size_t count) {
+	return cudaMemcpyPeer(dst, dstDevice, src, srcDevice, count);
 }
 */
 import "C"
@@ -150,6 +161,53 @@ func RunOnDevice(deviceID int, fn func() error) error {
 		return fn()
 	}
 	return withLockedDevice(deviceID, fn)
+}
+
+// CanAccessPeer reports whether one CUDA device can access another via peer access.
+func CanAccessPeer(deviceID, peerDeviceID int) (bool, error) {
+	if !ShouldUseCuda() {
+		return false, fmt.Errorf("CUDA not available")
+	}
+	var canAccess C.int
+	err := withLockedThread(func() error {
+		status := C.cudaDeviceCanAccessPeer_Internal(&canAccess, C.int(deviceID), C.int(peerDeviceID))
+		if status != 0 {
+			return fmt.Errorf("cudaDeviceCanAccessPeer failed with error code %d", status)
+		}
+		return nil
+	})
+	if err != nil {
+		return false, err
+	}
+	return canAccess != 0, nil
+}
+
+// EnablePeerAccess enables peer access from deviceID to peerDeviceID.
+func EnablePeerAccess(deviceID, peerDeviceID int) error {
+	if !ShouldUseCuda() {
+		return fmt.Errorf("CUDA not available")
+	}
+	return RunOnDevice(deviceID, func() error {
+		status := C.cudaDeviceEnablePeerAccess_Internal(C.int(peerDeviceID))
+		if status != 0 {
+			return fmt.Errorf("cudaDeviceEnablePeerAccess failed with error code %d", status)
+		}
+		return nil
+	})
+}
+
+// CudaMemcpyPeer performs direct device-to-device copies between different devices.
+func CudaMemcpyPeer(dst unsafe.Pointer, dstDeviceID int, src unsafe.Pointer, srcDeviceID int, count int64) error {
+	if !ShouldUseCuda() {
+		return fmt.Errorf("CUDA not available")
+	}
+	return RunOnDevice(dstDeviceID, func() error {
+		status := C.cudaMemcpyPeer_Internal(dst, C.int(dstDeviceID), src, C.int(srcDeviceID), C.size_t(count))
+		if status != 0 {
+			return fmt.Errorf("cudaMemcpyPeer failed with error code %d", status)
+		}
+		return nil
+	})
 }
 
 // CudaMalloc allocates CUDA memory

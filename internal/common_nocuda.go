@@ -1,5 +1,4 @@
 //go:build !cuda
-// +build !cuda
 
 package internal
 
@@ -111,6 +110,21 @@ func CudaDeviceSynchronizeOnDevice(deviceID int) error {
 // RunOnDevice executes fn within the selected device context (simulation pass-through).
 func RunOnDevice(deviceID int, fn func() error) error {
 	return fn()
+}
+
+// CanAccessPeer reports whether one device can access another (simulation stub).
+func CanAccessPeer(deviceID, peerDeviceID int) (bool, error) {
+	return false, fmt.Errorf("CUDA not available - using simulation mode")
+}
+
+// EnablePeerAccess enables peer access between devices (simulation stub).
+func EnablePeerAccess(deviceID, peerDeviceID int) error {
+	return fmt.Errorf("CUDA not available - using simulation mode")
+}
+
+// CudaMemcpyPeer performs peer memory copies between devices (simulation stub).
+func CudaMemcpyPeer(dst unsafe.Pointer, dstDeviceID int, src unsafe.Pointer, srcDeviceID int, count int64) error {
+	return fmt.Errorf("CUDA not available - using simulation mode")
 }
 
 // Device management utilities

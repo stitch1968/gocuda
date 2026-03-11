@@ -31,7 +31,7 @@ func TestFFT(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create FFT input view: %v", err)
 	}
-	for i := 0; i < size; i++ {
+	for i := range size {
 		inputData[i] = advanced.Complex64{Real: 1.0, Imag: 0.0}
 	}
 
@@ -73,7 +73,7 @@ func TestSortingAlgorithms(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create radix sort input view: %v", err)
 	}
-	for i := 0; i < size; i++ {
+	for i := range size {
 		uintData[i] = uint32((size-i)*123) % 1000
 	}
 
@@ -106,7 +106,7 @@ func TestSortingAlgorithms(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create bitonic sort input view: %v", err)
 	}
-	for i := 0; i < floatSize; i++ {
+	for i := range floatSize {
 		fData[i] = float32(floatSize - i)
 	}
 
@@ -346,7 +346,7 @@ func BenchmarkFFT(b *testing.B) {
 	if err != nil {
 		b.Fatalf("Failed to create FFT benchmark view: %v", err)
 	}
-	for i := 0; i < size; i++ {
+	for i := range size {
 		inputData[i] = advanced.Complex64{Real: float32(i), Imag: 0.0}
 	}
 

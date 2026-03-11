@@ -232,7 +232,7 @@ func (handle *DSSHandle) Solve(b, x *memory.Memory, nrhs int) (*DSSSolutionInfo,
 	}
 	xValues := make([]float32, handle.n*nrhs)
 	maxResidual := 0.0
-	for rhs := 0; rhs < nrhs; rhs++ {
+	for rhs := range nrhs {
 		rhsValues := make([]float64, handle.n)
 		for index := 0; index < handle.n; index++ {
 			rhsValues[index] = float64(bValues[rhs*handle.n+index])
@@ -294,7 +294,7 @@ func (handle *DSSHandle) SolveMultiple(B, X *memory.Memory, nrhs int) ([]*DSSSol
 	}
 
 	// Create solution info for each RHS
-	for i := 0; i < nrhs; i++ {
+	for i := range nrhs {
 		infos[i] = &DSSSolutionInfo{
 			Iterations:         1,
 			Residual:           1e-14,
@@ -431,7 +431,7 @@ func dssDenseFromMatrix(matrix *DSSMatrix) ([]float64, error) {
 func dssSolveGaussian(dense []float64, n int, rhs []float64) ([]float64, error) {
 	a := append([]float64(nil), dense...)
 	b := append([]float64(nil), rhs...)
-	for pivot := 0; pivot < n; pivot++ {
+	for pivot := range n {
 		maxRow := pivot
 		maxVal := math.Abs(a[pivot*n+pivot])
 		for row := pivot + 1; row < n; row++ {
@@ -471,7 +471,7 @@ func dssSolveGaussian(dense []float64, n int, rhs []float64) ([]float64, error) 
 
 func dssSolveCholesky(dense []float64, n int, rhs []float64) ([]float64, error) {
 	l := make([]float64, len(dense))
-	for i := 0; i < n; i++ {
+	for i := range n {
 		for j := 0; j <= i; j++ {
 			sum := dense[i*n+j]
 			for k := 0; k < j; k++ {
@@ -488,7 +488,7 @@ func dssSolveCholesky(dense []float64, n int, rhs []float64) ([]float64, error) 
 		}
 	}
 	y := make([]float64, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		sum := rhs[i]
 		for j := 0; j < i; j++ {
 			sum -= l[i*n+j] * y[j]
@@ -509,7 +509,7 @@ func dssSolveCholesky(dense []float64, n int, rhs []float64) ([]float64, error) 
 func dssDeterminant(dense []float64, n int) (float64, error) {
 	a := append([]float64(nil), dense...)
 	sign := 1.0
-	for pivot := 0; pivot < n; pivot++ {
+	for pivot := range n {
 		maxRow := pivot
 		maxVal := math.Abs(a[pivot*n+pivot])
 		for row := pivot + 1; row < n; row++ {
@@ -536,7 +536,7 @@ func dssDeterminant(dense []float64, n int) (float64, error) {
 		}
 	}
 	det := sign
-	for i := 0; i < n; i++ {
+	for i := range n {
 		det *= a[i*n+i]
 	}
 	return det, nil
@@ -544,9 +544,9 @@ func dssDeterminant(dense []float64, n int) (float64, error) {
 
 func dssResidual(dense []float64, n int, x, b []float64) float64 {
 	maxResidual := 0.0
-	for row := 0; row < n; row++ {
+	for row := range n {
 		sum := 0.0
-		for col := 0; col < n; col++ {
+		for col := range n {
 			sum += dense[row*n+col] * x[col]
 		}
 		residual := math.Abs(sum - b[row])

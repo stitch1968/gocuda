@@ -367,7 +367,7 @@ func ExecuteParallel(functions ...func()) error {
 	for i := range functions {
 		streams[i], err = CreateStream()
 		if err != nil {
-			for j := 0; j < i; j++ {
+			for j := range i {
 				_ = GetManager().DestroyStream(streams[j])
 			}
 			return err

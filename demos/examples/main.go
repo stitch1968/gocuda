@@ -18,7 +18,7 @@ func main() {
 
 	// Example 1: Basic cuda.Go() usage (like go routines)
 	fmt.Println("\n1. Basic cuda.Go() usage:")
-	err := cuda.Go(func(ctx context.Context, args ...interface{}) error {
+	err := cuda.Go(func(ctx context.Context, args ...any) error {
 		fmt.Printf("Hello from CUDA kernel! Args: %v\n", args)
 		return nil
 	}, "arg1", 42, 3.14)
@@ -72,7 +72,7 @@ func vectorAddExample() {
 	b := make([]float32, n)
 
 	// Fill vectors with data
-	for i := 0; i < n; i++ {
+	for i := range n {
 		a[i] = 1.0
 		b[i] = 2.0
 	}
@@ -141,9 +141,9 @@ func channelExample() {
 	defer ch.Close()
 
 	// Send data from GPU
-	err := cuda.Go(func(ctx context.Context, args ...interface{}) error {
+	err := cuda.Go(func(ctx context.Context, args ...any) error {
 		channel := args[0].(*cuda.CudaChannel)
-		for i := 0; i < 3; i++ {
+		for i := range 3 {
 			channel.Send(fmt.Sprintf("Message %d from GPU", i))
 		}
 		return nil
@@ -156,7 +156,7 @@ func channelExample() {
 	cuda.Synchronize()
 
 	// Receive data on host
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		msg := ch.Receive()
 		fmt.Printf("Received: %v\n", msg)
 	}
@@ -197,7 +197,7 @@ func streamExample() {
 	fmt.Println("Running tasks on multiple streams...")
 
 	// Execute tasks on different streams
-	err = cuda.GoWithStream(stream1, func(ctx context.Context, args ...interface{}) error {
+	err = cuda.GoWithStream(stream1, func(ctx context.Context, args ...any) error {
 		fmt.Println("Task 1 on stream 1")
 		return nil
 	})
@@ -205,7 +205,7 @@ func streamExample() {
 		log.Fatal(err)
 	}
 
-	err = cuda.GoWithStream(stream2, func(ctx context.Context, args ...interface{}) error {
+	err = cuda.GoWithStream(stream2, func(ctx context.Context, args ...any) error {
 		fmt.Println("Task 2 on stream 2")
 		return nil
 	})
@@ -223,11 +223,11 @@ func waitGroupExample() {
 
 	fmt.Printf("Starting %d concurrent tasks...\n", numTasks)
 
-	for i := 0; i < numTasks; i++ {
+	for i := range numTasks {
 		wg.Add(1)
 		taskID := i
 
-		err := cuda.Go(func(ctx context.Context, args ...interface{}) error {
+		err := cuda.Go(func(ctx context.Context, args ...any) error {
 			defer wg.Done()
 			id := args[0].(int)
 			fmt.Printf("Task %d completed\n", id)

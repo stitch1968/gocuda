@@ -4,6 +4,7 @@ package performance
 
 import (
 	"fmt"
+	"maps"
 	"math"
 	"sync"
 	"time"
@@ -261,7 +262,7 @@ func (mbo *MemoryBandwidthOptimizer) convertAoStoSoA(data []float32) []float32 {
 	numElements := n / 4
 
 	// Reorganize: [x1,y1,z1,w1, x2,y2,z2,w2, ...] -> [x1,x2,..., y1,y2,..., z1,z2,..., w1,w2,...]
-	for i := 0; i < numElements; i++ {
+	for i := range numElements {
 		optimized[i] = data[i*4]                 // X components
 		optimized[numElements+i] = data[i*4+1]   // Y components
 		optimized[2*numElements+i] = data[i*4+2] // Z components
@@ -342,16 +343,12 @@ func (mbo *MemoryBandwidthOptimizer) GetOptimizationReport() *OptimizationReport
 		DeviceID:  mbo.device,
 		Patterns:  make(map[string]*AccessPattern),
 		Baselines: make(map[string]float64),
-		Summary:   make(map[string]interface{}),
+		Summary:   make(map[string]any),
 	}
 
 	// Copy patterns and baselines
-	for k, v := range mbo.profiles {
-		report.Patterns[k] = v
-	}
-	for k, v := range mbo.baselines {
-		report.Baselines[k] = v
-	}
+	maps.Copy(report.Patterns, mbo.profiles)
+	maps.Copy(report.Baselines, mbo.baselines)
 
 	// Generate summary statistics
 	totalPatterns := len(mbo.profiles)
@@ -380,7 +377,7 @@ type OptimizationReport struct {
 	DeviceID  int                       `json:"device_id"`
 	Patterns  map[string]*AccessPattern `json:"patterns"`
 	Baselines map[string]float64        `json:"baselines"`
-	Summary   map[string]interface{}    `json:"summary"`
+	Summary   map[string]any            `json:"summary"`
 }
 
 // String returns a formatted string representation of the optimization report

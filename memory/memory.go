@@ -66,13 +66,22 @@ func Alloc(size int64) (*Memory, error) {
 	return AllocWithStream(internal.GetDefaultStream(), size)
 }
 
+// AllocOnDevice allocates device memory associated with a specific device ID.
+func AllocOnDevice(size int64, deviceID int) (*Memory, error) {
+	return allocWithTypeAndStreamOnDevice(internal.GetDefaultStream(), size, TypeDevice, deviceID)
+}
+
 // AllocWithStream allocates memory on the GPU with a specific stream
 func AllocWithStream(stream *internal.Stream, size int64) (*Memory, error) {
-	return AllocWithTypeAndStream(stream, size, TypeDevice)
+	return allocWithTypeAndStreamOnDevice(stream, size, TypeDevice, internal.GetDevice())
 }
 
 // AllocWithTypeAndStream allocates memory with specific type and stream
 func AllocWithTypeAndStream(stream *internal.Stream, size int64, memType Type) (*Memory, error) {
+	return allocWithTypeAndStreamOnDevice(stream, size, memType, internal.GetDevice())
+}
+
+func allocWithTypeAndStreamOnDevice(stream *internal.Stream, size int64, memType Type, deviceID int) (*Memory, error) {
 	if size <= 0 {
 		return nil, fmt.Errorf("invalid size: %d", size)
 	}
@@ -87,7 +96,6 @@ func AllocWithTypeAndStream(stream *internal.Stream, size int64, memType Type) (
 	// Check if we should use real CUDA or simulation
 	if internal.ShouldUseCuda() && memType == TypeDevice {
 		// Use real CUDA memory allocation
-		deviceID := internal.GetDevice()
 		ptr, err = internal.CudaMallocOnDevice(size, deviceID)
 		if err != nil {
 			return nil, fmt.Errorf("CUDA malloc failed: %v", err)
@@ -114,13 +122,10 @@ func AllocWithTypeAndStream(stream *internal.Stream, size int64, memType Type) (
 		cudaBacked: internal.ShouldUseCuda() && memType == TypeDevice,
 		memType:    memType,
 		alignment:  256,
-		deviceID:   0,
+		deviceID:   deviceID,
 		attributes: Attribute{
 			IsAligned: true,
 		},
-	}
-	if mem.cudaBacked {
-		mem.deviceID = internal.GetDevice()
 	}
 
 	// Register the allocation

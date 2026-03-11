@@ -41,7 +41,7 @@ func FFT(input *memory.Memory, output *memory.Memory, n int, inverse bool) error
 // cooleyTukeyFFT implements the Cooley-Tukey FFT algorithm
 func cooleyTukeyFFT(data []Complex64, n int, inverse bool) error {
 	// Bit-reversal permutation
-	for i := 0; i < n; i++ {
+	for i := range n {
 		j := bitReverse(i, int(math.Log2(float64(n))))
 		if i < j {
 			data[i], data[j] = data[j], data[i]
@@ -57,7 +57,7 @@ func cooleyTukeyFFT(data []Complex64, n int, inverse bool) error {
 		}
 
 		for i := 0; i < n; i += size {
-			for j := 0; j < halfsize; j++ {
+			for j := range halfsize {
 				u := data[i+j]
 				angle := step * float64(j)
 				w := Complex64{
@@ -74,7 +74,7 @@ func cooleyTukeyFFT(data []Complex64, n int, inverse bool) error {
 	// Normalize for inverse transform
 	if inverse {
 		scale := float32(1.0 / float64(n))
-		for i := 0; i < n; i++ {
+		for i := range n {
 			data[i].Real *= scale
 			data[i].Imag *= scale
 		}
@@ -86,7 +86,7 @@ func cooleyTukeyFFT(data []Complex64, n int, inverse bool) error {
 // bitReverse reverses the bits of an integer
 func bitReverse(x, bits int) int {
 	result := 0
-	for i := 0; i < bits; i++ {
+	for range bits {
 		result = (result << 1) | (x & 1)
 		x >>= 1
 	}
@@ -120,7 +120,7 @@ func RadixSort(data *memory.Memory, n int) error {
 
 	// Find maximum value to determine number of digits
 	maxVal := uint32(0)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		if values[i] > maxVal {
 			maxVal = values[i]
 		}
@@ -140,7 +140,7 @@ func countingSort(data []uint32, n int, exp uint32) {
 	count := make([]int, 10)
 
 	// Count occurrences
-	for i := 0; i < n; i++ {
+	for i := range n {
 		count[(data[i]/exp)%10]++
 	}
 
@@ -223,7 +223,7 @@ func BFS(graph *memory.Memory, vertices, edges int, start int, distances *memory
 	}
 
 	// Initialize distances
-	for i := 0; i < vertices; i++ {
+	for i := range vertices {
 		dist[i] = -1
 	}
 	dist[start] = 0
@@ -235,7 +235,7 @@ func BFS(graph *memory.Memory, vertices, edges int, start int, distances *memory
 		queue = queue[1:]
 
 		// Process neighbors (simplified - assumes fixed adjacency structure)
-		for i := 0; i < vertices; i++ {
+		for i := range vertices {
 			if adj[v*vertices+i] == 1 && dist[i] == -1 {
 				dist[i] = dist[v] + 1
 				queue = append(queue, i)
@@ -259,20 +259,20 @@ func PageRank(graph *memory.Memory, vertices int, iterations int, damping float3
 
 	// Initialize ranks
 	initialRank := float32(1.0) / float32(vertices)
-	for i := 0; i < vertices; i++ {
+	for i := range vertices {
 		rankData[i] = initialRank
 	}
 
 	// PageRank iterations
 	newRanks := make([]float32, vertices)
-	for iter := 0; iter < iterations; iter++ {
+	for range iterations {
 		// Calculate new ranks
-		for i := 0; i < vertices; i++ {
+		for i := range vertices {
 			newRanks[i] = (1.0 - damping) / float32(vertices)
-			for j := 0; j < vertices; j++ {
+			for j := range vertices {
 				if graphData[j*vertices+i] > 0 {
 					outDegree := float32(0)
-					for k := 0; k < vertices; k++ {
+					for k := range vertices {
 						if graphData[j*vertices+k] > 0 {
 							outDegree++
 						}
@@ -309,10 +309,10 @@ func GEMM(alpha float32, A, B *memory.Memory, beta float32, C *memory.Memory, m,
 	}
 
 	// GEMM computation
-	for i := 0; i < m; i++ {
-		for j := 0; j < n; j++ {
+	for i := range m {
+		for j := range n {
 			sum := float32(0)
-			for l := 0; l < k; l++ {
+			for l := range k {
 				sum += aData[i*k+l] * bData[l*n+j]
 			}
 			cData[i*n+j] = alpha*sum + beta*cData[i*n+j]
@@ -333,8 +333,8 @@ func Transpose(input *memory.Memory, output *memory.Memory, rows, cols int) erro
 		return err
 	}
 
-	for i := 0; i < rows; i++ {
-		for j := 0; j < cols; j++ {
+	for i := range rows {
+		for j := range cols {
 			outputData[j*rows+i] = inputData[i*cols+j]
 		}
 	}
@@ -364,7 +364,7 @@ func LUDecomposition(matrix *memory.Memory, n int, L, U *memory.Memory) error {
 	}
 
 	// LU decomposition
-	for i := 0; i < n; i++ {
+	for i := range n {
 		// Upper triangular
 		for k := i; k < n; k++ {
 			sum := float32(0)

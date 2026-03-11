@@ -35,7 +35,7 @@ type PipelineStage struct {
 }
 
 // ComputeFunc is the signature for compute operations in pipeline stages
-type ComputeFunc func(*memory.Memory, map[string]interface{}) (*memory.Memory, error)
+type ComputeFunc func(*memory.Memory, map[string]any) (*memory.Memory, error)
 
 // StreamInfo contains information about a CUDA stream
 type StreamInfo struct {
@@ -87,7 +87,7 @@ func NewAsyncPipeline(numStreams int) *AsyncPipeline {
 	}
 
 	// Initialize streams
-	for i := 0; i < numStreams; i++ {
+	for i := range numStreams {
 		pipeline.streams[i] = StreamInfo{
 			ID:       i,
 			Name:     fmt.Sprintf("Stream_%d", i),
@@ -143,7 +143,7 @@ func (ap *AsyncPipeline) AddStage(stage PipelineStage) error {
 }
 
 // Execute runs the async pipeline with overlapped compute and transfer
-func (ap *AsyncPipeline) Execute(input *memory.Memory, params map[string]interface{}) <-chan Result {
+func (ap *AsyncPipeline) Execute(input *memory.Memory, params map[string]any) <-chan Result {
 	resultChan := make(chan Result, len(ap.stages))
 
 	go ap.executePipelineAsync(input, params, resultChan)
@@ -152,7 +152,7 @@ func (ap *AsyncPipeline) Execute(input *memory.Memory, params map[string]interfa
 }
 
 // executePipelineAsync performs the async pipeline execution
-func (ap *AsyncPipeline) executePipelineAsync(input *memory.Memory, params map[string]interface{}, resultChan chan<- Result) {
+func (ap *AsyncPipeline) executePipelineAsync(input *memory.Memory, params map[string]any, resultChan chan<- Result) {
 	defer close(resultChan)
 
 	ap.mutex.Lock()

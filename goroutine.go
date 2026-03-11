@@ -9,7 +9,7 @@ import (
 )
 
 // GoFunc represents a function that can be executed on GPU
-type GoFunc func(ctx context.Context, args ...interface{}) error
+type GoFunc func(ctx context.Context, args ...any) error
 
 // CudaWaitGroup is similar to sync.WaitGroup but for CUDA operations
 type CudaWaitGroup struct {
@@ -33,25 +33,25 @@ func (cwg *CudaWaitGroup) Wait() {
 
 // CudaChannel provides a channel-like interface for CUDA operations
 type CudaChannel struct {
-	ch     chan interface{}
+	ch     chan any
 	stream *Stream
 }
 
 // NewCudaChannel creates a new CUDA channel
 func NewCudaChannel(buffer int) *CudaChannel {
 	return &CudaChannel{
-		ch:     make(chan interface{}, buffer),
+		ch:     make(chan any, buffer),
 		stream: GetDefaultStream(),
 	}
 }
 
 // Send sends a value to the channel
-func (cc *CudaChannel) Send(value interface{}) {
+func (cc *CudaChannel) Send(value any) {
 	cc.ch <- value
 }
 
 // Receive receives a value from the channel
-func (cc *CudaChannel) Receive() interface{} {
+func (cc *CudaChannel) Receive() any {
 	return <-cc.ch
 }
 
@@ -62,12 +62,12 @@ func (cc *CudaChannel) Close() {
 
 // Go executes a function on the GPU similar to go routine
 // Usage: cuda.Go(func(ctx context.Context, args ...interface{}) error { ... }, arg1, arg2, ...)
-func Go(fn GoFunc, args ...interface{}) error {
+func Go(fn GoFunc, args ...any) error {
 	return GoWithStream(GetDefaultStream(), fn, args...)
 }
 
 // GoWithStream executes a function on the GPU with a specific stream
-func GoWithStream(stream *Stream, fn GoFunc, args ...interface{}) error {
+func GoWithStream(stream *Stream, fn GoFunc, args ...any) error {
 	ctx, err := DefaultContext()
 	if err != nil {
 		return err
@@ -81,7 +81,7 @@ func GoWithStream(stream *Stream, fn GoFunc, args ...interface{}) error {
 
 	kernel := &SimpleKernel{
 		Name: "UserDefinedKernel",
-		Func: func(kernelArgs ...interface{}) error {
+		Func: func(kernelArgs ...any) error {
 			ctx := context.Background()
 			return fn(ctx, kernelArgs...)
 		},
@@ -98,12 +98,12 @@ func GoWithStream(stream *Stream, fn GoFunc, args ...interface{}) error {
 }
 
 // GoWithDimensions executes a function on the GPU with custom grid and block dimensions
-func GoWithDimensions(gridDim, blockDim kernels.Dim3, fn GoFunc, args ...interface{}) error {
+func GoWithDimensions(gridDim, blockDim kernels.Dim3, fn GoFunc, args ...any) error {
 	return GoWithDimensionsAndStream(GetDefaultStream(), gridDim, blockDim, fn, args...)
 }
 
 // GoWithDimensionsAndStream executes a function on the GPU with custom dimensions and stream
-func GoWithDimensionsAndStream(stream *Stream, gridDim, blockDim kernels.Dim3, fn GoFunc, args ...interface{}) error {
+func GoWithDimensionsAndStream(stream *Stream, gridDim, blockDim kernels.Dim3, fn GoFunc, args ...any) error {
 	ctx, err := DefaultContext()
 	if err != nil {
 		return err
@@ -117,7 +117,7 @@ func GoWithDimensionsAndStream(stream *Stream, gridDim, blockDim kernels.Dim3, f
 
 	kernel := &SimpleKernel{
 		Name: "UserDefinedKernel",
-		Func: func(kernelArgs ...interface{}) error {
+		Func: func(kernelArgs ...any) error {
 			ctx := context.Background()
 			return fn(ctx, kernelArgs...)
 		},
@@ -171,7 +171,7 @@ func ParallelFor(start, end int, fn func(i int) error) error {
 	gridDim := kernels.Dim3{X: gridSize, Y: 1, Z: 1}
 	blockDim := kernels.Dim3{X: blockSize, Y: 1, Z: 1}
 
-	return GoWithDimensions(gridDim, blockDim, func(ctx context.Context, args ...interface{}) error {
+	return GoWithDimensions(gridDim, blockDim, func(ctx context.Context, args ...any) error {
 		// Execute in parallel using goroutines for simulation
 		var wg sync.WaitGroup
 		errorChan := make(chan error, numThreads)
@@ -242,7 +242,7 @@ func Map(input []float64, fn func(float64) float64) ([]float64, error) {
 }
 
 // Select provides a select-like operation for CUDA channels
-func Select(cases ...SelectCase) (int, interface{}, bool) {
+func Select(cases ...SelectCase) (int, any, bool) {
 	// Simplified select implementation
 	for i, c := range cases {
 		select {
@@ -261,5 +261,5 @@ func Select(cases ...SelectCase) (int, interface{}, bool) {
 // SelectCase represents a case in a select operation
 type SelectCase struct {
 	Channel *CudaChannel
-	Handler func(interface{})
+	Handler func(any)
 }

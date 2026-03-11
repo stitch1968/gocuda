@@ -3,6 +3,8 @@ package cuda
 import (
 	"fmt"
 	"time"
+
+	streamspkg "github.com/stitch1968/gocuda/streams"
 )
 
 // Profiler provides timing and performance metrics for CUDA operations
@@ -108,7 +110,7 @@ func Benchmark(name string, iterations int, fn func() error) {
 	var min, max time.Duration
 	first := true
 
-	for i := 0; i < iterations; i++ {
+	for i := range iterations {
 		timer := NewTimer()
 		timer.Start()
 
@@ -218,21 +220,19 @@ func WithContext(deviceID int, fn func(*Context) error) error {
 
 // WithStream executes a function with a CUDA stream
 func WithStream(fn func(*Stream) error) error {
-	ctx, err := DefaultContext()
+	managedStream, err := streamspkg.CreateStream()
 	if err != nil {
 		return err
 	}
-	stream, err := ctx.NewStream()
-	if err != nil {
-		return err
-	}
-	// Note: Stream cleanup is handled automatically
+	defer func() {
+		_ = streamspkg.GetManager().DestroyStream(managedStream)
+	}()
 
-	return fn(stream)
+	return fn(managedStream.Stream)
 }
 
 // Launch provides a higher-level interface for launching kernels
-func Launch(name string, gridDim, blockDim Dim3, kernel Kernel, args ...interface{}) error {
+func Launch(name string, gridDim, blockDim Dim3, kernel Kernel, args ...any) error {
 	timer := NewTimer()
 	timer.Start()
 
@@ -261,7 +261,7 @@ func Launch(name string, gridDim, blockDim Dim3, kernel Kernel, args ...interfac
 }
 
 // LaunchAsync launches a kernel asynchronously
-func LaunchAsync(stream *Stream, gridDim, blockDim Dim3, kernel Kernel, args ...interface{}) error {
+func LaunchAsync(stream *Stream, gridDim, blockDim Dim3, kernel Kernel, args ...any) error {
 	// Execute kernel asynchronously using the provided stream
 	fmt.Printf("Launching async kernel with grid %+v, block %+v\n", gridDim, blockDim)
 
@@ -271,10 +271,7 @@ func LaunchAsync(stream *Stream, gridDim, blockDim Dim3, kernel Kernel, args ...
 // BatchExecute executes multiple operations in batches
 func BatchExecute(operations []func() error, batchSize int) error {
 	for i := 0; i < len(operations); i += batchSize {
-		end := i + batchSize
-		if end > len(operations) {
-			end = len(operations)
-		}
+		end := min(i+batchSize, len(operations))
 
 		// Execute batch
 		for j := i; j < end; j++ {
@@ -296,21 +293,26 @@ func BatchExecute(operations []func() error, batchSize int) error {
 
 // Pipeline executes a series of operations in a pipeline
 func Pipeline(stages []func(*Stream) error) error {
-	ctx, err := DefaultContext()
-	if err != nil {
-		return err
-	}
 	streams := make([]*Stream, len(stages))
+	managedStreams := make([]*streamspkg.Stream, 0, len(stages))
 
 	// Create streams for each stage
 	for i := range streams {
-		stream, err := ctx.NewStream()
+		managedStream, err := streamspkg.CreateStream()
 		if err != nil {
+			for _, created := range managedStreams {
+				_ = streamspkg.GetManager().DestroyStream(created)
+			}
 			return err
 		}
-		// Note: Stream cleanup is handled automatically
-		streams[i] = stream
+		managedStreams = append(managedStreams, managedStream)
+		streams[i] = managedStream.Stream
 	}
+	defer func() {
+		for _, managedStream := range managedStreams {
+			_ = streamspkg.GetManager().DestroyStream(managedStream)
+		}
+	}()
 
 	// Execute stages
 	for i, stage := range stages {
@@ -344,7 +346,7 @@ func NewAsyncExecutor(workers int) *AsyncExecutor {
 	}
 
 	// Start worker goroutines
-	for i := 0; i < workers; i++ {
+	for range workers {
 		go ae.worker()
 	}
 

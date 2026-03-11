@@ -179,13 +179,13 @@ CGO_ENABLED=1 go test -tags cuda ./...
 ## Environment Requirements
 
 ### CPU Simulation Mode
-- ✅ Go 1.21 or later
+- ✅ Go 1.26 or later
 - ✅ Any operating system
 - ✅ No GPU required
 - ✅ No additional dependencies
 
 ### Real CUDA Mode
-- ✅ Go 1.21 or later
+- ✅ Go 1.26 or later
 - ✅ NVIDIA GPU with CUDA support
 - ✅ NVIDIA CUDA Toolkit (11.0 or later)
 - ✅ Appropriate GPU drivers

@@ -42,7 +42,7 @@ func TestVectorAdd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create vector b view: %v", err)
 	}
-	for i := 0; i < size; i++ {
+	for i := range size {
 		aData[i] = float32(i)
 		bData[i] = float32(i * 2)
 	}
@@ -62,7 +62,7 @@ func TestVectorAdd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create vector c view: %v", err)
 	}
-	for i := 0; i < size; i++ {
+	for i := range size {
 		expected := float32(i + i*2)
 		if cData[i] != expected {
 			t.Errorf("At index %d: expected %f, got %f", i, expected, cData[i])
@@ -107,7 +107,7 @@ func TestVectorAddWithStream(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create stream vector b view: %v", err)
 	}
-	for i := 0; i < size; i++ {
+	for i := range size {
 		aData[i] = float32(i + 1)
 		bData[i] = float32(i + 2)
 	}

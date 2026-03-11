@@ -194,7 +194,7 @@ func (decoder *JpegDecoderState) DecodeJpegBatch(jpegDataList [][]byte, params J
 		output, width, height, err := decoder.DecodeJpeg(jpegData, params)
 		if err != nil {
 			// Clean up previously allocated memory
-			for j := 0; j < i; j++ {
+			for j := range i {
 				if outputs[j] != nil {
 					outputs[j].Free()
 				}
@@ -363,9 +363,9 @@ func resolveJpegCrop(bounds image.Rectangle, params JpegDecodeParams) image.Rect
 func convertImageToJpegFormat(img image.Image, cropRect image.Rectangle, width, height int, format JpegFormat) []byte {
 	channels := jpegChannelCount(format)
 	output := make([]byte, width*height*channels)
-	for y := 0; y < height; y++ {
+	for y := range height {
 		sourceY := cropRect.Min.Y + (y*cropRect.Dy())/height
-		for x := 0; x < width; x++ {
+		for x := range width {
 			sourceX := cropRect.Min.X + (x*cropRect.Dx())/width
 			r, g, b, _ := img.At(sourceX, sourceY).RGBA()
 			r8 := byte(r >> 8)
@@ -400,8 +400,8 @@ func buildImageFromJpegBytes(data []byte, width, height int, format JpegFormat) 
 		return img, nil
 	}
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
-	for y := 0; y < height; y++ {
-		for x := 0; x < width; x++ {
+	for y := range height {
+		for x := range width {
 			source := (y*width + x) * channels
 			var r, g, b byte
 			switch format {

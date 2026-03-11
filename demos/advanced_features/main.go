@@ -250,7 +250,7 @@ func demoAsyncPipeline() {
 	// Execute pipeline
 	fmt.Println("   🚀 Executing async pipeline...")
 	start := time.Now()
-	resultChan := pipeline.Execute(inputMem, map[string]interface{}{
+	resultChan := pipeline.Execute(inputMem, map[string]any{
 		"processing_mode": "optimized",
 		"batch_size":      1024,
 	})
@@ -347,7 +347,7 @@ func demoMultiGPU() {
 		// Create a test kernel for parallel execution
 		testKernel := &performance.MultiGPUKernel{
 			Name: "vector_processing",
-			Implementation: func(deviceID int, input *memory.Memory, params map[string]interface{}) (*memory.Memory, error) {
+			Implementation: func(deviceID int, input *memory.Memory, params map[string]any) (*memory.Memory, error) {
 				// Simulate compute work
 				time.Sleep(10 * time.Millisecond)
 
@@ -363,7 +363,7 @@ func demoMultiGPU() {
 		// Execute kernel on all GPUs
 		fmt.Printf("   🚀 Executing kernel '%s' on all GPUs...\n", testKernel.GetName())
 		execStart := time.Now()
-		results, err := multiGPU.ParallelExecute(testKernel, map[string]interface{}{
+		results, err := multiGPU.ParallelExecute(testKernel, map[string]any{
 			"algorithm": "optimized",
 			"precision": "float32",
 		})
@@ -408,7 +408,7 @@ func demoMultiGPU() {
 
 // Pipeline stage implementations
 
-func preprocessingStage(input *memory.Memory, params map[string]interface{}) (*memory.Memory, error) {
+func preprocessingStage(input *memory.Memory, params map[string]any) (*memory.Memory, error) {
 	// Simulate preprocessing work
 	time.Sleep(5 * time.Millisecond)
 
@@ -421,7 +421,7 @@ func preprocessingStage(input *memory.Memory, params map[string]interface{}) (*m
 	return result, nil
 }
 
-func computationStage(input *memory.Memory, params map[string]interface{}) (*memory.Memory, error) {
+func computationStage(input *memory.Memory, params map[string]any) (*memory.Memory, error) {
 	// Simulate main computation work
 	time.Sleep(15 * time.Millisecond)
 
@@ -433,7 +433,7 @@ func computationStage(input *memory.Memory, params map[string]interface{}) (*mem
 	return result, nil
 }
 
-func postprocessingStage(input *memory.Memory, params map[string]interface{}) (*memory.Memory, error) {
+func postprocessingStage(input *memory.Memory, params map[string]any) (*memory.Memory, error) {
 	// Simulate postprocessing (output is half the size)
 	time.Sleep(3 * time.Millisecond)
 
