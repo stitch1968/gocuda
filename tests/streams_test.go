@@ -57,6 +57,35 @@ func TestStreamManager(t *testing.T) {
 	t.Log("✅ Stream manager test passed")
 }
 
+func TestDestroyStreamClosesWorker(t *testing.T) {
+	manager := streams.GetManager()
+	stream, err := streams.CreateStream()
+	if err != nil {
+		t.Fatalf("Failed to create stream: %v", err)
+	}
+
+	if err := manager.DestroyStream(stream); err != nil {
+		t.Fatalf("Failed to destroy stream: %v", err)
+	}
+
+	if !stream.IsClosed() {
+		t.Fatal("expected destroyed user stream to be closed")
+	}
+}
+
+func TestDestroyDefaultStreamDoesNotCloseIt(t *testing.T) {
+	manager := streams.GetManager()
+	stream := manager.GetDefaultStream()
+
+	if err := manager.DestroyStream(stream); err != nil {
+		t.Fatalf("Failed to synchronize default stream: %v", err)
+	}
+
+	if stream.IsClosed() {
+		t.Fatal("expected default stream to remain open")
+	}
+}
+
 // TestDefaultStream tests default stream functionality
 func TestDefaultStream(t *testing.T) {
 	t.Log("Testing default stream...")

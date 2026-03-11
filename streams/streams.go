@@ -38,6 +38,10 @@ type Event struct {
 
 // Record records the event in the stream
 func (e *Event) Record(stream *internal.Stream) error {
+	if stream == nil {
+		stream = internal.GetDefaultStream()
+	}
+
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -165,8 +169,15 @@ func (m *Manager) GetDefaultStream() *Stream {
 
 // DestroyStream destroys a stream
 func (m *Manager) DestroyStream(stream *Stream) error {
+	if stream == nil {
+		return fmt.Errorf("stream cannot be nil")
+	}
+
+	if stream == m.defaultStream {
+		return stream.Synchronize()
+	}
+
 	m.mu.Lock()
-	defer m.mu.Unlock()
 
 	// Find and remove stream
 	for id, s := range m.streams {
@@ -175,9 +186,10 @@ func (m *Manager) DestroyStream(stream *Stream) error {
 			break
 		}
 	}
+	m.mu.Unlock()
 
-	// Wait for stream to complete
-	return stream.Synchronize()
+	// Fully close the internal worker so background goroutines do not leak.
+	return stream.Close()
 }
 
 // SynchronizeAll waits for all streams to complete
@@ -355,6 +367,9 @@ func ExecuteParallel(functions ...func()) error {
 	for i := range functions {
 		streams[i], err = CreateStream()
 		if err != nil {
+			for j := 0; j < i; j++ {
+				_ = GetManager().DestroyStream(streams[j])
+			}
 			return err
 		}
 	}

@@ -16,6 +16,7 @@ type Stream struct {
 	priority   int
 	flags      uint32
 	tasks      chan func()
+	workerDone chan struct{}
 	isBlocking bool
 	name       string
 	mu         sync.Mutex
@@ -52,6 +53,7 @@ func newStream(name string) *Stream {
 		priority:   0,
 		flags:      0,
 		tasks:      make(chan func(), 100),
+		workerDone: make(chan struct{}),
 		isBlocking: false,
 		name:       name,
 	}
@@ -62,6 +64,7 @@ func newStream(name string) *Stream {
 
 // processor handles stream task processing
 func (s *Stream) processor() {
+	defer close(s.workerDone)
 	for task := range s.tasks {
 		func() {
 			defer s.completeTask()
@@ -116,7 +119,15 @@ func (s *Stream) Close() error {
 	s.closed = true
 	close(s.tasks)
 	s.mu.Unlock()
+	<-s.workerDone
 	return nil
+}
+
+// IsClosed reports whether the stream has been closed.
+func (s *Stream) IsClosed() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.closed
 }
 
 // Error handling utilities

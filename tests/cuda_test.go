@@ -15,6 +15,20 @@ func TestInitialize(t *testing.T) {
 	}
 }
 
+func TestInitializationState(t *testing.T) {
+	if err := cuda.Initialize(); err != nil {
+		t.Fatalf("Failed to initialize CUDA: %v", err)
+	}
+
+	if !cuda.IsInitialized() {
+		t.Fatal("expected CUDA runtime to report initialized state")
+	}
+
+	if err := cuda.InitializationError(); err != nil {
+		t.Fatalf("expected nil initialization error, got %v", err)
+	}
+}
+
 func TestGetDevices(t *testing.T) {
 	devices, err := cuda.GetDevices()
 	if err != nil {

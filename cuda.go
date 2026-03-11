@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"runtime"
 	"sync"
+	"sync/atomic"
 
 	"github.com/stitch1968/gocuda/internal"
 	"github.com/stitch1968/gocuda/memory"
@@ -83,17 +84,15 @@ var (
 	defaultContext *Context
 	defaultStream  *Stream
 	initOnce       sync.Once
+	initialized    atomic.Bool
 	initErr        error
-
-	// Stream ID counter
-	streamIDCounter int64
 )
 
 // Initialize initializes the CUDA runtime (real or simulated)
 func Initialize() error {
 	initOnce.Do(func() {
 		// Initialize CUDA runtime detection
-		cudaRuntime := InitializeCudaRuntime()
+		InitializeCudaRuntime()
 
 		// Create default context with detected or simulated device
 		defaultContext, initErr = NewContext(0)
@@ -103,14 +102,19 @@ func Initialize() error {
 
 		// Create default stream
 		defaultStream = internal.GetDefaultStream()
-
-		// Print CUDA information
-		if cudaRuntime.Available {
-			fmt.Println("CUDA runtime initialized successfully")
-		} else {
-			fmt.Println("Using CPU simulation mode")
-		}
+		initialized.Store(true)
 	})
+	return initErr
+}
+
+// IsInitialized reports whether the CUDA runtime has been initialized successfully.
+func IsInitialized() bool {
+	return initialized.Load() && initErr == nil && defaultContext != nil && defaultStream != nil
+}
+
+// InitializationError returns the initialization error recorded by Initialize,
+// or nil if initialization has not failed.
+func InitializationError() error {
 	return initErr
 }
 
