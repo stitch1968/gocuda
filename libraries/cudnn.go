@@ -7,6 +7,7 @@ import (
 	"math"
 	"time"
 
+	cuda "github.com/stitch1968/gocuda"
 	"github.com/stitch1968/gocuda/memory"
 )
 
@@ -16,6 +17,7 @@ import (
 type DNNHandle struct {
 	handle    uintptr
 	destroyed bool
+	native    bool
 }
 
 // TensorDescriptor describes the layout of a tensor
@@ -26,6 +28,7 @@ type TensorDescriptor struct {
 	dimensions []int
 	strides    []int
 	destroyed  bool
+	native     bool
 }
 
 // FilterDescriptor describes a convolution filter
@@ -35,6 +38,7 @@ type FilterDescriptor struct {
 	format     DNNTensorFormat
 	dimensions []int // [outputChannels, inputChannels, height, width]
 	destroyed  bool
+	native     bool
 }
 
 // ConvolutionDescriptor describes a convolution operation
@@ -49,6 +53,7 @@ type ConvolutionDescriptor struct {
 	mode      DNNConvolutionMode
 	dataType  DNNDataType
 	destroyed bool
+	native    bool
 }
 
 // PoolingDescriptor describes a pooling operation
@@ -62,6 +67,7 @@ type PoolingDescriptor struct {
 	strideH   int
 	strideW   int
 	destroyed bool
+	native    bool
 }
 
 // ActivationDescriptor describes an activation function
@@ -71,6 +77,7 @@ type ActivationDescriptor struct {
 	nanOpt    DNNNanPropagation
 	coeff     float64
 	destroyed bool
+	native    bool
 }
 
 // BatchNormDescriptor describes batch normalization
@@ -78,6 +85,7 @@ type BatchNormDescriptor struct {
 	handle    uintptr
 	mode      DNNBatchNormMode
 	destroyed bool
+	native    bool
 }
 
 // DNNDataType represents cuDNN data types
@@ -159,6 +167,9 @@ func CreateDNNHandle() (*DNNHandle, error) {
 	if err := ensureCudaReady(); err != nil {
 		return nil, err
 	}
+	if cuda.ShouldUseCuda() && cudnnNativeAvailable() {
+		return createNativeDNNHandle()
+	}
 
 	handle := &DNNHandle{
 		handle: uintptr(time.Now().UnixNano()),
@@ -173,6 +184,9 @@ func (h *DNNHandle) DestroyHandle() error {
 		return fmt.Errorf("handle already destroyed")
 	}
 	h.destroyed = true
+	if h.native {
+		return destroyNativeDNNHandle(h)
+	}
 	return nil
 }
 
@@ -182,6 +196,9 @@ func (h *DNNHandle) DestroyHandle() error {
 func CreateTensorDescriptor() (*TensorDescriptor, error) {
 	if err := ensureCudaReady(); err != nil {
 		return nil, err
+	}
+	if cuda.ShouldUseCuda() && cudnnNativeAvailable() {
+		return createNativeTensorDescriptor()
 	}
 
 	desc := &TensorDescriptor{
@@ -205,6 +222,9 @@ func (desc *TensorDescriptor) SetTensorNdDescriptor(dataType DNNDataType, dimens
 	desc.strides = make([]int, len(strides))
 	copy(desc.dimensions, dimensions)
 	copy(desc.strides, strides)
+	if desc.native {
+		return setNativeTensorNdDescriptor(desc, dataType, dimensions, strides)
+	}
 
 	return nil
 }
@@ -225,6 +245,9 @@ func (desc *TensorDescriptor) SetTensor4dDescriptor(format DNNTensorFormat, data
 	} else if format == DNNTensorNHWC {
 		desc.strides = []int{h * w * c, 1, w * c, c}
 	}
+	if desc.native {
+		return setNativeTensor4dDescriptor(desc, format, dataType, n, c, h, w)
+	}
 
 	return nil
 }
@@ -235,6 +258,9 @@ func (desc *TensorDescriptor) DestroyTensorDescriptor() error {
 		return fmt.Errorf("descriptor already destroyed")
 	}
 	desc.destroyed = true
+	if desc.native {
+		return destroyNativeTensorDescriptor(desc)
+	}
 	return nil
 }
 
@@ -244,6 +270,9 @@ func (desc *TensorDescriptor) DestroyTensorDescriptor() error {
 func CreateFilterDescriptor() (*FilterDescriptor, error) {
 	if err := ensureCudaReady(); err != nil {
 		return nil, err
+	}
+	if cuda.ShouldUseCuda() && cudnnNativeAvailable() {
+		return createNativeFilterDescriptor()
 	}
 
 	desc := &FilterDescriptor{
@@ -263,6 +292,9 @@ func (desc *FilterDescriptor) SetFilterNdDescriptor(dataType DNNDataType, format
 	desc.format = format
 	desc.dimensions = make([]int, len(dimensions))
 	copy(desc.dimensions, dimensions)
+	if desc.native {
+		return setNativeFilterNdDescriptor(desc, dataType, format, dimensions)
+	}
 
 	return nil
 }
@@ -276,6 +308,9 @@ func (desc *FilterDescriptor) SetFilter4dDescriptor(dataType DNNDataType, format
 	desc.dataType = dataType
 	desc.format = format
 	desc.dimensions = []int{k, c, h, w}
+	if desc.native {
+		return setNativeFilter4dDescriptor(desc, dataType, format, k, c, h, w)
+	}
 
 	return nil
 }
@@ -286,6 +321,9 @@ func (desc *FilterDescriptor) DestroyFilterDescriptor() error {
 		return fmt.Errorf("descriptor already destroyed")
 	}
 	desc.destroyed = true
+	if desc.native {
+		return destroyNativeFilterDescriptor(desc)
+	}
 	return nil
 }
 
@@ -295,6 +333,9 @@ func (desc *FilterDescriptor) DestroyFilterDescriptor() error {
 func CreateConvolutionDescriptor() (*ConvolutionDescriptor, error) {
 	if err := ensureCudaReady(); err != nil {
 		return nil, err
+	}
+	if cuda.ShouldUseCuda() && cudnnNativeAvailable() {
+		return createNativeConvolutionDescriptor()
 	}
 
 	desc := &ConvolutionDescriptor{
@@ -320,6 +361,9 @@ func (desc *ConvolutionDescriptor) SetConvolution2dDescriptor(padH, padW, stride
 	desc.dilationW = dilationW
 	desc.mode = mode
 	desc.dataType = dataType
+	if desc.native {
+		return setNativeConvolution2dDescriptor(desc, padH, padW, strideH, strideW, dilationH, dilationW, mode, dataType)
+	}
 
 	return nil
 }
@@ -333,6 +377,9 @@ func (desc *ConvolutionDescriptor) GetConvolution2dForwardOutputDim(inputDesc *T
 	// Extract dimensions
 	if len(inputDesc.dimensions) < 4 || len(filterDesc.dimensions) < 4 {
 		return 0, 0, 0, 0, fmt.Errorf("invalid tensor dimensions")
+	}
+	if desc.native {
+		return nativeConvolutionForwardOutputDim(desc, inputDesc, filterDesc)
 	}
 
 	inputN, _, inputH, inputW := inputDesc.dimensions[0], inputDesc.dimensions[1], inputDesc.dimensions[2], inputDesc.dimensions[3]
@@ -358,6 +405,9 @@ func (h *DNNHandle) ConvolutionForward(alpha float32, inputDesc *TensorDescripto
 	if inputDesc.destroyed || filterDesc.destroyed || convDesc.destroyed || outputDesc.destroyed {
 		return fmt.Errorf("one or more descriptors have been destroyed")
 	}
+	if h.native {
+		return nativeConvolutionForward(h, alpha, inputDesc, inputData, filterDesc, filterData, convDesc, beta, outputDesc, outputData)
+	}
 
 	return h.performConvolution(inputData, filterData, outputData, inputDesc, filterDesc, outputDesc, convDesc, alpha, beta)
 }
@@ -368,6 +418,9 @@ func (desc *ConvolutionDescriptor) DestroyConvolutionDescriptor() error {
 		return fmt.Errorf("descriptor already destroyed")
 	}
 	desc.destroyed = true
+	if desc.native {
+		return destroyNativeConvolutionDescriptor(desc)
+	}
 	return nil
 }
 
@@ -377,6 +430,9 @@ func (desc *ConvolutionDescriptor) DestroyConvolutionDescriptor() error {
 func CreatePoolingDescriptor() (*PoolingDescriptor, error) {
 	if err := ensureCudaReady(); err != nil {
 		return nil, err
+	}
+	if cuda.ShouldUseCuda() && cudnnNativeAvailable() {
+		return createNativePoolingDescriptor()
 	}
 
 	desc := &PoolingDescriptor{
@@ -399,6 +455,9 @@ func (desc *PoolingDescriptor) SetPooling2dDescriptor(mode DNNPoolingMode, windo
 	desc.padW = padW
 	desc.strideH = strideH
 	desc.strideW = strideW
+	if desc.native {
+		return setNativePooling2dDescriptor(desc, mode, windowH, windowW, padH, padW, strideH, strideW)
+	}
 
 	return nil
 }
@@ -410,6 +469,9 @@ func (h *DNNHandle) PoolingForward(poolingDesc *PoolingDescriptor, alpha float32
 	if h.destroyed || poolingDesc.destroyed || inputDesc.destroyed || outputDesc.destroyed {
 		return fmt.Errorf("one or more descriptors have been destroyed")
 	}
+	if h.native {
+		return nativePoolingForward(h, poolingDesc, alpha, inputDesc, inputData, beta, outputDesc, outputData)
+	}
 
 	return h.performPooling(inputData, outputData, inputDesc, outputDesc, poolingDesc, alpha, beta)
 }
@@ -420,6 +482,9 @@ func (desc *PoolingDescriptor) DestroyPoolingDescriptor() error {
 		return fmt.Errorf("descriptor already destroyed")
 	}
 	desc.destroyed = true
+	if desc.native {
+		return destroyNativePoolingDescriptor(desc)
+	}
 	return nil
 }
 
@@ -429,6 +494,9 @@ func (desc *PoolingDescriptor) DestroyPoolingDescriptor() error {
 func CreateActivationDescriptor() (*ActivationDescriptor, error) {
 	if err := ensureCudaReady(); err != nil {
 		return nil, err
+	}
+	if cuda.ShouldUseCuda() && cudnnNativeAvailable() {
+		return createNativeActivationDescriptor()
 	}
 
 	desc := &ActivationDescriptor{
@@ -447,6 +515,9 @@ func (desc *ActivationDescriptor) SetActivationDescriptor(mode DNNActivationMode
 	desc.mode = mode
 	desc.nanOpt = nanOpt
 	desc.coeff = coeff
+	if desc.native {
+		return setNativeActivationDescriptor(desc, mode, nanOpt, coeff)
+	}
 
 	return nil
 }
@@ -458,6 +529,9 @@ func (h *DNNHandle) ActivationForward(activationDesc *ActivationDescriptor, alph
 	if h.destroyed || activationDesc.destroyed || inputDesc.destroyed || outputDesc.destroyed {
 		return fmt.Errorf("one or more descriptors have been destroyed")
 	}
+	if h.native {
+		return nativeActivationForward(h, activationDesc, alpha, inputDesc, inputData, beta, outputDesc, outputData)
+	}
 
 	return h.performActivation(inputData, outputData, inputDesc, outputDesc, activationDesc, alpha, beta)
 }
@@ -468,6 +542,9 @@ func (desc *ActivationDescriptor) DestroyActivationDescriptor() error {
 		return fmt.Errorf("descriptor already destroyed")
 	}
 	desc.destroyed = true
+	if desc.native {
+		return destroyNativeActivationDescriptor(desc)
+	}
 	return nil
 }
 
@@ -481,6 +558,7 @@ func CreateBatchNormDescriptor() (*BatchNormDescriptor, error) {
 
 	desc := &BatchNormDescriptor{
 		handle: uintptr(time.Now().UnixNano()),
+		native: cuda.ShouldUseCuda() && cudnnNativeAvailable(),
 	}
 
 	return desc, nil
@@ -493,6 +571,9 @@ func (h *DNNHandle) BatchNormalizationForwardInference(mode DNNBatchNormMode, al
 
 	if h.destroyed {
 		return fmt.Errorf("handle has been destroyed")
+	}
+	if h.native {
+		return nativeBatchNormForwardInference(h, mode, alpha, beta, inputDesc, input, outputDesc, output, bnScaleBiasDesc, bnScale, bnBias, estimatedMean, estimatedVariance, epsilon)
 	}
 
 	return h.performBatchNorm(input, output, bnScale, bnBias, estimatedMean, estimatedVariance, inputDesc, outputDesc, bnScaleBiasDesc, mode, alpha, beta, epsilon)
