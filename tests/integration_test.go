@@ -50,8 +50,14 @@ func TestIntegrationWorkflow(t *testing.T) {
 
 	// Step 3: Initialize data
 	profiler.StartEvent("data_initialization")
-	data1 := (*[1 << 30]float32)(mem1.Ptr())[:1024:1024]
-	data2 := (*[1 << 30]float32)(mem2.Ptr())[:1024:1024]
+	data1, err := memory.View[float32](mem1, 1024)
+	if err != nil {
+		t.Fatalf("Failed to create input view 1: %v", err)
+	}
+	data2, err := memory.View[float32](mem2, 1024)
+	if err != nil {
+		t.Fatalf("Failed to create input view 2: %v", err)
+	}
 	for i := 0; i < 1024; i++ {
 		data1[i] = float32(i)
 		data2[i] = float32(i * 2)
@@ -79,7 +85,10 @@ func TestIntegrationWorkflow(t *testing.T) {
 	defer sortData.Free()
 
 	// Initialize with reverse data
-	sortArray := (*[1 << 30]uint32)(sortData.Ptr())[:1024:1024]
+	sortArray, err := memory.View[uint32](sortData, 1024)
+	if err != nil {
+		t.Fatalf("Failed to create sort input view: %v", err)
+	}
 	for i := 0; i < 1024; i++ {
 		sortArray[i] = uint32(1024 - i)
 	}
@@ -108,7 +117,10 @@ func TestIntegrationWorkflow(t *testing.T) {
 	defer fftOutput.Free()
 
 	// Initialize FFT input
-	fftData := (*[1 << 30]advanced.Complex64)(fftInput.Ptr())[:fftSize:fftSize]
+	fftData, err := memory.View[advanced.Complex64](fftInput, fftSize)
+	if err != nil {
+		t.Fatalf("Failed to create FFT input view: %v", err)
+	}
 	for i := 0; i < fftSize; i++ {
 		fftData[i] = advanced.Complex64{Real: float32(i), Imag: 0.0}
 	}
@@ -129,7 +141,10 @@ func TestIntegrationWorkflow(t *testing.T) {
 
 	// Step 8: Validate results
 	profiler.StartEvent("result_validation")
-	resultData := (*[1 << 30]float32)(result.Ptr())[:1024:1024]
+	resultData, err := memory.View[float32](result, 1024)
+	if err != nil {
+		t.Fatalf("Failed to create result view: %v", err)
+	}
 
 	// Verify vector addition results
 	for i := 0; i < 10; i++ { // Check first 10 elements
@@ -192,7 +207,10 @@ func TestConcurrentOperations(t *testing.T) {
 
 	// Initialize data in each memory buffer
 	for i, mem := range memories {
-		data := (*[1 << 30]float32)(mem.Ptr())[:1024:1024]
+		data, err := memory.View[float32](mem, 1024)
+		if err != nil {
+			t.Fatalf("Failed to create concurrent buffer view %d: %v", i, err)
+		}
 		for j := 0; j < 1024; j++ {
 			data[j] = float32(j * (i + 1))
 		}

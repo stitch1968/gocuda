@@ -34,8 +34,14 @@ func TestVectorAdd(t *testing.T) {
 	defer c.Free()
 
 	// Initialize test data
-	aData := (*[1 << 30]float32)(a.Ptr())[:size:size]
-	bData := (*[1 << 30]float32)(b.Ptr())[:size:size]
+	aData, err := memory.View[float32](a, size)
+	if err != nil {
+		t.Fatalf("Failed to create vector a view: %v", err)
+	}
+	bData, err := memory.View[float32](b, size)
+	if err != nil {
+		t.Fatalf("Failed to create vector b view: %v", err)
+	}
 	for i := 0; i < size; i++ {
 		aData[i] = float32(i)
 		bData[i] = float32(i * 2)
@@ -52,7 +58,10 @@ func TestVectorAdd(t *testing.T) {
 	}
 
 	// Verify results
-	cData := (*[1 << 30]float32)(c.Ptr())[:size:size]
+	cData, err := memory.View[float32](c, size)
+	if err != nil {
+		t.Fatalf("Failed to create vector c view: %v", err)
+	}
 	for i := 0; i < size; i++ {
 		expected := float32(i + i*2)
 		if cData[i] != expected {
@@ -90,8 +99,14 @@ func TestVectorAddWithStream(t *testing.T) {
 	defer c.Free()
 
 	// Initialize data
-	aData := (*[1 << 30]float32)(a.Ptr())[:size:size]
-	bData := (*[1 << 30]float32)(b.Ptr())[:size:size]
+	aData, err := memory.View[float32](a, size)
+	if err != nil {
+		t.Fatalf("Failed to create stream vector a view: %v", err)
+	}
+	bData, err := memory.View[float32](b, size)
+	if err != nil {
+		t.Fatalf("Failed to create stream vector b view: %v", err)
+	}
 	for i := 0; i < size; i++ {
 		aData[i] = float32(i + 1)
 		bData[i] = float32(i + 2)
@@ -162,6 +177,30 @@ func TestKernelErrorHandling(t *testing.T) {
 	err = vectorAdd.Execute(gridDim, blockDim, 0, nil, "a", "b", "c", "n")
 	if err == nil {
 		t.Error("Expected error with wrong argument types")
+	}
+
+	// Test with a buffer too small for the requested vector length
+	smallA, err := memory.Alloc(4)
+	if err != nil {
+		t.Fatalf("Failed to allocate small vector a: %v", err)
+	}
+	defer smallA.Free()
+
+	smallB, err := memory.Alloc(4)
+	if err != nil {
+		t.Fatalf("Failed to allocate small vector b: %v", err)
+	}
+	defer smallB.Free()
+
+	smallC, err := memory.Alloc(4)
+	if err != nil {
+		t.Fatalf("Failed to allocate small vector c: %v", err)
+	}
+	defer smallC.Free()
+
+	err = vectorAdd.Execute(gridDim, blockDim, 0, nil, smallA, smallB, smallC, 2)
+	if err == nil {
+		t.Error("Expected error when vector buffers are too small")
 	}
 
 	t.Log("✅ Kernel error handling test passed")

@@ -19,9 +19,8 @@ type SimpleMemory struct {
 func Alloc(size int64) *SimpleMemory {
 	return &SimpleMemory{
 		size:      size,
-		memType:   TypeDevice,         // Smart default
-		stream:    GetDefaultStream(), // Smart default
-		alignment: 256,                // Smart default
+		memType:   TypeDevice, // Smart default
+		alignment: 256,        // Smart default
 	}
 }
 
@@ -57,7 +56,16 @@ func (sm *SimpleMemory) WithStream(stream *Stream) *SimpleMemory {
 
 // Allocate performs the actual memory allocation
 func (sm *SimpleMemory) Allocate() (*Memory, error) {
-	return MallocWithTypeAndStream(sm.stream, sm.size, sm.memType)
+	stream := sm.stream
+	if stream == nil {
+		var err error
+		stream, err = DefaultStream()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return MallocWithTypeAndStream(stream, sm.size, sm.memType)
 }
 
 // SimpleContext provides a simplified context for beginners
@@ -81,7 +89,10 @@ func NewSimpleContext() (*SimpleContext, error) {
 		}
 	}
 
-	ctx := GetDefaultContext()
+	ctx, err := DefaultContext()
+	if err != nil {
+		return nil, err
+	}
 	return &SimpleContext{ctx: ctx}, nil
 }
 
@@ -121,9 +132,13 @@ func NewVector(data []float32) (*Vector, error) {
 	}
 
 	// Copy data to GPU/memory (handle both simulation and real CUDA)
+	floatData, err := View[float32](mem, size)
+	if err != nil {
+		mem.Free()
+		return nil, err
+	}
+
 	if mem.Data() != nil {
-		// Simulation mode - direct copy to data slice
-		floatData := (*[1 << 30]float32)(mem.Ptr())[:size:size]
 		copy(floatData, data)
 	} else {
 		// Real CUDA mode - use memory copy functions
@@ -320,9 +335,13 @@ func NewMatrix(rows, cols int, data []float32) (*Matrix, error) {
 	}
 
 	// Copy data to GPU/memory (handle both simulation and real CUDA)
+	floatData, err := View[float32](mem, size)
+	if err != nil {
+		mem.Free()
+		return nil, err
+	}
+
 	if mem.Data() != nil {
-		// Simulation mode - direct copy to data slice
-		floatData := (*[1 << 30]float32)(mem.Ptr())[:size:size]
 		copy(floatData, data)
 	} else {
 		// Real CUDA mode - use memory copy functions
@@ -443,13 +462,16 @@ func SimpleVectorAdd(a, b []float32) ([]float32, error) {
 
 	// Get result
 	output := make([]float32, len(a))
+	floatData, err := View[float32](result.mem, len(a))
+	if err != nil {
+		return nil, err
+	}
+
 	if result.mem.Data() != nil {
-		// Simulation mode - direct access
-		floatData := (*[1 << 30]float32)(result.mem.Ptr())[:len(a):len(a)]
 		copy(output, floatData)
 	} else {
 		// Real CUDA mode - use memory copy
-		err = CopyDeviceToHost((*[1 << 30]byte)(unsafe.Pointer(&output[0]))[:len(output)*4], result.mem)
+		err = CopyDeviceToHost(unsafe.Slice((*byte)(unsafe.Pointer(&output[0])), len(output)*4), result.mem)
 		if err != nil {
 			return nil, err
 		}
@@ -517,13 +539,16 @@ func SimpleMatrixMultiply(a, b [][]float32) ([][]float32, error) {
 
 	// Get result and reshape
 	flatResult := make([]float32, rows*cols)
+	floatData, err := View[float32](result.mem, rows*cols)
+	if err != nil {
+		return nil, err
+	}
+
 	if result.mem.Data() != nil {
-		// Simulation mode - direct access
-		floatData := (*[1 << 30]float32)(result.mem.Ptr())[: rows*cols : rows*cols]
 		copy(flatResult, floatData)
 	} else {
 		// Real CUDA mode - use memory copy
-		err = CopyDeviceToHost((*[1 << 30]byte)(unsafe.Pointer(&flatResult[0]))[:len(flatResult)*4], result.mem)
+		err = CopyDeviceToHost(unsafe.Slice((*byte)(unsafe.Pointer(&flatResult[0])), len(flatResult)*4), result.mem)
 		if err != nil {
 			return nil, err
 		}

@@ -6,7 +6,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"unsafe"
 
 	cuda "github.com/stitch1968/gocuda"
 	"github.com/stitch1968/gocuda/memory"
@@ -85,7 +84,13 @@ func testMemoryAllocation() {
 	for i, memType := range memTypes {
 		fmt.Printf("  Allocating %s memory (1MB)... ", memTypeNames[i])
 
-		mem, err := cuda.MallocWithTypeAndStream(cuda.GetDefaultStream(), 1024*1024, memType)
+		stream, err := cuda.DefaultStream()
+		if err != nil {
+			fmt.Printf("Failed: %v\n", err)
+			continue
+		}
+
+		mem, err := cuda.MallocWithTypeAndStream(stream, 1024*1024, memType)
 		if err != nil {
 			fmt.Printf("Failed: %v\n", err)
 			continue
@@ -138,18 +143,21 @@ func testKernelExecution() {
 	// Initialize data (only works in simulation mode with accessible data)
 	if !cuda.ShouldUseCuda() && memA.Data() != nil {
 		fmt.Println("  Initializing data...")
-		dataA := memA.Data()
-		dataB := memB.Data()
+		dataA, err := cuda.View[float32](memA, size)
+		if err != nil {
+			fmt.Printf("Failed: %v\n", err)
+			return
+		}
+		dataB, err := cuda.View[float32](memB, size)
+		if err != nil {
+			fmt.Printf("Failed: %v\n", err)
+			return
+		}
 
 		// Fill with simple test pattern
-		for i := 0; i < size*4; i += 4 {
-			// Simulate float32 values
-			val := float32(i / 4)
-			valBytes := *(*[4]byte)(unsafe.Pointer(&val))
-			for j := 0; j < 4; j++ {
-				dataA[i+j] = valBytes[j]
-				dataB[i+j] = valBytes[j]
-			}
+		for i := 0; i < size; i++ {
+			dataA[i] = float32(i)
+			dataB[i] = float32(i)
 		}
 	}
 
@@ -188,7 +196,11 @@ func testKernelExecution() {
 	_ = blockDim // Avoid unused variable
 	_ = kernel   // Avoid unused variable
 
-	stream := cuda.GetDefaultStream()
+	stream, err := cuda.DefaultStream()
+	if err != nil {
+		fmt.Printf("Failed to get default stream: %v\n", err)
+		return
+	}
 	stream.Execute(func() {
 		// Simplified kernel execution - just demonstration
 		fmt.Println("Kernel executed (simulated)")

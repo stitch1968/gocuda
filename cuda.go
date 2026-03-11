@@ -83,6 +83,7 @@ var (
 	defaultContext *Context
 	defaultStream  *Stream
 	initOnce       sync.Once
+	initErr        error
 
 	// Stream ID counter
 	streamIDCounter int64
@@ -90,22 +91,18 @@ var (
 
 // Initialize initializes the CUDA runtime (real or simulated)
 func Initialize() error {
-	var err error
 	initOnce.Do(func() {
 		// Initialize CUDA runtime detection
 		cudaRuntime := InitializeCudaRuntime()
 
 		// Create default context with detected or simulated device
-		defaultContext, err = NewContext(0)
-		if err != nil {
+		defaultContext, initErr = NewContext(0)
+		if initErr != nil {
 			return
 		}
 
 		// Create default stream
-		defaultStream, err = defaultContext.NewStream()
-		if err != nil {
-			return
-		}
+		defaultStream = internal.GetDefaultStream()
 
 		// Print CUDA information
 		if cudaRuntime.Available {
@@ -114,7 +111,7 @@ func Initialize() error {
 			fmt.Println("Using CPU simulation mode")
 		}
 	})
-	return err
+	return initErr
 }
 
 // GetDevices returns all available CUDA devices (real or simulated)
@@ -204,18 +201,36 @@ func (c *Context) NewStream() (*Stream, error) {
 
 // GetDefaultStream returns the default CUDA stream
 func GetDefaultStream() *Stream {
-	if err := Initialize(); err != nil {
+	stream, err := DefaultStream()
+	if err != nil {
 		panic(err)
 	}
-	return defaultStream
+	return stream
+}
+
+// DefaultStream returns the default CUDA stream without panicking on init failure.
+func DefaultStream() (*Stream, error) {
+	if err := Initialize(); err != nil {
+		return nil, err
+	}
+	return defaultStream, nil
 }
 
 // GetDefaultContext returns the default CUDA context
 func GetDefaultContext() *Context {
-	if err := Initialize(); err != nil {
+	ctx, err := DefaultContext()
+	if err != nil {
 		panic(err)
 	}
-	return defaultContext
+	return ctx
+}
+
+// DefaultContext returns the default CUDA context without panicking on init failure.
+func DefaultContext() (*Context, error) {
+	if err := Initialize(); err != nil {
+		return nil, err
+	}
+	return defaultContext, nil
 }
 
 // Execute implements the Kernel interface for SimpleKernel

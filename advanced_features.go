@@ -175,7 +175,11 @@ func CreateEvent(flags EventFlags) (*CudaEvent, error) {
 // Record records an event in a stream (like cudaEventRecord)
 func (e *CudaEvent) Record(stream *Stream) error {
 	if stream == nil {
-		stream = GetDefaultStream()
+		var err error
+		stream, err = DefaultStream()
+		if err != nil {
+			return err
+		}
 	}
 
 	e.stream = stream
@@ -275,7 +279,11 @@ func (g *CudaGraph) AddKernelNode(kernel Kernel, dependencies []*GraphNode, args
 // Launch launches the graph (like cudaGraphLaunch)
 func (g *CudaGraph) Launch(stream *Stream) error {
 	if stream == nil {
-		stream = GetDefaultStream()
+		var err error
+		stream, err = DefaultStream()
+		if err != nil {
+			return err
+		}
 	}
 
 	// Execute nodes in dependency order (simplified topological sort)
@@ -306,7 +314,12 @@ type Occupancy struct {
 
 // CalculateOccupancy calculates theoretical occupancy for a kernel
 func CalculateOccupancy(kernel Kernel, blockSize int, sharedMemPerBlock int) (*Occupancy, error) {
-	device := GetDefaultContext().device
+	ctx, err := DefaultContext()
+	if err != nil {
+		return nil, err
+	}
+
+	device := ctx.device
 
 	// Simplified occupancy calculation
 	maxThreadsPerSM := device.Properties.MaxThreadsPerBlock
@@ -359,7 +372,12 @@ func GetCurrentDevice() (int, error) {
 
 // DeviceSynchronize synchronizes the current device (like cudaDeviceSynchronize)
 func DeviceSynchronize() error {
-	return GetDefaultStream().Synchronize()
+	stream, err := DefaultStream()
+	if err != nil {
+		return err
+	}
+
+	return stream.Synchronize()
 }
 
 // DeviceReset resets the current device (like cudaDeviceReset)

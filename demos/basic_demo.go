@@ -84,7 +84,10 @@ func main() {
 	fmt.Printf("   ✅ Received: %v\n", message)
 
 	fmt.Println("\n🎯 Demo: Multiple Streams (Concurrent Execution)")
-	ctx := cuda.GetDefaultContext()
+	ctx, err := cuda.DefaultContext()
+	if err != nil {
+		log.Fatal(err)
+	}
 	stream1, _ := ctx.NewStream()
 	stream2, _ := ctx.NewStream()
 

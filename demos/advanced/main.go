@@ -206,7 +206,10 @@ func multiStreamPerformance() {
 
 	// Multi-stream execution
 	start = time.Now()
-	ctx := cuda.GetDefaultContext()
+	ctx, err := cuda.DefaultContext()
+	if err != nil {
+		log.Fatal(err)
+	}
 	numStreams := 4
 	workPerStream := workloadSize / numStreams
 

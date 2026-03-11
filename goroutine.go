@@ -112,22 +112,15 @@ func GoWithDimensionsAndStream(stream *Stream, gridDim, blockDim kernels.Dim3, f
 
 // Synchronize waits for all CUDA operations to complete (similar to runtime.Gosched())
 func Synchronize() error {
-	// Create a new stream for synchronization to avoid WaitGroup reuse issues
-	stream := GetDefaultStream()
-	// Use a simple approach that doesn't cause WaitGroup conflicts
-	stream.Execute(func() {
-		// This is a no-op that forces synchronization
-	})
-	return nil
+	return GetDefaultStream().Synchronize()
 }
 
 // SynchronizeStream waits for all operations in a specific stream to complete
 func SynchronizeStream(stream *Stream) error {
-	// Use a simple approach that doesn't cause WaitGroup conflicts
-	stream.Execute(func() {
-		// This is a no-op that forces synchronization
-	})
-	return nil
+	if stream == nil {
+		stream = GetDefaultStream()
+	}
+	return stream.Synchronize()
 }
 
 // ParallelFor executes a function in parallel across multiple GPU threads

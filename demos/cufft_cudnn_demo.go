@@ -79,7 +79,10 @@ func demo1DFFT(ctx *libraries.FFTContext) {
 	defer output.Free()
 
 	// Initialize input with a signal (sine wave)
-	inputData := (*[1 << 30]libraries.Complex64)(input.Ptr())[:size:size]
+	inputData, err := memory.View[libraries.Complex64](input, size)
+	if err != nil {
+		log.Fatalf("Failed to create FFT input view: %v", err)
+	}
 	for i := 0; i < size; i++ {
 		// Create a sine wave signal
 		frequency := 2.0
@@ -104,7 +107,10 @@ func demo1DFFT(ctx *libraries.FFTContext) {
 	elapsed := time.Since(start)
 
 	// Verify some output values
-	outputData := (*[1 << 30]libraries.Complex64)(output.Ptr())[:size:size]
+	outputData, err := memory.View[libraries.Complex64](output, size)
+	if err != nil {
+		log.Fatalf("Failed to create FFT output view: %v", err)
+	}
 	maxMagnitude := float32(0)
 	for i := 0; i < size; i++ {
 		magnitude := outputData[i].Real*outputData[i].Real + outputData[i].Imag*outputData[i].Imag
@@ -135,7 +141,10 @@ func demo2DFFT(ctx *libraries.FFTContext) {
 	defer output.Free()
 
 	// Initialize input with 2D pattern
-	inputData := (*[1 << 30]libraries.Complex64)(input.Ptr())[:size:size]
+	inputData, err := memory.View[libraries.Complex64](input, size)
+	if err != nil {
+		log.Fatalf("Failed to create 2D FFT input view: %v", err)
+	}
 	for y := 0; y < ny; y++ {
 		for x := 0; x < nx; x++ {
 			i := y*nx + x
@@ -183,7 +192,10 @@ func demoR2CFFT(ctx *libraries.FFTContext) {
 	defer output.Free()
 
 	// Initialize real input
-	inputData := (*[1 << 30]float32)(input.Ptr())[:size:size]
+	inputData, err := memory.View[float32](input, size)
+	if err != nil {
+		log.Fatalf("Failed to create R2C input view: %v", err)
+	}
 	for i := 0; i < size; i++ {
 		inputData[i] = float32(i % 10) // Simple pattern
 	}
@@ -223,7 +235,10 @@ func demoSimpleFFT() {
 	defer output.Free()
 
 	// Initialize input
-	inputData := (*[1 << 30]libraries.Complex64)(input.Ptr())[:size:size]
+	inputData, err := memory.View[libraries.Complex64](input, size)
+	if err != nil {
+		log.Fatalf("Failed to create simple FFT input view: %v", err)
+	}
 	for i := 0; i < size; i++ {
 		inputData[i].Real = float32(i)
 		inputData[i].Imag = 0.0
@@ -295,8 +310,14 @@ func demoConvolution() {
 	defer output.Free()
 
 	// Initialize data
-	inputData := (*[1 << 30]float32)(input.Ptr())[: inputSize/4 : inputSize/4]
-	filterData := (*[1 << 30]float32)(filter.Ptr())[: filterSize/4 : filterSize/4]
+	inputData, err := memory.View[float32](input, int(inputSize/4))
+	if err != nil {
+		log.Fatalf("Failed to create convolution input view: %v", err)
+	}
+	filterData, err := memory.View[float32](filter, int(filterSize/4))
+	if err != nil {
+		log.Fatalf("Failed to create convolution filter view: %v", err)
+	}
 
 	for i := range inputData {
 		inputData[i] = float32(i%256) / 256.0 // Normalized image data
@@ -340,7 +361,10 @@ func demoActivation() {
 	defer output.Free()
 
 	// Initialize input with some values (including negative ones for ReLU test)
-	inputData := (*[1 << 30]float32)(input.Ptr())[: dataSize/4 : dataSize/4]
+	inputData, err := memory.View[float32](input, int(dataSize/4))
+	if err != nil {
+		log.Fatalf("Failed to create activation input view: %v", err)
+	}
 	for i := range inputData {
 		inputData[i] = float32(i%100-50) / 25.0 // Values from -2 to 2
 	}
@@ -399,7 +423,10 @@ func demoPooling() {
 	defer output.Free()
 
 	// Initialize input
-	inputData := (*[1 << 30]float32)(input.Ptr())[: inputSize/4 : inputSize/4]
+	inputData, err := memory.View[float32](input, int(inputSize/4))
+	if err != nil {
+		log.Fatalf("Failed to create pooling input view: %v", err)
+	}
 	for i := range inputData {
 		inputData[i] = float32(i%1000) / 1000.0
 	}
@@ -466,10 +493,22 @@ func demoBatchNorm() {
 	defer variance.Free()
 
 	// Initialize parameters
-	scaleData := (*[1 << 30]float32)(scale.Ptr())[:channels:channels]
-	biasData := (*[1 << 30]float32)(bias.Ptr())[:channels:channels]
-	meanData := (*[1 << 30]float32)(mean.Ptr())[:channels:channels]
-	varData := (*[1 << 30]float32)(variance.Ptr())[:channels:channels]
+	scaleData, err := memory.View[float32](scale, channels)
+	if err != nil {
+		log.Fatalf("Failed to create batch norm scale view: %v", err)
+	}
+	biasData, err := memory.View[float32](bias, channels)
+	if err != nil {
+		log.Fatalf("Failed to create batch norm bias view: %v", err)
+	}
+	meanData, err := memory.View[float32](mean, channels)
+	if err != nil {
+		log.Fatalf("Failed to create batch norm mean view: %v", err)
+	}
+	varData, err := memory.View[float32](variance, channels)
+	if err != nil {
+		log.Fatalf("Failed to create batch norm variance view: %v", err)
+	}
 
 	for i := 0; i < channels; i++ {
 		scaleData[i] = 1.0 // Scale = 1
@@ -531,7 +570,10 @@ func demoNeuralLayer() {
 	defer finalOutput.Free()
 
 	// Initialize input
-	inputData := (*[1 << 30]float32)(input.Ptr())[: inputSize/4 : inputSize/4]
+	inputData, err := memory.View[float32](input, int(inputSize/4))
+	if err != nil {
+		log.Fatalf("Failed to create neural layer input view: %v", err)
+	}
 	for i := range inputData {
 		inputData[i] = float32(i%256)/128.0 - 1.0 // Normalized to [-1, 1]
 	}

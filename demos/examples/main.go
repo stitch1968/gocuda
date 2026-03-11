@@ -180,7 +180,10 @@ func memoryExample() {
 }
 
 func streamExample() {
-	ctx := cuda.GetDefaultContext()
+	ctx, err := cuda.DefaultContext()
+	if err != nil {
+		log.Fatal(err)
+	}
 	stream1, err := ctx.NewStream()
 	if err != nil {
 		log.Fatal(err)

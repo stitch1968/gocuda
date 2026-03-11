@@ -4,13 +4,28 @@
 package cuda
 
 /*
-#cgo CFLAGS: -I/usr/local/cuda/include -I/opt/cuda/include -IC:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.0/include
-#cgo LDFLAGS: -L/usr/local/cuda/lib64 -L/opt/cuda/lib64 -LC:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.0/lib/x64 -lcudart -lcuda
-#cgo windows LDFLAGS: -lcudart -lcuda
+#cgo CFLAGS: -I/usr/local/cuda/include -I/opt/cuda/include
+#cgo windows CFLAGS: -I"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include" -I"D:/NVIDIA/include"
+#cgo LDFLAGS: -L/usr/local/cuda/lib64 -L/opt/cuda/lib64 -lcudart -lcuda
+#cgo windows LDFLAGS: -L${SRCDIR}/lib_mingw -lcudart -lcuda -Wl,--no-as-needed
+#cgo darwin LDFLAGS: -lcudart -lcuda
 
 #include <cuda_runtime.h>
 #include <cuda.h>
 #include <stdlib.h>
+
+// Ensure CUDA types are properly defined
+#ifndef __CUDA_RUNTIME_H__
+#error "CUDA runtime header not found - check CUDA installation"
+#endif
+
+// Forward declare CUDA types to avoid CGO resolution issues
+typedef struct cudaDeviceProp cudaDeviceProp;
+typedef enum cudaMemcpyKind cudaMemcpyKind;
+typedef struct CUstream_st* cudaStream_t;
+typedef struct CUevent_st* cudaEvent_t;
+
+// Wrapper functions to help with CGO type resolution
 
 // Helper function to get CUDA runtime version
 int getCudaRuntimeVersion() {
@@ -48,9 +63,27 @@ int getCudaDeviceProperties(int device, cudaDeviceProp* prop) {
     return (int)err;
 }
 
-// Helper function to allocate device memory
+int getCudaDeviceAttributeValue(int device, int attr) {
+	int value = 0;
+	cudaError_t err = cudaDeviceGetAttribute(&value, (enum cudaDeviceAttr)attr, device);
+	if (err != cudaSuccess) {
+		return -1;
+	}
+	return value;
+}
+
+int getCudaClockRate(int device) {
+	return getCudaDeviceAttributeValue(device, cudaDevAttrClockRate);
+}
+
+int getCudaMemoryClockRate(int device) {
+	return getCudaDeviceAttributeValue(device, cudaDevAttrMemoryClockRate);
+}
+
+// Helper function to allocate managed memory so host-side simulation code can
+// safely inspect and modify buffers in CUDA builds.
 cudaError_t cudaMallocWrapper(void** ptr, size_t size) {
-    return cudaMalloc(ptr, size);
+	return cudaMallocManaged(ptr, size, cudaMemAttachGlobal);
 }
 
 // Helper function to free device memory
@@ -92,6 +125,7 @@ const char* cudaGetErrorStringWrapper(cudaError_t error) {
 import "C"
 import (
 	"fmt"
+	"runtime"
 	"sync"
 	"unsafe"
 )
@@ -184,8 +218,8 @@ func InitializeCudaRuntime() *CudaRuntime {
 							MaxThreadsPerBlock:          int(prop.maxThreadsPerBlock),
 							WarpSize:                    int(prop.warpSize),
 							MultiProcessorCount:         int(prop.multiProcessorCount),
-							ClockRate:                   int(prop.clockRate),
-							MemoryClockRate:             int(prop.memoryClockRate),
+							ClockRate:                   int(C.getCudaClockRate(C.int(i))),
+							MemoryClockRate:             int(C.getCudaMemoryClockRate(C.int(i))),
 							MemoryBusWidth:              int(prop.memoryBusWidth),
 							L2CacheSize:                 int(prop.l2CacheSize),
 							MaxThreadsPerMultiProcessor: int(prop.maxThreadsPerMultiProcessor),
@@ -381,17 +415,17 @@ func CudaMemcpy(dst, src unsafe.Pointer, size int64, kind MemcpyKind) error {
 
 // PrintCudaInfo prints information about the CUDA runtime and devices
 func PrintCudaInfo() {
-	runtime := GetCudaRuntime()
+	cudaRuntime := GetCudaRuntime()
 
 	fmt.Println("=== CUDA Information ===")
-	if runtime.Available {
+	if cudaRuntime.Available {
 		fmt.Printf("CUDA Available: Yes\n")
-		fmt.Printf("Runtime Version: %d\n", runtime.RuntimeVersion)
-		fmt.Printf("Driver Version: %d\n", runtime.DriverVersion)
-		fmt.Printf("Device Count: %d\n", runtime.DeviceCount)
+		fmt.Printf("Runtime Version: %d\n", cudaRuntime.RuntimeVersion)
+		fmt.Printf("Driver Version: %d\n", cudaRuntime.DriverVersion)
+		fmt.Printf("Device Count: %d\n", cudaRuntime.DeviceCount)
 		fmt.Println()
 
-		for i, device := range runtime.Devices {
+		for i, device := range cudaRuntime.Devices {
 			props := device.Properties
 			fmt.Printf("Device %d: %s\n", i, device.Name)
 			fmt.Printf("  Compute Capability: %d.%d\n", props.Major, props.Minor)

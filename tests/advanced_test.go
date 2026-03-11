@@ -27,7 +27,10 @@ func TestFFT(t *testing.T) {
 	defer output.Free()
 
 	// Initialize input with test data
-	inputData := (*[1 << 30]advanced.Complex64)(input.Ptr())[:size:size]
+	inputData, err := memory.View[advanced.Complex64](input, size)
+	if err != nil {
+		t.Fatalf("Failed to create FFT input view: %v", err)
+	}
 	for i := 0; i < size; i++ {
 		inputData[i] = advanced.Complex64{Real: 1.0, Imag: 0.0}
 	}
@@ -66,7 +69,10 @@ func TestSortingAlgorithms(t *testing.T) {
 	defer data.Free()
 
 	// Initialize with random-ish data
-	uintData := (*[1 << 30]uint32)(data.Ptr())[:size:size]
+	uintData, err := memory.View[uint32](data, size)
+	if err != nil {
+		t.Fatalf("Failed to create radix sort input view: %v", err)
+	}
 	for i := 0; i < size; i++ {
 		uintData[i] = uint32((size-i)*123) % 1000
 	}
@@ -96,7 +102,10 @@ func TestSortingAlgorithms(t *testing.T) {
 	defer floatData.Free()
 
 	// Initialize with reverse-sorted data
-	fData := (*[1 << 30]float32)(floatData.Ptr())[:floatSize:floatSize]
+	fData, err := memory.View[float32](floatData, floatSize)
+	if err != nil {
+		t.Fatalf("Failed to create bitonic sort input view: %v", err)
+	}
 	for i := 0; i < floatSize; i++ {
 		fData[i] = float32(floatSize - i)
 	}
@@ -144,9 +153,18 @@ func TestMatrixOperations(t *testing.T) {
 	defer matC.Free()
 
 	// Initialize matrices
-	dataA := (*[1 << 30]float32)(matA.Ptr())[: m*k : m*k]
-	dataB := (*[1 << 30]float32)(matB.Ptr())[: k*n : k*n]
-	dataC := (*[1 << 30]float32)(matC.Ptr())[: m*n : m*n]
+	dataA, err := memory.View[float32](matA, m*k)
+	if err != nil {
+		t.Fatalf("Failed to create matrix A view: %v", err)
+	}
+	dataB, err := memory.View[float32](matB, k*n)
+	if err != nil {
+		t.Fatalf("Failed to create matrix B view: %v", err)
+	}
+	dataC, err := memory.View[float32](matC, m*n)
+	if err != nil {
+		t.Fatalf("Failed to create matrix C view: %v", err)
+	}
 
 	for i := 0; i < m*k; i++ {
 		dataA[i] = 2.0
@@ -211,7 +229,10 @@ func TestGraphAlgorithms(t *testing.T) {
 	defer distances.Free()
 
 	// Initialize simple graph
-	graphData := (*[1 << 30]int32)(graph.Ptr())[: vertices*vertices : vertices*vertices]
+	graphData, err := memory.View[int32](graph, vertices*vertices)
+	if err != nil {
+		t.Fatalf("Failed to create graph view: %v", err)
+	}
 	for i := 0; i < vertices*vertices; i++ {
 		graphData[i] = 0
 	}
@@ -321,7 +342,10 @@ func BenchmarkFFT(b *testing.B) {
 	defer output.Free()
 
 	// Initialize input
-	inputData := (*[1 << 30]advanced.Complex64)(input.Ptr())[:size:size]
+	inputData, err := memory.View[advanced.Complex64](input, size)
+	if err != nil {
+		b.Fatalf("Failed to create FFT benchmark view: %v", err)
+	}
 	for i := 0; i < size; i++ {
 		inputData[i] = advanced.Complex64{Real: float32(i), Imag: 0.0}
 	}

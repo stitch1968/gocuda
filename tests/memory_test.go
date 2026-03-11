@@ -208,6 +208,41 @@ func TestMemoryErrorHandling(t *testing.T) {
 	t.Log("✅ Memory error handling test passed")
 }
 
+// TestMemoryViewBounds tests bounds-checked typed memory views.
+func TestMemoryViewBounds(t *testing.T) {
+	t.Log("Testing typed memory view bounds...")
+
+	mem, err := memory.Alloc(16)
+	if err != nil {
+		t.Fatalf("Failed to allocate memory: %v", err)
+	}
+	defer mem.Free()
+
+	values, err := memory.View[uint32](mem, 4)
+	if err != nil {
+		t.Fatalf("Expected valid memory view: %v", err)
+	}
+	if len(values) != 4 {
+		t.Fatalf("Expected view length 4, got %d", len(values))
+	}
+
+	_, err = memory.View[uint32](mem, 5)
+	if err == nil {
+		t.Fatal("Expected out-of-bounds error for oversized memory view")
+	}
+
+	if err := mem.Free(); err != nil {
+		t.Fatalf("Failed to free memory: %v", err)
+	}
+
+	_, err = memory.View[uint32](mem, 1)
+	if err == nil {
+		t.Fatal("Expected error when viewing freed memory")
+	}
+
+	t.Log("✅ Typed memory view bounds test passed")
+}
+
 // BenchmarkMemoryAllocation benchmarks memory allocation performance
 func BenchmarkMemoryAllocation(b *testing.B) {
 	for i := 0; i < b.N; i++ {

@@ -219,7 +219,10 @@ func TestCudaChannel(t *testing.T) {
 func TestMultipleStreams(t *testing.T) {
 	cuda.Initialize()
 
-	ctx := cuda.GetDefaultContext()
+	ctx, err := cuda.DefaultContext()
+	if err != nil {
+		t.Fatalf("Failed to get default context: %v", err)
+	}
 
 	stream1, err := ctx.NewStream()
 	if err != nil {

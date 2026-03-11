@@ -482,7 +482,11 @@ func demoCuFFT() {
 	defer output.Free()
 
 	// Initialize input data
-	inputData := (*[1 << 30]libraries.Complex64)(input.Ptr())[:size:size]
+	inputData, err := memory.View[libraries.Complex64](input, size)
+	if err != nil {
+		log.Printf("Failed to create FFT input view: %v", err)
+		return
+	}
 	for i := 0; i < size; i++ {
 		inputData[i].Real = float32(i%100) / 100.0
 		inputData[i].Imag = 0.0
@@ -519,7 +523,11 @@ func demoCuFFT() {
 	realInput, _ := memory.Alloc(int64(size * 4)) // float32
 	defer realInput.Free()
 
-	realData := (*[1 << 30]float32)(realInput.Ptr())[:size:size]
+	realData, err := memory.View[float32](realInput, size)
+	if err != nil {
+		log.Printf("Failed to create R2C input view: %v", err)
+		return
+	}
 	for i := 0; i < size; i++ {
 		realData[i] = float32(i%50) / 25.0
 	}

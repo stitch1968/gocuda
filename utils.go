@@ -216,7 +216,10 @@ func WithContext(deviceID int, fn func(*Context) error) error {
 
 // WithStream executes a function with a CUDA stream
 func WithStream(fn func(*Stream) error) error {
-	ctx := GetDefaultContext()
+	ctx, err := DefaultContext()
+	if err != nil {
+		return err
+	}
 	stream, err := ctx.NewStream()
 	if err != nil {
 		return err
@@ -235,7 +238,12 @@ func Launch(name string, gridDim, blockDim Dim3, kernel Kernel, args ...interfac
 	fmt.Printf("Launching kernel '%s' with grid %+v, block %+v\n", name, gridDim, blockDim)
 
 	// Use default stream for execution
-	err := kernel.Execute(gridDim, blockDim, 0, GetDefaultStream(), args...)
+	stream, err := DefaultStream()
+	if err != nil {
+		return err
+	}
+
+	err = kernel.Execute(gridDim, blockDim, 0, stream, args...)
 	if err != nil {
 		return fmt.Errorf("kernel execution failed: %v", err)
 	}
@@ -286,7 +294,10 @@ func BatchExecute(operations []func() error, batchSize int) error {
 
 // Pipeline executes a series of operations in a pipeline
 func Pipeline(stages []func(*Stream) error) error {
-	ctx := GetDefaultContext()
+	ctx, err := DefaultContext()
+	if err != nil {
+		return err
+	}
 	streams := make([]*Stream, len(stages))
 
 	// Create streams for each stage

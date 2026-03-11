@@ -10,7 +10,7 @@ import (
 
 // cuTENSOR - High-Performance Tensor Operations Library
 
-// Tensor data types
+// TensorDataType data types
 type TensorDataType int
 
 const (
@@ -30,7 +30,7 @@ const (
 	TensorBFloat16
 )
 
-// Tensor memory layout
+// TensorLayout memory layout
 type TensorLayout int
 
 const (
@@ -39,7 +39,7 @@ const (
 	TensorLayoutCustom                       // Custom stride pattern
 )
 
-// Tensor operation types
+// TensorOperation operation types
 type TensorOperation int
 
 const (
@@ -66,7 +66,7 @@ const (
 	TensorOpTensorCore
 )
 
-// Tensor reduction operations
+// TensorReduction reduction operations
 type TensorReduction int
 
 const (
@@ -81,7 +81,7 @@ const (
 	TensorReduceAll
 )
 
-// Tensor descriptor
+// CuTensorDescriptor descriptor
 type CuTensorDescriptor struct {
 	dataType   TensorDataType
 	layout     TensorLayout
@@ -91,7 +91,7 @@ type CuTensorDescriptor struct {
 	alignReq   int
 }
 
-// Tensor contraction descriptor
+// ContractionDescriptor contraction descriptor
 type ContractionDescriptor struct {
 	TensorA   *CuTensorDescriptor
 	TensorB   *CuTensorDescriptor
@@ -105,7 +105,7 @@ type ContractionDescriptor struct {
 	Workspace *memory.Memory
 }
 
-// Contraction algorithms
+// ContractionAlgorithm algorithms
 type ContractionAlgorithm int
 
 const (
@@ -117,7 +117,7 @@ const (
 	ContractionAlgoLowestMemory
 )
 
-// cuTENSOR handle
+// CuTensorHandle handle
 type CuTensorHandle struct {
 	handle       *memory.Memory
 	workspace    *memory.Memory
@@ -128,7 +128,7 @@ type CuTensorHandle struct {
 	streamHandle *memory.Memory
 }
 
-// Tensor math modes
+// TensorMathMode math modes
 type TensorMathMode int
 
 const (
@@ -138,7 +138,7 @@ const (
 	TensorMathAccurate
 )
 
-// Tensor plan for optimized execution
+// TensorPlan for optimized execution
 type TensorPlan struct {
 	handle        *memory.Memory
 	operation     TensorOperation
@@ -737,7 +737,7 @@ func (handle *CuTensorHandle) Destroy() error {
 	return nil
 }
 
-// DestroyTensorPlan destroys a tensor plan and frees its resources
+// Destroy destroys a tensor plan and frees its resources
 func (plan *TensorPlan) Destroy() error {
 	if plan.handle != nil {
 		plan.handle.Free()

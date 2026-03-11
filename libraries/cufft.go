@@ -276,9 +276,14 @@ func (ctx *FFTContext) performComplexFFT(input, output *memory.Memory, size int,
 		return fmt.Errorf("input and output memory cannot be nil")
 	}
 
-	// Get input and output data
-	inputData := (*[1 << 30]Complex64)(input.Ptr())[:size:size]
-	outputData := (*[1 << 30]Complex64)(output.Ptr())[:size:size]
+	inputData, err := memory.View[Complex64](input, size)
+	if err != nil {
+		return err
+	}
+	outputData, err := memory.View[Complex64](output, size)
+	if err != nil {
+		return err
+	}
 
 	// Perform FFT using Go's complex number support
 	complexInput := make([]complex64, size)
@@ -312,9 +317,14 @@ func (ctx *FFTContext) performRealToComplexFFT(input, output *memory.Memory, siz
 		return fmt.Errorf("input and output memory cannot be nil")
 	}
 
-	// Get input data as real numbers
-	inputData := (*[1 << 30]float32)(input.Ptr())[:size:size]
-	outputData := (*[1 << 30]Complex64)(output.Ptr())[:size:size]
+	inputData, err := memory.View[float32](input, size)
+	if err != nil {
+		return err
+	}
+	outputData, err := memory.View[Complex64](output, size)
+	if err != nil {
+		return err
+	}
 
 	// Convert to complex for DFT
 	complexInput := make([]complex64, size)
@@ -339,9 +349,14 @@ func (ctx *FFTContext) performComplexToRealFFT(input, output *memory.Memory, siz
 		return fmt.Errorf("input and output memory cannot be nil")
 	}
 
-	// Get input data as complex numbers
-	inputData := (*[1 << 30]Complex64)(input.Ptr())[:size:size]
-	outputData := (*[1 << 30]float32)(output.Ptr())[:size:size]
+	inputData, err := memory.View[Complex64](input, size)
+	if err != nil {
+		return err
+	}
+	outputData, err := memory.View[float32](output, size)
+	if err != nil {
+		return err
+	}
 
 	// Convert to Go complex format
 	complexInput := make([]complex64, size)
@@ -466,7 +481,7 @@ func GetFFTSize(size int) int {
 	return n
 }
 
-// Estimate memory requirements for FFT operations
+// EstimateMemory estimates memory requirements for FFT operations
 func (ctx *FFTContext) EstimateMemory(plan *FFTPlan) (inputBytes, outputBytes int64) {
 	totalSize := int64(plan.nx)
 	if plan.ny > 0 {

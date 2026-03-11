@@ -13,7 +13,7 @@ import (
 
 // nvJPEG - High-Performance JPEG Encoder/Decoder Library
 
-// JPEG formats and configurations
+// JpegFormat formats and configurations
 type JpegFormat int
 
 const (
@@ -27,7 +27,7 @@ const (
 	JpegFormatYUV444
 )
 
-// JPEG decoder backend types
+// JpegBackend decoder backend types
 type JpegBackend int
 
 const (
@@ -37,14 +37,14 @@ const (
 	JpegBackendHardware
 )
 
-// JPEG decoder state
+// JpegDecoderState decoder state
 type JpegDecoderState struct {
 	handle  *memory.Memory
 	backend JpegBackend
 	stream  *memory.Memory
 }
 
-// JPEG encoder state
+// JpegEncoderState encoder state
 type JpegEncoderState struct {
 	handle  *memory.Memory
 	backend JpegBackend
@@ -52,7 +52,7 @@ type JpegEncoderState struct {
 	quality int
 }
 
-// JPEG decode parameters
+// JpegDecodeParams decode parameters
 type JpegDecodeParams struct {
 	OutputFormat JpegFormat
 	Backend      JpegBackend
@@ -64,7 +64,7 @@ type JpegDecodeParams struct {
 	ScaleHeight  int
 }
 
-// JPEG encode parameters
+// JpegEncodeParams encode parameters
 type JpegEncodeParams struct {
 	InputFormat      JpegFormat
 	Quality          int
@@ -273,7 +273,7 @@ func (encoder *JpegEncoderState) SetQuality(quality int) error {
 	return nil
 }
 
-// GetImageInfo extracts basic information from JPEG data without full decoding
+// GetJpegImageInfo extracts basic information from JPEG data without full decoding
 func GetJpegImageInfo(jpegData []byte) (width, height, channels int, err error) {
 	if len(jpegData) == 0 {
 		return 0, 0, 0, fmt.Errorf("empty JPEG data")

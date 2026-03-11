@@ -40,6 +40,7 @@ type Memory struct {
 	size       int64
 	stream     *internal.Stream
 	data       []byte // Actual data storage for simulation
+	cudaBacked bool
 	memType    Type
 	attributes Attribute
 	pitch      int64 // For 2D/3D memory allocations
@@ -85,8 +86,9 @@ func AllocWithTypeAndStream(stream *internal.Stream, size int64, memType Type) (
 		if err != nil {
 			return nil, fmt.Errorf("CUDA malloc failed: %v", err)
 		}
-		// For real CUDA memory, we don't have direct access to the data
-		data = nil
+		// Managed allocations remain host-accessible, which lets the CPU-backed
+		// simulation paths and tests inspect buffers safely in CUDA builds.
+		data = unsafe.Slice((*byte)(ptr), int(size))
 	} else {
 		// Use simulation with regular memory
 		// CUDA requires 256-byte alignment for optimal performance
@@ -99,13 +101,14 @@ func AllocWithTypeAndStream(stream *internal.Stream, size int64, memType Type) (
 	}
 
 	mem := &Memory{
-		ptr:       ptr,
-		size:      size,
-		stream:    stream,
-		data:      data,
-		memType:   memType,
-		alignment: 256,
-		deviceID:  0, // Default device
+		ptr:        ptr,
+		size:       size,
+		stream:     stream,
+		data:       data,
+		cudaBacked: internal.ShouldUseCuda() && memType == TypeDevice,
+		memType:    memType,
+		alignment:  256,
+		deviceID:   0, // Default device
 		attributes: Attribute{
 			IsAligned: true,
 		},
@@ -136,7 +139,7 @@ func (m *Memory) Free() error {
 	globalManager.mu.Unlock()
 
 	var err error
-	if internal.ShouldUseCuda() && m.memType == TypeDevice && m.data == nil {
+	if m.cudaBacked {
 		// Use real CUDA memory deallocation
 		err = internal.CudaFree(m.ptr)
 	}
@@ -155,7 +158,7 @@ func (m *Memory) Free() error {
 // finalize is called by the garbage collector
 func (m *Memory) finalize() {
 	if m.ptr != nil {
-		m.Free()
+		_ = m.Free()
 	}
 }
 
@@ -172,6 +175,35 @@ func (m *Memory) Ptr() unsafe.Pointer {
 // Data returns the simulation data slice
 func (m *Memory) Data() []byte {
 	return m.data
+}
+
+// View returns a typed slice over the allocation after validating size bounds.
+func View[T any](m *Memory, length int) ([]T, error) {
+	if m == nil {
+		return nil, fmt.Errorf("nil memory allocation")
+	}
+	if length < 0 {
+		return nil, fmt.Errorf("negative view length: %d", length)
+	}
+	if length == 0 {
+		return []T{}, nil
+	}
+	if m.ptr == nil {
+		return nil, fmt.Errorf("memory has been freed")
+	}
+
+	var zero T
+	elementSize := unsafe.Sizeof(zero)
+	if elementSize == 0 {
+		return nil, fmt.Errorf("zero-sized element types are not supported")
+	}
+
+	requiredBytes := int64(length) * int64(elementSize)
+	if requiredBytes > m.size {
+		return nil, fmt.Errorf("requested view exceeds allocation: need %d bytes, have %d", requiredBytes, m.size)
+	}
+
+	return unsafe.Slice((*T)(m.ptr), length), nil
 }
 
 // GetType returns the memory type

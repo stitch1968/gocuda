@@ -1,3 +1,20 @@
 {
-    "makefile.configureOnOpen": false
+    "makefile.configureOnOpen": false,
+    "go.buildTags": "cuda",
+    "go.toolsEnvVars": {
+        "CGO_ENABLED": "1",
+        "GOOS": "windows",
+        "GOARCH": "amd64"
+    },
+    "go.lintTool": "golangci-lint",
+    "go.lintOnSave": "package",
+    "go.buildOnSave": "off",
+    "gopls": {
+        "build.buildFlags": ["-tags=cuda"],
+        "build.env": {
+            "CGO_ENABLED": "1"
+        },
+        "ui.diagnostic.staticcheck": true,
+        "ui.completion.usePlaceholders": true
+    }
 }

@@ -1,6 +1,6 @@
-# GoCUDA - Comprehensive Go CUDA Interface
+# GoCUDA - Go CUDA Interface With Dual-Mode Runtime
 
-GoCUDA provides the most complete Go interface to the CUDA ecosystem, offering **complete CUDA API coverage** including all major runtime libraries. It **automatically detects CUDA availability** and provides high-quality CPU simulation when CUDA is not available.
+GoCUDA provides a broad Go interface to CUDA concepts and selected CUDA ecosystem libraries. It automatically detects CUDA availability, runs in CPU simulation mode when CUDA is unavailable, and can execute against real NVIDIA hardware when built with the `cuda` tag and a working Windows or Unix CUDA toolchain.
 
 ## 🎯 Complete CUDA Ecosystem Coverage
 
@@ -11,7 +11,7 @@ GoCUDA provides the most complete Go interface to the CUDA ecosystem, offering *
 - **Kernel Execution** - Complete launch parameter control
 - **Event & Synchronization** - Comprehensive timing and sync primitives
 
-### ✅ CUDA Runtime Libraries (Complete Implementation - 13 Libraries)
+### ✅ CUDA Runtime Libraries
 - **🎲 cuRAND** - Complete random number generation (XORWOW, MRG32K3A, MTGP32, PHILOX)
 - **🕸️ cuSPARSE** - Full sparse matrix operations (SpMV, SpMM, SpGEMM, factorizations)
 - **🔧 cuSOLVER** - Complete linear algebra solvers (QR, SVD, LU, eigenvalues, Cholesky)
@@ -42,18 +42,26 @@ GoCUDA provides the most complete Go interface to the CUDA ecosystem, offering *
 
 ### 1. **GPU Mode** (Real CUDA Hardware)
 - Requires NVIDIA GPU with CUDA drivers installed
-- Direct GPU memory allocation and kernel execution
-- Full hardware acceleration with maximum performance
-- Complete CUDA runtime library support
+- Uses CUDA-tagged builds and real CUDA runtime calls
+- High-level Go algorithms may still execute on CPU-managed buffers when a feature is implemented as a simulation/helper path
+- Best suited for validating integration with CUDA-capable systems
 
 ### 2. **CPU Simulation Mode** (No GPU Required)
 - **Automatic fallback** when CUDA hardware unavailable
 - **Realistic behavioral simulation** of all CUDA operations
-- **Mathematical accuracy** - algorithms produce expected results
+- **Functional algorithm coverage** for the tested operations in this repository
 - **Perfect for development** - test CUDA code on any machine
 - **Production quality** - comprehensive error handling and resource management
 
-The **same Go code works in both modes** - no changes needed!
+The same high-level Go code is intended to work in both modes, but the CUDA build currently uses managed memory for high-level allocations so host-side helper algorithms and tests can inspect buffers safely.
+
+## Library Runtime Boundaries
+
+- Core runtime, memory, streams, and the tested kernel helpers run against either simulation mode or CUDA-tagged builds.
+- Several packages under `libraries/` still provide CPU-side helper implementations that operate on managed or host-visible buffers even in CUDA mode.
+- Today this includes the current `cuFFT` and `cuDNN` wrappers used by the demos and tests in this repository.
+- Treat those packages as functional compatibility layers rather than direct bindings for production GPU throughput.
+- See `docs/LIBRARY_RUNTIME_BOUNDARIES.md` for the current boundary notes.
 
 ## Installation
 
@@ -71,9 +79,17 @@ go build ./...
 go mod init your-project
 go get github.com/stitch1968/gocuda
 
-# Build with CUDA support
+# Build with CUDA support (requires CGO and a working C/C++ toolchain)
 go build -tags cuda ./...
+
+# Simulation mode (recommended for development and testing)
+go build ./...
 ```
+
+**Windows hardware mode requirements**
+- NVIDIA CUDA Toolkit installed
+- Visual Studio Build Tools or Visual Studio with the C++ workload installed
+- The repository's `lib_mingw` import libraries available for cgo linking on Windows
 
 ### Quick Verification
 Test that everything works correctly:
@@ -82,6 +98,9 @@ Test that everything works correctly:
 ```cmd
 # Verify all build scripts work
 .\verify_build.bat
+
+# Run CUDA-tagged tests after opening an MSVC developer shell or calling vcvars64.bat
+go test -tags cuda ./...
 
 # Run comprehensive demo
 .\build.bat nocuda demo

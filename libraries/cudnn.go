@@ -580,8 +580,14 @@ func (h *DNNHandle) performConvolution(input, filter, output *memory.Memory, inp
 		outputSize *= dim
 	}
 
-	outputData := (*[1 << 30]float32)(output.Ptr())[:outputSize:outputSize]
-	inputData := (*[1 << 30]float32)(input.Ptr())[:outputSize:outputSize]
+	outputData, err := memory.View[float32](output, outputSize)
+	if err != nil {
+		return err
+	}
+	inputData, err := memory.View[float32](input, outputSize)
+	if err != nil {
+		return err
+	}
 
 	// Simulate convolution by applying a simple transformation
 	for i := 0; i < len(outputData) && i < len(inputData); i++ {
@@ -601,8 +607,14 @@ func (h *DNNHandle) performPooling(input, output *memory.Memory, inputDesc, outp
 		outputSize *= dim
 	}
 
-	outputData := (*[1 << 30]float32)(output.Ptr())[:outputSize:outputSize]
-	inputData := (*[1 << 30]float32)(input.Ptr())[:outputSize:outputSize]
+	outputData, err := memory.View[float32](output, outputSize)
+	if err != nil {
+		return err
+	}
+	inputData, err := memory.View[float32](input, outputSize)
+	if err != nil {
+		return err
+	}
 
 	// Simulate pooling operation
 	poolingFactor := 0.8 // Simulate max pooling reducing values slightly
@@ -627,8 +639,14 @@ func (h *DNNHandle) performActivation(input, output *memory.Memory, inputDesc, o
 		outputSize *= dim
 	}
 
-	outputData := (*[1 << 30]float32)(output.Ptr())[:outputSize:outputSize]
-	inputData := (*[1 << 30]float32)(input.Ptr())[:outputSize:outputSize]
+	outputData, err := memory.View[float32](output, outputSize)
+	if err != nil {
+		return err
+	}
+	inputData, err := memory.View[float32](input, outputSize)
+	if err != nil {
+		return err
+	}
 
 	// Apply activation function
 	for i := 0; i < len(outputData) && i < len(inputData); i++ {
@@ -670,8 +688,14 @@ func (h *DNNHandle) performBatchNorm(input, output, scale, bias, mean, variance 
 		outputSize *= dim
 	}
 
-	outputData := (*[1 << 30]float32)(output.Ptr())[:outputSize:outputSize]
-	inputData := (*[1 << 30]float32)(input.Ptr())[:outputSize:outputSize]
+	outputData, err := memory.View[float32](output, outputSize)
+	if err != nil {
+		return err
+	}
+	inputData, err := memory.View[float32](input, outputSize)
+	if err != nil {
+		return err
+	}
 
 	// Simulate batch normalization: (x - mean) / sqrt(variance + epsilon) * scale + bias
 	for i := 0; i < len(outputData) && i < len(inputData); i++ {

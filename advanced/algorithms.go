@@ -22,9 +22,14 @@ func FFT(input *memory.Memory, output *memory.Memory, n int, inverse bool) error
 		return fmt.Errorf("FFT size must be a power of 2, got %d", n)
 	}
 
-	// Get data pointers
-	inputData := (*[1 << 30]Complex64)(input.Ptr())[:n:n]
-	outputData := (*[1 << 30]Complex64)(output.Ptr())[:n:n]
+	inputData, err := memory.View[Complex64](input, n)
+	if err != nil {
+		return err
+	}
+	outputData, err := memory.View[Complex64](output, n)
+	if err != nil {
+		return err
+	}
 
 	// Copy input to output for in-place computation
 	copy(outputData, inputData)
@@ -108,8 +113,10 @@ func complexMul(a, b Complex64) Complex64 {
 
 // RadixSort performs parallel radix sort on GPU
 func RadixSort(data *memory.Memory, n int) error {
-	// Simple simulation of radix sort
-	values := (*[1 << 30]uint32)(data.Ptr())[:n:n]
+	values, err := memory.View[uint32](data, n)
+	if err != nil {
+		return err
+	}
 
 	// Find maximum value to determine number of digits
 	maxVal := uint32(0)
@@ -159,7 +166,10 @@ func BitonicSort(data *memory.Memory, n int) error {
 		return fmt.Errorf("bitonic sort requires power of 2 size, got %d", n)
 	}
 
-	values := (*[1 << 30]float32)(data.Ptr())[:n:n]
+	values, err := memory.View[float32](data, n)
+	if err != nil {
+		return err
+	}
 	bitonicSortRecursive(values, 0, n, true)
 	return nil
 }
@@ -200,8 +210,17 @@ func bitonicMerge(data []float32, low, cnt int, dir bool) {
 func BFS(graph *memory.Memory, vertices, edges int, start int, distances *memory.Memory) error {
 	// Graph is stored as adjacency list
 	// This is a simplified CPU simulation
-	adj := (*[1 << 30]int)(graph.Ptr())
-	dist := (*[1 << 30]int)(distances.Ptr())[:vertices:vertices]
+	if start < 0 || start >= vertices {
+		return fmt.Errorf("start vertex %d out of range", start)
+	}
+	adj, err := memory.View[int32](graph, vertices*vertices)
+	if err != nil {
+		return err
+	}
+	dist, err := memory.View[int32](distances, vertices)
+	if err != nil {
+		return err
+	}
 
 	// Initialize distances
 	for i := 0; i < vertices; i++ {
@@ -229,8 +248,14 @@ func BFS(graph *memory.Memory, vertices, edges int, start int, distances *memory
 
 // PageRank performs PageRank algorithm on GPU
 func PageRank(graph *memory.Memory, vertices int, iterations int, damping float32, ranks *memory.Memory) error {
-	graphData := (*[1 << 30]float32)(graph.Ptr())
-	rankData := (*[1 << 30]float32)(ranks.Ptr())[:vertices:vertices]
+	graphData, err := memory.View[float32](graph, vertices*vertices)
+	if err != nil {
+		return err
+	}
+	rankData, err := memory.View[float32](ranks, vertices)
+	if err != nil {
+		return err
+	}
 
 	// Initialize ranks
 	initialRank := float32(1.0) / float32(vertices)
@@ -270,9 +295,18 @@ func PageRank(graph *memory.Memory, vertices int, iterations int, damping float3
 
 // GEMM performs General Matrix Multiply (C = alpha*A*B + beta*C)
 func GEMM(alpha float32, A, B *memory.Memory, beta float32, C *memory.Memory, m, n, k int) error {
-	aData := (*[1 << 30]float32)(A.Ptr())
-	bData := (*[1 << 30]float32)(B.Ptr())
-	cData := (*[1 << 30]float32)(C.Ptr())
+	aData, err := memory.View[float32](A, m*k)
+	if err != nil {
+		return err
+	}
+	bData, err := memory.View[float32](B, k*n)
+	if err != nil {
+		return err
+	}
+	cData, err := memory.View[float32](C, m*n)
+	if err != nil {
+		return err
+	}
 
 	// GEMM computation
 	for i := 0; i < m; i++ {
@@ -290,8 +324,14 @@ func GEMM(alpha float32, A, B *memory.Memory, beta float32, C *memory.Memory, m,
 
 // Transpose performs matrix transpose
 func Transpose(input *memory.Memory, output *memory.Memory, rows, cols int) error {
-	inputData := (*[1 << 30]float32)(input.Ptr())
-	outputData := (*[1 << 30]float32)(output.Ptr())
+	inputData, err := memory.View[float32](input, rows*cols)
+	if err != nil {
+		return err
+	}
+	outputData, err := memory.View[float32](output, rows*cols)
+	if err != nil {
+		return err
+	}
 
 	for i := 0; i < rows; i++ {
 		for j := 0; j < cols; j++ {
@@ -304,9 +344,18 @@ func Transpose(input *memory.Memory, output *memory.Memory, rows, cols int) erro
 
 // LUDecomposition performs LU decomposition
 func LUDecomposition(matrix *memory.Memory, n int, L, U *memory.Memory) error {
-	matData := (*[1 << 30]float32)(matrix.Ptr())
-	lData := (*[1 << 30]float32)(L.Ptr())
-	uData := (*[1 << 30]float32)(U.Ptr())
+	matData, err := memory.View[float32](matrix, n*n)
+	if err != nil {
+		return err
+	}
+	lData, err := memory.View[float32](L, n*n)
+	if err != nil {
+		return err
+	}
+	uData, err := memory.View[float32](U, n*n)
+	if err != nil {
+		return err
+	}
 
 	// Initialize L and U
 	for i := 0; i < n*n; i++ {

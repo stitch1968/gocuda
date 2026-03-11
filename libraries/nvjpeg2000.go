@@ -11,7 +11,7 @@ import (
 
 // nvJPEG2000 - High-Performance JPEG2000 Encoder/Decoder Library
 
-// JPEG2000 formats and configurations
+// Jpeg2000Format formats and configurations
 type Jpeg2000Format int
 
 const (
@@ -25,7 +25,7 @@ const (
 	Jpeg2000FormatYUV444
 )
 
-// JPEG2000 codec types
+// Jpeg2000Codec codec types
 type Jpeg2000Codec int
 
 const (
@@ -35,7 +35,7 @@ const (
 	Jpeg2000CodecJPX                      // JPEG2000 with JPX container
 )
 
-// JPEG2000 progression orders
+// Jpeg2000ProgressionOrder progression orders
 type Jpeg2000ProgressionOrder int
 
 const (
@@ -46,14 +46,14 @@ const (
 	Jpeg2000ProgressionCPRL                                 // Component-Position-Resolution-Layer
 )
 
-// JPEG2000 decoder state
+// Jpeg2000DecoderState decoder state
 type Jpeg2000DecoderState struct {
 	handle *memory.Memory
 	stream *memory.Memory
 	codec  Jpeg2000Codec
 }
 
-// JPEG2000 encoder state
+// Jpeg2000EncoderState encoder state
 type Jpeg2000EncoderState struct {
 	handle           *memory.Memory
 	stream           *memory.Memory
@@ -63,7 +63,7 @@ type Jpeg2000EncoderState struct {
 	numLevels        int
 }
 
-// JPEG2000 decode parameters
+// Jpeg2000DecodeParams decode parameters
 type Jpeg2000DecodeParams struct {
 	OutputFormat Jpeg2000Format
 	Codec        Jpeg2000Codec
@@ -76,7 +76,7 @@ type Jpeg2000DecodeParams struct {
 	ReduceFactor int // Reduce image by 2^reduce_factor
 }
 
-// JPEG2000 encode parameters
+// Jpeg2000EnodeParams encode parameters
 type Jpeg2000EnodeParams struct {
 	InputFormat      Jpeg2000Format
 	Codec            Jpeg2000Codec
@@ -91,7 +91,7 @@ type Jpeg2000EnodeParams struct {
 	PrecinctHeight   []int
 }
 
-// JPEG2000 image information
+// Jpeg2000ImageInfo image information
 type Jpeg2000ImageInfo struct {
 	Width      int
 	Height     int

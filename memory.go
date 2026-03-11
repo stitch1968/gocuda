@@ -37,3 +37,8 @@ var (
 	GetInfo                      = memory.GetInfo
 	GetMemoryInfo                = memory.GetInfo // Alias for backward compatibility
 )
+
+// View returns a typed slice over an allocation after validating bounds.
+func View[T any](m *Memory, length int) ([]T, error) {
+	return memory.View[T](m, length)
+}

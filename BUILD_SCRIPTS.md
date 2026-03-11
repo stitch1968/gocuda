@@ -115,14 +115,17 @@ go run demos/missing_features/main.go
 ### CPU Simulation Mode (`nocuda`)
 - **No GPU required** - Works on any system
 - **High-quality simulation** - Realistic behavior and performance modeling
-- **Mathematical accuracy** - Results match expected CUDA behavior
+- **Functional behavior coverage** - Tested operations run without requiring a GPU
 - **Perfect for development** - Test CUDA code without GPU hardware
 - **Default mode** - Automatically selected when CUDA not available
 
 ### CUDA Hardware Mode (`cuda`)
 - **Requires NVIDIA GPU** with CUDA drivers installed
+- **Windows also requires** Visual Studio Build Tools or Visual Studio with the C++ workload
+- **Windows cgo linking uses** the repository's `lib_mingw` import libraries
 - **Real GPU acceleration** - Direct hardware execution
-- **Maximum performance** - Full GPU compute power utilized
+- **Managed memory is used for high-level allocations** so CPU-backed helper paths can safely inspect buffers in CUDA builds
+- **Some `libraries/` wrappers remain compatibility layers** backed by CPU-side helper logic on managed buffers rather than direct vendor library calls
 - **Production deployment** - Real-world performance characteristics
 
 ## Troubleshooting

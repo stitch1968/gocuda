@@ -37,10 +37,18 @@ func (k *VectorAdd) Execute(gridDim, blockDim Dim3, sharedMem int, stream *inter
 		return fmt.Errorf("invalid argument types for vector add")
 	}
 
-	// Simulate parallel vector addition
-	aData := (*[1 << 30]float32)(a.Ptr())[:n:n]
-	bData := (*[1 << 30]float32)(b.Ptr())[:n:n]
-	cData := (*[1 << 30]float32)(c.Ptr())[:n:n]
+	aData, err := memory.View[float32](a, n)
+	if err != nil {
+		return err
+	}
+	bData, err := memory.View[float32](b, n)
+	if err != nil {
+		return err
+	}
+	cData, err := memory.View[float32](c, n)
+	if err != nil {
+		return err
+	}
 
 	for i := 0; i < n; i++ {
 		cData[i] = aData[i] + bData[i]
@@ -68,10 +76,18 @@ func (mk *MatrixMultiply) Execute(gridDim, blockDim Dim3, sharedMem int, stream 
 		return fmt.Errorf("invalid argument types for matrix multiply")
 	}
 
-	// Simulate parallel matrix multiplication
-	aData := (*[1 << 30]float32)(a.Ptr())[: m*k : m*k]
-	bData := (*[1 << 30]float32)(b.Ptr())[: k*n : k*n]
-	cData := (*[1 << 30]float32)(c.Ptr())[: m*n : m*n]
+	aData, err := memory.View[float32](a, m*k)
+	if err != nil {
+		return err
+	}
+	bData, err := memory.View[float32](b, k*n)
+	if err != nil {
+		return err
+	}
+	cData, err := memory.View[float32](c, m*n)
+	if err != nil {
+		return err
+	}
 
 	for i := 0; i < m; i++ {
 		for j := 0; j < n; j++ {
@@ -108,9 +124,18 @@ func (conv *Convolution2D) Execute(gridDim, blockDim Dim3, sharedMem int, stream
 		return fmt.Errorf("invalid argument types for convolution2D")
 	}
 
-	inputData := (*[1 << 30]float32)(input.Ptr())
-	filterData := (*[1 << 30]float32)(filter.Ptr())
-	outputData := (*[1 << 30]float32)(output.Ptr())
+	inputData, err := memory.View[float32](input, inputWidth*inputHeight)
+	if err != nil {
+		return err
+	}
+	filterData, err := memory.View[float32](filter, filterWidth*filterHeight)
+	if err != nil {
+		return err
+	}
+	outputData, err := memory.View[float32](output, outputWidth*outputHeight)
+	if err != nil {
+		return err
+	}
 
 	// Perform 2D convolution
 	for y := 0; y < outputHeight; y++ {
@@ -149,8 +174,14 @@ func (saxpy *SAXPY) Execute(gridDim, blockDim Dim3, sharedMem int, stream *inter
 		return fmt.Errorf("invalid argument types for SAXPY")
 	}
 
-	xData := (*[1 << 30]float32)(x.Ptr())[:n:n]
-	yData := (*[1 << 30]float32)(y.Ptr())[:n:n]
+	xData, err := memory.View[float32](x, n)
+	if err != nil {
+		return err
+	}
+	yData, err := memory.View[float32](y, n)
+	if err != nil {
+		return err
+	}
 
 	for i := 0; i < n; i++ {
 		yData[i] = a*xData[i] + yData[i]
@@ -175,8 +206,14 @@ func (red *Reduction) Execute(gridDim, blockDim Dim3, sharedMem int, stream *int
 		return fmt.Errorf("invalid argument types for reduction")
 	}
 
-	inputData := (*[1 << 30]float32)(input.Ptr())[:n:n]
-	outputData := (*[1 << 30]float32)(output.Ptr())
+	inputData, err := memory.View[float32](input, n)
+	if err != nil {
+		return err
+	}
+	outputData, err := memory.View[float32](output, 1)
+	if err != nil {
+		return err
+	}
 
 	sum := float32(0)
 	for i := 0; i < n; i++ {
@@ -195,10 +232,8 @@ func ExecuteVectorAdd(a, b, c *memory.Memory, n int) error {
 	gridDim := Dim3{X: (n + 255) / 256, Y: 1, Z: 1}
 	blockDim := Dim3{X: 256, Y: 1, Z: 1}
 
-	internal.GetDefaultStream().Execute(func() {
-		kernel.Execute(gridDim, blockDim, 0, internal.GetDefaultStream(), a, b, c, n)
-	})
-	return nil
+	stream := internal.GetDefaultStream()
+	return kernel.Execute(gridDim, blockDim, 0, stream, a, b, c, n)
 }
 
 // ExecuteVectorAddAsync performs asynchronous vector addition
@@ -219,10 +254,8 @@ func ExecuteMatrixMultiply(a, b, c *memory.Memory, m, n, k int) error {
 	gridDim := Dim3{X: (n + 15) / 16, Y: (m + 15) / 16, Z: 1}
 	blockDim := Dim3{X: 16, Y: 16, Z: 1}
 
-	internal.GetDefaultStream().Execute(func() {
-		kernel.Execute(gridDim, blockDim, 0, internal.GetDefaultStream(), a, b, c, m, n, k)
-	})
-	return nil
+	stream := internal.GetDefaultStream()
+	return kernel.Execute(gridDim, blockDim, 0, stream, a, b, c, m, n, k)
 }
 
 // ExecuteMatrixMultiplyAsync performs asynchronous matrix multiplication
@@ -251,7 +284,11 @@ func CreateVector(size int, values []float32) (*memory.Memory, error) {
 		}
 
 		// Copy values to memory
-		memData := (*[1 << 30]float32)(mem.Ptr())[:size:size]
+		memData, viewErr := memory.View[float32](mem, size)
+		if viewErr != nil {
+			_ = mem.Free()
+			return nil, viewErr
+		}
 		copy(memData, values)
 	}
 
@@ -260,7 +297,10 @@ func CreateVector(size int, values []float32) (*memory.Memory, error) {
 
 // FillVector fills a vector with a constant value
 func FillVector(mem *memory.Memory, size int, value float32) error {
-	data := (*[1 << 30]float32)(mem.Ptr())[:size:size]
+	data, err := memory.View[float32](mem, size)
+	if err != nil {
+		return err
+	}
 	for i := 0; i < size; i++ {
 		data[i] = value
 	}
@@ -282,7 +322,11 @@ func CreateMatrix(rows, cols int, values []float32) (*memory.Memory, error) {
 		}
 
 		// Copy values to memory
-		memData := (*[1 << 30]float32)(mem.Ptr())[:size:size]
+		memData, viewErr := memory.View[float32](mem, size)
+		if viewErr != nil {
+			_ = mem.Free()
+			return nil, viewErr
+		}
 		copy(memData, values)
 	}
 
@@ -291,13 +335,19 @@ func CreateMatrix(rows, cols int, values []float32) (*memory.Memory, error) {
 
 // GetVectorValue gets a value from a vector at the specified index
 func GetVectorValue(mem *memory.Memory, index int) float32 {
-	data := (*[1 << 30]float32)(mem.Ptr())
+	data, err := memory.View[float32](mem, index+1)
+	if err != nil {
+		return 0
+	}
 	return data[index]
 }
 
 // SetVectorValue sets a value in a vector at the specified index
 func SetVectorValue(mem *memory.Memory, index int, value float32) {
-	data := (*[1 << 30]float32)(mem.Ptr())
+	data, err := memory.View[float32](mem, index+1)
+	if err != nil {
+		return
+	}
 	data[index] = value
 }
 
@@ -331,9 +381,18 @@ func ElementwiseAdd(a, b, c *memory.Memory, n int) error {
 // ElementwiseMultiply performs element-wise multiplication
 func ElementwiseMultiply(a, b, c *memory.Memory, n int) error {
 	kernel := NewCustomKernel("ElementwiseMultiply", func(gridDim, blockDim Dim3, sharedMem int, stream *internal.Stream, args ...interface{}) error {
-		aData := (*[1 << 30]float32)(a.Ptr())[:n:n]
-		bData := (*[1 << 30]float32)(b.Ptr())[:n:n]
-		cData := (*[1 << 30]float32)(c.Ptr())[:n:n]
+		aData, err := memory.View[float32](a, n)
+		if err != nil {
+			return err
+		}
+		bData, err := memory.View[float32](b, n)
+		if err != nil {
+			return err
+		}
+		cData, err := memory.View[float32](c, n)
+		if err != nil {
+			return err
+		}
 
 		for i := 0; i < n; i++ {
 			cData[i] = aData[i] * bData[i]
@@ -341,17 +400,21 @@ func ElementwiseMultiply(a, b, c *memory.Memory, n int) error {
 		return nil
 	})
 
-	internal.GetDefaultStream().Execute(func() {
-		kernel.Execute(Dim3{X: 1, Y: 1, Z: 1}, Dim3{X: 1, Y: 1, Z: 1}, 0, internal.GetDefaultStream())
-	})
-	return nil
+	stream := internal.GetDefaultStream()
+	return kernel.Execute(Dim3{X: 1, Y: 1, Z: 1}, Dim3{X: 1, Y: 1, Z: 1}, 0, stream)
 }
 
 // ScalarMultiply performs scalar multiplication: c = a * scalar
 func ScalarMultiply(a, c *memory.Memory, scalar float32, n int) error {
 	kernel := NewCustomKernel("ScalarMultiply", func(gridDim, blockDim Dim3, sharedMem int, stream *internal.Stream, args ...interface{}) error {
-		aData := (*[1 << 30]float32)(a.Ptr())[:n:n]
-		cData := (*[1 << 30]float32)(c.Ptr())[:n:n]
+		aData, err := memory.View[float32](a, n)
+		if err != nil {
+			return err
+		}
+		cData, err := memory.View[float32](c, n)
+		if err != nil {
+			return err
+		}
 
 		for i := 0; i < n; i++ {
 			cData[i] = aData[i] * scalar
@@ -359,8 +422,6 @@ func ScalarMultiply(a, c *memory.Memory, scalar float32, n int) error {
 		return nil
 	})
 
-	internal.GetDefaultStream().Execute(func() {
-		kernel.Execute(Dim3{X: 1, Y: 1, Z: 1}, Dim3{X: 1, Y: 1, Z: 1}, 0, internal.GetDefaultStream())
-	})
-	return nil
+	stream := internal.GetDefaultStream()
+	return kernel.Execute(Dim3{X: 1, Y: 1, Z: 1}, Dim3{X: 1, Y: 1, Z: 1}, 0, stream)
 }
