@@ -3,9 +3,11 @@
 package libraries
 
 import (
+	"errors"
 	"fmt"
 	"math"
 
+	cuda "github.com/stitch1968/gocuda"
 	"github.com/stitch1968/gocuda/memory"
 )
 
@@ -117,36 +119,46 @@ type AmgXConfig struct {
 
 // AmgX handle
 type AmgXHandle struct {
-	handle    *memory.Memory
-	config    AmgXConfig
-	workspace *memory.Memory
-	resources *memory.Memory
-	matrix    *AmgXMatrix
-	dense     []float64
-	n         int
-	nnz       int
-	setupDone bool
-	levels    int
+	handle          *memory.Memory
+	config          AmgXConfig
+	workspace       *memory.Memory
+	resources       *memory.Memory
+	matrix          *AmgXMatrix
+	dense           []float64
+	n               int
+	nnz             int
+	setupDone       bool
+	levels          int
+	nativeConfig    uintptr
+	nativeResources uintptr
+	nativeSolver    uintptr
+	native          bool
 }
 
 // AmgX matrix
 type AmgXMatrix struct {
-	handle *memory.Memory
-	rowPtr *memory.Memory
-	colInd *memory.Memory
-	values *memory.Memory
-	n      int
-	nnz    int
-	mode   AmgXMode
+	handle       *memory.Memory
+	rowPtr       *memory.Memory
+	colInd       *memory.Memory
+	values       *memory.Memory
+	n            int
+	nnz          int
+	mode         AmgXMode
+	nativeHandle uintptr
+	native       bool
 }
 
 // AmgX vector
 type AmgXVector struct {
-	handle *memory.Memory
-	data   *memory.Memory
-	size   int
-	mode   AmgXMode
+	handle       *memory.Memory
+	data         *memory.Memory
+	size         int
+	mode         AmgXMode
+	nativeHandle uintptr
+	native       bool
 }
+
+var errAMGXUnsupported = errors.New("amgx native path unsupported for requested parameters")
 
 // AmgX solve info
 type AmgXSolveInfo struct {
@@ -166,7 +178,13 @@ func CreateAmgXHandle(config AmgXConfig) (*AmgXHandle, error) {
 	if err := ensureCudaReady(); err != nil {
 		return nil, err
 	}
+	if cuda.ShouldUseCuda() && amgxNativeAvailable() {
+		return createNativeAmgXHandle(config)
+	}
+	return createDeterministicAmgXHandle(config)
+}
 
+func createDeterministicAmgXHandle(config AmgXConfig) (*AmgXHandle, error) {
 	handle := &AmgXHandle{
 		config:    config,
 		setupDone: false,
@@ -209,7 +227,13 @@ func CreateAmgXMatrix(n, nnz int, rowPtr, colInd, values *memory.Memory, mode Am
 	if n <= 0 || nnz <= 0 {
 		return nil, fmt.Errorf("invalid matrix dimensions: n=%d, nnz=%d", n, nnz)
 	}
+	if cuda.ShouldUseCuda() && amgxNativeAvailable() {
+		return createNativeAmgXMatrix(n, nnz, rowPtr, colInd, values, mode)
+	}
+	return createDeterministicAmgXMatrix(n, nnz, rowPtr, colInd, values, mode)
+}
 
+func createDeterministicAmgXMatrix(n, nnz int, rowPtr, colInd, values *memory.Memory, mode AmgXMode) (*AmgXMatrix, error) {
 	matrix := &AmgXMatrix{
 		rowPtr: rowPtr,
 		colInd: colInd,
@@ -238,7 +262,13 @@ func CreateAmgXVector(size int, data *memory.Memory, mode AmgXMode) (*AmgXVector
 	if size <= 0 {
 		return nil, fmt.Errorf("invalid vector size: %d", size)
 	}
+	if cuda.ShouldUseCuda() && amgxNativeAvailable() {
+		return createNativeAmgXVector(size, data, mode)
+	}
+	return createDeterministicAmgXVector(size, data, mode)
+}
 
+func createDeterministicAmgXVector(size int, data *memory.Memory, mode AmgXMode) (*AmgXVector, error) {
 	vector := &AmgXVector{
 		data: data,
 		size: size,
@@ -257,6 +287,23 @@ func CreateAmgXVector(size int, data *memory.Memory, mode AmgXMode) (*AmgXVector
 
 // Setup performs the AMG setup phase (coarsening, interpolation, etc.)
 func (handle *AmgXHandle) Setup(matrix *AmgXMatrix) error {
+	if handle != nil && handle.native && matrix != nil && matrix.native {
+		dense, err := amgxDenseFromMatrix(matrix, handle.config.Precision)
+		if err != nil {
+			return fmt.Errorf("AmgX setup failed: %v", err)
+		}
+		handle.matrix = matrix
+		handle.dense = dense
+		if err := setupNativeAmgX(handle, matrix); err == nil {
+			handle.n = matrix.n
+			handle.nnz = matrix.nnz
+			handle.levels = amgxEstimateLevels(handle.config.MaxLevels, matrix.n)
+			handle.setupDone = true
+			return nil
+		} else if !errors.Is(err, errAMGXUnsupported) {
+			return err
+		}
+	}
 	if matrix == nil {
 		return fmt.Errorf("matrix cannot be nil")
 	}
@@ -271,13 +318,7 @@ func (handle *AmgXHandle) Setup(matrix *AmgXMatrix) error {
 	handle.dense = dense
 
 	// Estimate number of levels based on problem size
-	handle.levels = int(math.Log2(float64(matrix.n)) / 2)
-	if handle.levels > handle.config.MaxLevels {
-		handle.levels = handle.config.MaxLevels
-	}
-	if handle.levels < 2 {
-		handle.levels = 2
-	}
+	handle.levels = amgxEstimateLevels(handle.config.MaxLevels, matrix.n)
 
 	handle.setupDone = true
 	return nil
@@ -285,6 +326,15 @@ func (handle *AmgXHandle) Setup(matrix *AmgXMatrix) error {
 
 // Solve solves the linear system using AMG
 func (handle *AmgXHandle) Solve(b, x *AmgXVector) (*AmgXSolveInfo, error) {
+	if handle != nil && handle.native && b != nil && x != nil && b.native && x.native {
+		info, err := solveNativeAmgX(handle, b, x)
+		if err == nil {
+			return info, nil
+		}
+		if !errors.Is(err, errAMGXUnsupported) {
+			return nil, err
+		}
+	}
 	if !handle.setupDone {
 		return nil, fmt.Errorf("AMG setup must be performed before solving")
 	}
@@ -382,6 +432,19 @@ func (handle *AmgXHandle) SolveMultiple(B, X []*AmgXVector) ([]*AmgXSolveInfo, e
 
 // UpdateMatrix updates the matrix values (keeping the same sparsity pattern)
 func (handle *AmgXHandle) UpdateMatrix(matrix *AmgXMatrix, keepStructure bool) error {
+	if handle != nil && handle.native && matrix != nil && matrix.native {
+		dense, err := amgxDenseFromMatrix(matrix, handle.config.Precision)
+		if err != nil {
+			return fmt.Errorf("AmgX matrix update failed: %v", err)
+		}
+		handle.matrix = matrix
+		handle.dense = dense
+		if err := updateNativeAmgXMatrix(handle, matrix, keepStructure); err == nil {
+			return nil
+		} else if !errors.Is(err, errAMGXUnsupported) {
+			return err
+		}
+	}
 	if matrix.n != handle.n || matrix.nnz != handle.nnz {
 		return fmt.Errorf("matrix structure must remain the same for updates")
 	}
@@ -475,6 +538,9 @@ func calculateAmgXWorkspaceSize(config AmgXConfig) int {
 
 // Destroy cleans up AmgX handle resources
 func (handle *AmgXHandle) Destroy() error {
+	if handle != nil && handle.native {
+		return destroyNativeAmgXHandle(handle)
+	}
 	if handle.handle != nil {
 		handle.handle.Free()
 		handle.handle = nil
@@ -566,6 +632,9 @@ func amgxWriteVector(vector *AmgXVector, precision AmgXPrecision, values []float
 
 // Destroy cleans up AmgX matrix resources
 func (matrix *AmgXMatrix) Destroy() error {
+	if matrix != nil && matrix.native {
+		return destroyNativeAmgXMatrix(matrix)
+	}
 	if matrix.handle != nil {
 		matrix.handle.Free()
 		matrix.handle = nil
@@ -575,11 +644,25 @@ func (matrix *AmgXMatrix) Destroy() error {
 
 // Destroy cleans up AmgX vector resources
 func (vector *AmgXVector) Destroy() error {
+	if vector != nil && vector.native {
+		return destroyNativeAmgXVector(vector)
+	}
 	if vector.handle != nil {
 		vector.handle.Free()
 		vector.handle = nil
 	}
 	return nil
+}
+
+func amgxEstimateLevels(maxLevels, n int) int {
+	levels := int(math.Log2(float64(n)) / 2)
+	if maxLevels > 0 && levels > maxLevels {
+		levels = maxLevels
+	}
+	if levels < 2 {
+		levels = 2
+	}
+	return levels
 }
 
 // Convenience functions
