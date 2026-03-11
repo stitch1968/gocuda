@@ -5,11 +5,13 @@ package libraries
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 
+	cuda "github.com/stitch1968/gocuda"
 	"github.com/stitch1968/gocuda/memory"
 )
 
@@ -52,9 +54,14 @@ const (
 
 // Jpeg2000DecoderState decoder state
 type Jpeg2000DecoderState struct {
-	handle *memory.Memory
-	stream *memory.Memory
-	codec  Jpeg2000Codec
+	handle       *memory.Memory
+	stream       *memory.Memory
+	codec        Jpeg2000Codec
+	nativeHandle uintptr
+	nativeState  uintptr
+	nativeStream uintptr
+	nativeParams uintptr
+	native       bool
 }
 
 // Jpeg2000EncoderState encoder state
@@ -65,7 +72,13 @@ type Jpeg2000EncoderState struct {
 	compressionRatio float32
 	numLayers        int
 	numLevels        int
+	nativeHandle     uintptr
+	nativeState      uintptr
+	nativeParams     uintptr
+	native           bool
 }
+
+var errNVJPEG2000Unsupported = errors.New("nvjpeg2000 native path unsupported for requested parameters")
 
 // Jpeg2000DecodeParams decode parameters
 type Jpeg2000DecodeParams struct {
@@ -111,6 +124,16 @@ func CreateJpeg2000Decoder(codec Jpeg2000Codec) (*Jpeg2000DecoderState, error) {
 	if err := ensureCudaReady(); err != nil {
 		return nil, err
 	}
+	if cuda.ShouldUseCuda() && nvjpeg2000NativeAvailable() {
+		decoder, err := createNativeJpeg2000Decoder(codec)
+		if err == nil {
+			return decoder, nil
+		}
+	}
+	return createDeterministicJpeg2000Decoder(codec)
+}
+
+func createDeterministicJpeg2000Decoder(codec Jpeg2000Codec) (*Jpeg2000DecoderState, error) {
 	if err := requireJpeg2000Tooling(); err != nil {
 		return nil, err
 	}
@@ -141,6 +164,16 @@ func CreateJpeg2000Encoder(codec Jpeg2000Codec) (*Jpeg2000EncoderState, error) {
 	if err := ensureCudaReady(); err != nil {
 		return nil, err
 	}
+	if cuda.ShouldUseCuda() && nvjpeg2000NativeAvailable() {
+		encoder, err := createNativeJpeg2000Encoder(codec)
+		if err == nil {
+			return encoder, nil
+		}
+	}
+	return createDeterministicJpeg2000Encoder(codec)
+}
+
+func createDeterministicJpeg2000Encoder(codec Jpeg2000Codec) (*Jpeg2000EncoderState, error) {
 	if err := requireJpeg2000Tooling(); err != nil {
 		return nil, err
 	}
@@ -171,6 +204,19 @@ func CreateJpeg2000Encoder(codec Jpeg2000Codec) (*Jpeg2000EncoderState, error) {
 
 // DecodeJpeg2000 decodes a JPEG2000 image from byte data
 func (decoder *Jpeg2000DecoderState) DecodeJpeg2000(j2kData []byte, params Jpeg2000DecodeParams) (*memory.Memory, int, int, error) {
+	if decoder != nil && decoder.native {
+		output, width, height, err := decodeNativeJpeg2000(decoder, j2kData, params)
+		if err == nil {
+			return output, width, height, nil
+		}
+		if !errors.Is(err, errNVJPEG2000Unsupported) {
+			return nil, 0, 0, err
+		}
+	}
+	return decodeJpeg2000Deterministic(j2kData, params)
+}
+
+func decodeJpeg2000Deterministic(j2kData []byte, params Jpeg2000DecodeParams) (*memory.Memory, int, int, error) {
 	if len(j2kData) == 0 {
 		return nil, 0, 0, fmt.Errorf("empty JPEG2000 data")
 	}
@@ -248,6 +294,19 @@ func (decoder *Jpeg2000DecoderState) DecodeJpeg2000Batch(j2kDataList [][]byte, p
 
 // EncodeJpeg2000 encodes image data to JPEG2000 format
 func (encoder *Jpeg2000EncoderState) EncodeJpeg2000(imageData *memory.Memory, width, height int, params Jpeg2000EnodeParams) ([]byte, error) {
+	if encoder != nil && encoder.native {
+		encoded, err := encodeNativeJpeg2000(encoder, imageData, width, height, params)
+		if err == nil {
+			return encoded, nil
+		}
+		if !errors.Is(err, errNVJPEG2000Unsupported) {
+			return nil, err
+		}
+	}
+	return encodeJpeg2000Deterministic(imageData, width, height, params)
+}
+
+func encodeJpeg2000Deterministic(imageData *memory.Memory, width, height int, params Jpeg2000EnodeParams) ([]byte, error) {
 	if imageData == nil {
 		return nil, fmt.Errorf("image data cannot be nil")
 	}
@@ -298,6 +357,12 @@ func (encoder *Jpeg2000EncoderState) SetNumLevels(levels int) error {
 func GetJpeg2000ImageInfo(j2kData []byte) (*Jpeg2000ImageInfo, error) {
 	if len(j2kData) == 0 {
 		return nil, fmt.Errorf("empty JPEG2000 data")
+	}
+	if cuda.ShouldUseCuda() && nvjpeg2000NativeAvailable() {
+		info, err := getNativeJpeg2000ImageInfo(j2kData)
+		if err == nil {
+			return info, nil
+		}
 	}
 
 	return parseJpeg2000Header(j2kData)
@@ -541,12 +606,15 @@ func codecExtensionFromBytes(j2kData []byte) string {
 
 // Destroy cleans up decoder resources
 func (decoder *Jpeg2000DecoderState) Destroy() error {
+	if decoder != nil && decoder.native {
+		return destroyNativeJpeg2000Decoder(decoder)
+	}
 	if decoder.handle != nil {
-		decoder.handle.Free()
+		_ = decoder.handle.Free()
 		decoder.handle = nil
 	}
 	if decoder.stream != nil {
-		decoder.stream.Free()
+		_ = decoder.stream.Free()
 		decoder.stream = nil
 	}
 	return nil
@@ -554,12 +622,15 @@ func (decoder *Jpeg2000DecoderState) Destroy() error {
 
 // Destroy cleans up encoder resources
 func (encoder *Jpeg2000EncoderState) Destroy() error {
+	if encoder != nil && encoder.native {
+		return destroyNativeJpeg2000Encoder(encoder)
+	}
 	if encoder.handle != nil {
-		encoder.handle.Free()
+		_ = encoder.handle.Free()
 		encoder.handle = nil
 	}
 	if encoder.stream != nil {
-		encoder.stream.Free()
+		_ = encoder.stream.Free()
 		encoder.stream = nil
 	}
 	return nil
