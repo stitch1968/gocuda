@@ -437,9 +437,9 @@ func (handle *AmgXHandle) UpdateMatrix(matrix *AmgXMatrix, keepStructure bool) e
 		if err != nil {
 			return fmt.Errorf("AmgX matrix update failed: %v", err)
 		}
-		handle.matrix = matrix
-		handle.dense = dense
 		if err := updateNativeAmgXMatrix(handle, matrix, keepStructure); err == nil {
+			handle.matrix = matrix
+			handle.dense = dense
 			return nil
 		} else if !errors.Is(err, errAMGXUnsupported) {
 			return err

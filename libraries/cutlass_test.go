@@ -93,6 +93,16 @@ func TestCutlassConvAndHelpers(t *testing.T) {
 	if err := CutlassRank2k(rankA, rankB, rankC, 2, 2, 1, 0); err != nil {
 		t.Fatalf("CutlassRank2k failed: %v", err)
 	}
+	rankValues, err := readMathFloat32Memory(rankC, 4)
+	if err != nil {
+		t.Fatalf("read rank2k output failed: %v", err)
+	}
+	rankExpected := []float32{34, 62, 62, 106}
+	for index, value := range rankValues {
+		if math.Abs(float64(value-rankExpected[index])) > 1e-4 {
+			t.Fatalf("unexpected rank2k[%d]: got %v want %v", index, value, rankExpected[index])
+		}
+	}
 
 	triA, _ := memory.Alloc(4 * 4)
 	triB, _ := memory.Alloc(4 * 4)

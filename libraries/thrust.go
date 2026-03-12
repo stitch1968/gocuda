@@ -55,6 +55,15 @@ func createDeterministicThrustContext() *ThrustContext {
 
 // Sort sorts elements in ascending order
 func (ctx *ThrustContext) Sort(data *memory.Memory, n int, policy ExecutionPolicy) error {
+	if ctx != nil && ctx.native && policy != PolicyHost {
+		err := executeNativeThrustSort(data, n)
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, errThrustUnsupported) {
+			return err
+		}
+	}
 	values, err := thrustReadValues(data, n)
 	if err != nil {
 		return err
@@ -65,6 +74,15 @@ func (ctx *ThrustContext) Sort(data *memory.Memory, n int, policy ExecutionPolic
 
 // SortByKey sorts key-value pairs by keys
 func (ctx *ThrustContext) SortByKey(keys, values *memory.Memory, n int, policy ExecutionPolicy) error {
+	if ctx != nil && ctx.native && policy != PolicyHost {
+		err := executeNativeThrustSortByKey(keys, values, n)
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, errThrustUnsupported) {
+			return err
+		}
+	}
 	keyValues, err := thrustReadValues(keys, n)
 	if err != nil {
 		return err
@@ -96,6 +114,15 @@ func (ctx *ThrustContext) SortByKey(keys, values *memory.Memory, n int, policy E
 
 // Reduce performs parallel reduction
 func (ctx *ThrustContext) Reduce(data *memory.Memory, n int, initValue float32, policy ExecutionPolicy) (float32, error) {
+	if ctx != nil && ctx.native && policy != PolicyHost {
+		result, err := executeNativeThrustReduce(data, n, initValue)
+		if err == nil {
+			return result, nil
+		}
+		if !errors.Is(err, errThrustUnsupported) {
+			return 0, err
+		}
+	}
 	values, err := thrustReadValues(data, n)
 	if err != nil {
 		return 0, err
@@ -109,6 +136,15 @@ func (ctx *ThrustContext) Reduce(data *memory.Memory, n int, initValue float32, 
 
 // Transform applies unary operation to each element
 func (ctx *ThrustContext) Transform(input, output *memory.Memory, n int, operation string, policy ExecutionPolicy) error {
+	if ctx != nil && ctx.native && policy != PolicyHost {
+		err := executeNativeThrustTransform(input, output, n, operation)
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, errThrustUnsupported) {
+			return err
+		}
+	}
 	inputValues, err := thrustReadValues(input, n)
 	if err != nil {
 		return err
@@ -126,6 +162,15 @@ func (ctx *ThrustContext) Transform(input, output *memory.Memory, n int, operati
 
 // TransformBinary applies binary operation to pairs of elements
 func (ctx *ThrustContext) TransformBinary(input1, input2, output *memory.Memory, n int, operation string, policy ExecutionPolicy) error {
+	if ctx != nil && ctx.native && policy != PolicyHost {
+		err := executeNativeThrustTransformBinary(input1, input2, output, n, operation)
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, errThrustUnsupported) {
+			return err
+		}
+	}
 	leftValues, err := thrustReadValues(input1, n)
 	if err != nil {
 		return err
@@ -147,6 +192,15 @@ func (ctx *ThrustContext) TransformBinary(input1, input2, output *memory.Memory,
 
 // Scan performs inclusive prefix sum
 func (ctx *ThrustContext) Scan(input, output *memory.Memory, n int, policy ExecutionPolicy) error {
+	if ctx != nil && ctx.native && policy != PolicyHost {
+		err := executeNativeThrustScan(input, output, n)
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, errThrustUnsupported) {
+			return err
+		}
+	}
 	inputValues, err := thrustReadValues(input, n)
 	if err != nil {
 		return err
@@ -162,6 +216,15 @@ func (ctx *ThrustContext) Scan(input, output *memory.Memory, n int, policy Execu
 
 // ExclusiveScan performs exclusive prefix sum
 func (ctx *ThrustContext) ExclusiveScan(input, output *memory.Memory, n int, initValue float32, policy ExecutionPolicy) error {
+	if ctx != nil && ctx.native && policy != PolicyHost {
+		err := executeNativeThrustExclusiveScan(input, output, n, initValue)
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, errThrustUnsupported) {
+			return err
+		}
+	}
 	inputValues, err := thrustReadValues(input, n)
 	if err != nil {
 		return err
@@ -177,6 +240,15 @@ func (ctx *ThrustContext) ExclusiveScan(input, output *memory.Memory, n int, ini
 
 // Find locates first occurrence of value
 func (ctx *ThrustContext) Find(data *memory.Memory, n int, value float32, policy ExecutionPolicy) (int, error) {
+	if ctx != nil && ctx.native && policy != PolicyHost {
+		index, err := executeNativeThrustFind(data, n, value)
+		if err == nil {
+			return index, nil
+		}
+		if !errors.Is(err, errThrustUnsupported) {
+			return -1, err
+		}
+	}
 	values, err := thrustReadValues(data, n)
 	if err != nil {
 		return -1, err
@@ -191,6 +263,15 @@ func (ctx *ThrustContext) Find(data *memory.Memory, n int, value float32, policy
 
 // Count counts occurrences of value
 func (ctx *ThrustContext) Count(data *memory.Memory, n int, value float32, policy ExecutionPolicy) (int, error) {
+	if ctx != nil && ctx.native && policy != PolicyHost {
+		count, err := executeNativeThrustCount(data, n, value)
+		if err == nil {
+			return count, nil
+		}
+		if !errors.Is(err, errThrustUnsupported) {
+			return 0, err
+		}
+	}
 	values, err := thrustReadValues(data, n)
 	if err != nil {
 		return 0, err
@@ -206,6 +287,15 @@ func (ctx *ThrustContext) Count(data *memory.Memory, n int, value float32, polic
 
 // Unique removes consecutive duplicate elements
 func (ctx *ThrustContext) Unique(data *memory.Memory, n int, policy ExecutionPolicy) (int, error) {
+	if ctx != nil && ctx.native && policy != PolicyHost {
+		newLen, err := executeNativeThrustUnique(data, n)
+		if err == nil {
+			return newLen, nil
+		}
+		if !errors.Is(err, errThrustUnsupported) {
+			return 0, err
+		}
+	}
 	values, err := thrustReadValues(data, n)
 	if err != nil {
 		return 0, err
@@ -225,6 +315,15 @@ func (ctx *ThrustContext) Unique(data *memory.Memory, n int, policy ExecutionPol
 
 // Partition partitions elements based on predicate
 func (ctx *ThrustContext) Partition(data *memory.Memory, n int, predicate string, policy ExecutionPolicy) (int, error) {
+	if ctx != nil && ctx.native && policy != PolicyHost {
+		partitionIndex, err := executeNativeThrustPartition(data, n, predicate)
+		if err == nil {
+			return partitionIndex, nil
+		}
+		if !errors.Is(err, errThrustUnsupported) {
+			return 0, err
+		}
+	}
 	values, err := thrustReadValues(data, n)
 	if err != nil {
 		return 0, err
@@ -270,6 +369,15 @@ func (ctx *ThrustContext) Copy(src, dst *memory.Memory, n int, policy ExecutionP
 
 // CopyIf copies elements that satisfy predicate
 func (ctx *ThrustContext) CopyIf(src, dst *memory.Memory, n int, predicate string, policy ExecutionPolicy) (int, error) {
+	if ctx != nil && ctx.native && policy != PolicyHost {
+		count, err := executeNativeThrustCopyIf(src, dst, n, predicate)
+		if err == nil {
+			return count, nil
+		}
+		if !errors.Is(err, errThrustUnsupported) {
+			return 0, err
+		}
+	}
 	values, err := thrustReadValues(src, n)
 	if err != nil {
 		return 0, err
@@ -334,6 +442,15 @@ func (ctx *ThrustContext) Generate(data *memory.Memory, n int, generator string,
 
 // Merge merges two sorted sequences
 func (ctx *ThrustContext) Merge(input1, input2, output *memory.Memory, n1, n2 int, policy ExecutionPolicy) error {
+	if ctx != nil && ctx.native && policy != PolicyHost {
+		err := executeNativeThrustMerge(input1, input2, output, n1, n2)
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, errThrustUnsupported) {
+			return err
+		}
+	}
 	leftValues, err := thrustReadValues(input1, n1)
 	if err != nil {
 		return err
@@ -360,6 +477,15 @@ func (ctx *ThrustContext) Merge(input1, input2, output *memory.Memory, n1, n2 in
 
 // SetUnion computes union of two sorted sequences
 func (ctx *ThrustContext) SetUnion(input1, input2, output *memory.Memory, n1, n2 int, policy ExecutionPolicy) (int, error) {
+	if ctx != nil && ctx.native && policy != PolicyHost {
+		count, err := executeNativeThrustSetUnion(input1, input2, output, n1, n2)
+		if err == nil {
+			return count, nil
+		}
+		if !errors.Is(err, errThrustUnsupported) {
+			return 0, err
+		}
+	}
 	leftValues, err := thrustReadValues(input1, n1)
 	if err != nil {
 		return 0, err
@@ -396,6 +522,15 @@ func (ctx *ThrustContext) SetUnion(input1, input2, output *memory.Memory, n1, n2
 
 // SetIntersection computes intersection of two sorted sequences
 func (ctx *ThrustContext) SetIntersection(input1, input2, output *memory.Memory, n1, n2 int, policy ExecutionPolicy) (int, error) {
+	if ctx != nil && ctx.native && policy != PolicyHost {
+		count, err := executeNativeThrustSetIntersection(input1, input2, output, n1, n2)
+		if err == nil {
+			return count, nil
+		}
+		if !errors.Is(err, errThrustUnsupported) {
+			return 0, err
+		}
+	}
 	leftValues, err := thrustReadValues(input1, n1)
 	if err != nil {
 		return 0, err
@@ -429,6 +564,15 @@ func (ctx *ThrustContext) SetIntersection(input1, input2, output *memory.Memory,
 
 // MinElement finds minimum element
 func (ctx *ThrustContext) MinElement(data *memory.Memory, n int, policy ExecutionPolicy) (float32, int, error) {
+	if ctx != nil && ctx.native && policy != PolicyHost {
+		value, index, err := executeNativeThrustMinElement(data, n)
+		if err == nil {
+			return value, index, nil
+		}
+		if !errors.Is(err, errThrustUnsupported) {
+			return 0, -1, err
+		}
+	}
 	values, err := thrustReadValues(data, n)
 	if err != nil {
 		return 0, -1, err
@@ -445,6 +589,15 @@ func (ctx *ThrustContext) MinElement(data *memory.Memory, n int, policy Executio
 
 // MaxElement finds maximum element
 func (ctx *ThrustContext) MaxElement(data *memory.Memory, n int, policy ExecutionPolicy) (float32, int, error) {
+	if ctx != nil && ctx.native && policy != PolicyHost {
+		value, index, err := executeNativeThrustMaxElement(data, n)
+		if err == nil {
+			return value, index, nil
+		}
+		if !errors.Is(err, errThrustUnsupported) {
+			return 0, -1, err
+		}
+	}
 	values, err := thrustReadValues(data, n)
 	if err != nil {
 		return 0, -1, err

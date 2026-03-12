@@ -28,6 +28,10 @@ static nvjpegStatus_t createEncoderStateWrapper(nvjpegHandle_t handle, nvjpegEnc
 	return nvjpegEncoderStateCreate(handle, state, NULL);
 }
 
+static nvjpegStatus_t createEncoderStateWithBackendWrapper(nvjpegHandle_t handle, nvjpegEncoderState_t* state, nvjpegEncBackend_t backend) {
+	return nvjpegEncoderStateCreateWithBackend(handle, state, backend, NULL);
+}
+
 static nvjpegStatus_t destroyEncoderStateWrapper(nvjpegEncoderState_t state) {
 	return nvjpegEncoderStateDestroy(state);
 }
@@ -62,6 +66,10 @@ static nvjpegStatus_t setEncoderQualityWrapper(nvjpegEncoderParams_t params, int
 	return nvjpegEncoderParamsSetQuality(params, quality, NULL);
 }
 
+static nvjpegStatus_t setEncoderSamplingFactorsWrapper(nvjpegEncoderParams_t params, nvjpegChromaSubsampling_t subsampling) {
+	return nvjpegEncoderParamsSetSamplingFactors(params, subsampling, NULL);
+}
+
 static nvjpegStatus_t encodeImageWrapper(nvjpegHandle_t handle, nvjpegEncoderState_t state, nvjpegEncoderParams_t params, nvjpegImage_t* image, int format, int width, int height) {
 	return nvjpegEncodeImage(handle, state, params, image, (nvjpegInputFormat_t)format, width, height, NULL);
 }
@@ -83,6 +91,38 @@ import (
 	"github.com/stitch1968/gocuda/memory"
 )
 
+func nvjpegHandleToUintptr(handle C.nvjpegHandle_t) uintptr {
+	return uintptr(unsafe.Pointer(handle))
+}
+
+func nvjpegHandleFromUintptr(handle uintptr) C.nvjpegHandle_t {
+	return (C.nvjpegHandle_t)(unsafe.Pointer(handle))
+}
+
+func nvjpegJpegStateToUintptr(state C.nvjpegJpegState_t) uintptr {
+	return uintptr(unsafe.Pointer(state))
+}
+
+func nvjpegJpegStateFromUintptr(state uintptr) C.nvjpegJpegState_t {
+	return (C.nvjpegJpegState_t)(unsafe.Pointer(state))
+}
+
+func nvjpegEncoderStateToUintptr(state C.nvjpegEncoderState_t) uintptr {
+	return uintptr(unsafe.Pointer(state))
+}
+
+func nvjpegEncoderStateFromUintptr(state uintptr) C.nvjpegEncoderState_t {
+	return (C.nvjpegEncoderState_t)(unsafe.Pointer(state))
+}
+
+func nvjpegEncoderParamsToUintptr(params C.nvjpegEncoderParams_t) uintptr {
+	return uintptr(unsafe.Pointer(params))
+}
+
+func nvjpegEncoderParamsFromUintptr(params uintptr) C.nvjpegEncoderParams_t {
+	return (C.nvjpegEncoderParams_t)(unsafe.Pointer(params))
+}
+
 func nvjpegNativeAvailable() bool {
 	return true
 }
@@ -101,8 +141,8 @@ func createNativeJpegDecoder(backend JpegBackend) (*JpegDecoderState, error) {
 
 	return &JpegDecoderState{
 		backend:      backend,
-		nativeHandle: uintptr(handle),
-		nativeState:  uintptr(state),
+		nativeHandle: nvjpegHandleToUintptr(handle),
+		nativeState:  nvjpegJpegStateToUintptr(state),
 		native:       true,
 	}, nil
 }
@@ -114,9 +154,9 @@ func createNativeJpegEncoder(backend JpegBackend, quality int) (*JpegEncoderStat
 	}
 
 	var state C.nvjpegEncoderState_t
-	if status := C.createEncoderStateWrapper(handle, &state); status != C.NVJPEG_STATUS_SUCCESS {
+	if status := C.createEncoderStateWithBackendWrapper(handle, &state, nativeNVJPEGEncoderBackend(backend)); status != C.NVJPEG_STATUS_SUCCESS {
 		_ = C.destroyNVJPEGHandle(handle)
-		return nil, nvjpegError("nvjpegEncoderStateCreate", status)
+		return nil, nvjpegError("nvjpegEncoderStateCreateWithBackend", status)
 	}
 
 	var params C.nvjpegEncoderParams_t
@@ -132,13 +172,19 @@ func createNativeJpegEncoder(backend JpegBackend, quality int) (*JpegEncoderStat
 		_ = C.destroyNVJPEGHandle(handle)
 		return nil, nvjpegError("nvjpegEncoderParamsSetQuality", status)
 	}
+	if status := C.setEncoderSamplingFactorsWrapper(params, C.NVJPEG_CSS_444); status != C.NVJPEG_STATUS_SUCCESS {
+		_ = C.destroyEncoderParamsWrapper(params)
+		_ = C.destroyEncoderStateWrapper(state)
+		_ = C.destroyNVJPEGHandle(handle)
+		return nil, nvjpegError("nvjpegEncoderParamsSetSamplingFactors", status)
+	}
 
 	return &JpegEncoderState{
 		backend:      backend,
 		quality:      quality,
-		nativeHandle: uintptr(handle),
-		nativeState:  uintptr(state),
-		nativeParams: uintptr(params),
+		nativeHandle: nvjpegHandleToUintptr(handle),
+		nativeState:  nvjpegEncoderStateToUintptr(state),
+		nativeParams: nvjpegEncoderParamsToUintptr(params),
 		native:       true,
 	}, nil
 }
@@ -156,7 +202,7 @@ func decodeNativeJpeg(decoder *JpegDecoderState, jpegData []byte, params JpegDec
 		return nil, 0, 0, err
 	}
 
-	width, height, _, err := getNativeJpegImageInfoWithHandle(C.nvjpegHandle_t(decoder.nativeHandle), jpegData)
+	width, height, _, err := getNativeJpegImageInfoWithHandle(nvjpegHandleFromUintptr(decoder.nativeHandle), jpegData)
 	if err != nil {
 		return nil, 0, 0, err
 	}
@@ -169,8 +215,8 @@ func decodeNativeJpeg(decoder *JpegDecoderState, jpegData []byte, params JpegDec
 	var image C.nvjpegImage_t
 	C.prepareInterleavedImage(&image, (*C.uchar)(output.Ptr()), C.uint(width*channels))
 	status := C.decodeJpegWrapper(
-		C.nvjpegHandle_t(decoder.nativeHandle),
-		C.nvjpegJpegState_t(decoder.nativeState),
+		nvjpegHandleFromUintptr(decoder.nativeHandle),
+		nvjpegJpegStateFromUintptr(decoder.nativeState),
 		(*C.uchar)(unsafe.Pointer(&jpegData[0])),
 		C.size_t(len(jpegData)),
 		C.int(nativeFormat),
@@ -201,16 +247,24 @@ func encodeNativeJpeg(encoder *JpegEncoderState, imageData *memory.Memory, width
 	if quality == 0 {
 		quality = encoder.quality
 	}
-	if status := C.setEncoderQualityWrapper(C.nvjpegEncoderParams_t(encoder.nativeParams), C.int(quality)); status != C.NVJPEG_STATUS_SUCCESS {
+	nativeParams := nvjpegEncoderParamsFromUintptr(encoder.nativeParams)
+	if status := C.setEncoderQualityWrapper(nativeParams, C.int(quality)); status != C.NVJPEG_STATUS_SUCCESS {
 		return nil, nvjpegError("nvjpegEncoderParamsSetQuality", status)
+	}
+	subsampling, err := nativeNVJPEGEncodeSampling(params.InputFormat)
+	if err != nil {
+		return nil, err
+	}
+	if status := C.setEncoderSamplingFactorsWrapper(nativeParams, subsampling); status != C.NVJPEG_STATUS_SUCCESS {
+		return nil, nvjpegError("nvjpegEncoderParamsSetSamplingFactors", status)
 	}
 
 	var image C.nvjpegImage_t
 	C.prepareInterleavedImage(&image, (*C.uchar)(imageData.Ptr()), C.uint(width*channels))
 	if status := C.encodeImageWrapper(
-		C.nvjpegHandle_t(encoder.nativeHandle),
-		C.nvjpegEncoderState_t(encoder.nativeState),
-		C.nvjpegEncoderParams_t(encoder.nativeParams),
+		nvjpegHandleFromUintptr(encoder.nativeHandle),
+		nvjpegEncoderStateFromUintptr(encoder.nativeState),
+		nvjpegEncoderParamsFromUintptr(encoder.nativeParams),
 		&image,
 		C.int(nativeFormat),
 		C.int(width),
@@ -220,7 +274,7 @@ func encodeNativeJpeg(encoder *JpegEncoderState, imageData *memory.Memory, width
 	}
 
 	var length C.size_t
-	if status := C.retrieveBitstreamLengthWrapper(C.nvjpegHandle_t(encoder.nativeHandle), C.nvjpegEncoderState_t(encoder.nativeState), &length); status != C.NVJPEG_STATUS_SUCCESS {
+	if status := C.retrieveBitstreamLengthWrapper(nvjpegHandleFromUintptr(encoder.nativeHandle), nvjpegEncoderStateFromUintptr(encoder.nativeState), &length); status != C.NVJPEG_STATUS_SUCCESS {
 		return nil, nvjpegError("nvjpegEncodeRetrieveBitstream(length)", status)
 	}
 	if length == 0 {
@@ -229,8 +283,8 @@ func encodeNativeJpeg(encoder *JpegEncoderState, imageData *memory.Memory, width
 
 	encoded := make([]byte, int(length))
 	if status := C.retrieveBitstreamWrapper(
-		C.nvjpegHandle_t(encoder.nativeHandle),
-		C.nvjpegEncoderState_t(encoder.nativeState),
+		nvjpegHandleFromUintptr(encoder.nativeHandle),
+		nvjpegEncoderStateFromUintptr(encoder.nativeState),
 		(*C.uchar)(unsafe.Pointer(&encoded[0])),
 		&length,
 	); status != C.NVJPEG_STATUS_SUCCESS {
@@ -276,13 +330,13 @@ func getNativeJpegImageInfoWithHandle(handle C.nvjpegHandle_t, jpegData []byte) 
 
 func destroyNativeJpegDecoder(decoder *JpegDecoderState) error {
 	if decoder.nativeState != 0 {
-		if status := C.destroyJpegStateWrapper(C.nvjpegJpegState_t(decoder.nativeState)); status != C.NVJPEG_STATUS_SUCCESS {
+		if status := C.destroyJpegStateWrapper(nvjpegJpegStateFromUintptr(decoder.nativeState)); status != C.NVJPEG_STATUS_SUCCESS {
 			return nvjpegError("nvjpegJpegStateDestroy", status)
 		}
 		decoder.nativeState = 0
 	}
 	if decoder.nativeHandle != 0 {
-		if status := C.destroyNVJPEGHandle(C.nvjpegHandle_t(decoder.nativeHandle)); status != C.NVJPEG_STATUS_SUCCESS {
+		if status := C.destroyNVJPEGHandle(nvjpegHandleFromUintptr(decoder.nativeHandle)); status != C.NVJPEG_STATUS_SUCCESS {
 			return nvjpegError("nvjpegDestroy", status)
 		}
 		decoder.nativeHandle = 0
@@ -293,19 +347,19 @@ func destroyNativeJpegDecoder(decoder *JpegDecoderState) error {
 
 func destroyNativeJpegEncoder(encoder *JpegEncoderState) error {
 	if encoder.nativeParams != 0 {
-		if status := C.destroyEncoderParamsWrapper(C.nvjpegEncoderParams_t(encoder.nativeParams)); status != C.NVJPEG_STATUS_SUCCESS {
+		if status := C.destroyEncoderParamsWrapper(nvjpegEncoderParamsFromUintptr(encoder.nativeParams)); status != C.NVJPEG_STATUS_SUCCESS {
 			return nvjpegError("nvjpegEncoderParamsDestroy", status)
 		}
 		encoder.nativeParams = 0
 	}
 	if encoder.nativeState != 0 {
-		if status := C.destroyEncoderStateWrapper(C.nvjpegEncoderState_t(encoder.nativeState)); status != C.NVJPEG_STATUS_SUCCESS {
+		if status := C.destroyEncoderStateWrapper(nvjpegEncoderStateFromUintptr(encoder.nativeState)); status != C.NVJPEG_STATUS_SUCCESS {
 			return nvjpegError("nvjpegEncoderStateDestroy", status)
 		}
 		encoder.nativeState = 0
 	}
 	if encoder.nativeHandle != 0 {
-		if status := C.destroyNVJPEGHandle(C.nvjpegHandle_t(encoder.nativeHandle)); status != C.NVJPEG_STATUS_SUCCESS {
+		if status := C.destroyNVJPEGHandle(nvjpegHandleFromUintptr(encoder.nativeHandle)); status != C.NVJPEG_STATUS_SUCCESS {
 			return nvjpegError("nvjpegDestroy", status)
 		}
 		encoder.nativeHandle = 0
@@ -334,9 +388,25 @@ func nativeNVJPEGInputFormat(format JpegFormat) (C.int, int, error) {
 	case JpegFormatBGR:
 		return C.NVJPEG_INPUT_BGRI, 3, nil
 	case JpegFormatGrayscale:
-		return C.NVJPEG_INPUT_Y, 1, nil
+		return 0, 0, errNVJPEGUnsupported
 	default:
 		return 0, 0, errNVJPEGUnsupported
+	}
+}
+
+func nativeNVJPEGEncoderBackend(backend JpegBackend) C.nvjpegEncBackend_t {
+	if backend == JpegBackendHardware {
+		return C.NVJPEG_ENC_BACKEND_HARDWARE
+	}
+	return C.NVJPEG_ENC_BACKEND_GPU
+}
+
+func nativeNVJPEGEncodeSampling(format JpegFormat) (C.nvjpegChromaSubsampling_t, error) {
+	switch format {
+	case JpegFormatRGB, JpegFormatBGR, JpegFormatRGBI, JpegFormatBGRI:
+		return C.NVJPEG_CSS_444, nil
+	default:
+		return 0, errNVJPEGUnsupported
 	}
 }
 

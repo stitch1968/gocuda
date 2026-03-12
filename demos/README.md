@@ -39,12 +39,17 @@ This folder contains demonstration programs showcasing different aspects of the 
 To run any demo, use:
 
 ```bash
-# For build-only demos (with //go:build ignore)
-go run -tags ignore basic_demo.go
+# From the repository root, run ignore-tagged demos by file path
+go run demos/basic_demo.go
+go run demos/memory_demo.go
+go run demos/simple_api_demo.go
+go run demos/simple_api_integration_demo.go
 
 # For regular Go programs
-go run examples/main.go
+go run demos/examples/main.go
 ```
+
+Passing `-tags ignore` is not required here and will pull Go's own generator files into the build on recent toolchains.
 
 ## Features Demonstrated
 

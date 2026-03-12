@@ -121,3 +121,5 @@ Before Windows CUDA-tagged validation is expected to pass for the current native
 
 AmgX is still optional unless Windows AmgX validation is specifically being exercised on this machine.
 
+If Windows AmgX validation is needed, use the upstream NVIDIA AMGX source repository at `https://github.com/NVIDIA/AMGX`. The upstream project builds `amgxsh.dll` on Windows and installs `include/amgx_c.h`; this repo expects those artifacts to be available to the Windows CUDA-tagged build and import-lib helper.
+

@@ -3,6 +3,7 @@ package tests
 import (
 	"testing"
 
+	cuda "github.com/stitch1968/gocuda"
 	"github.com/stitch1968/gocuda/internal"
 	"github.com/stitch1968/gocuda/memory"
 )
@@ -200,6 +201,14 @@ func TestZeroLengthTransfersAreNoOps(t *testing.T) {
 }
 
 func TestAllocOnDeviceAndPeerCopy(t *testing.T) {
+	devices, err := cuda.GetDevices()
+	if err != nil {
+		t.Fatalf("Failed to get CUDA devices: %v", err)
+	}
+	if len(devices) < 2 {
+		t.Skip("peer copy test requires at least 2 CUDA devices")
+	}
+
 	src, err := memory.AllocOnDevice(4, 0)
 	if err != nil {
 		t.Fatalf("Failed to allocate source memory: %v", err)

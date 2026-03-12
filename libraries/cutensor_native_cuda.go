@@ -4,7 +4,7 @@ package libraries
 
 /*
 #cgo linux CFLAGS: -I/usr/local/cuda/include -I/opt/cuda/include
-#cgo windows CFLAGS: -I"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include" -I"D:/NVIDIA/include"
+#cgo windows CFLAGS: -I"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include" -I"C:/Program Files/NVIDIA cuTensor/v2.5/include" -I"C:/Program Files/NVIDIA cuTENSOR/v2.5/include" -I"D:/NVIDIA/include"
 #cgo linux LDFLAGS: -L/usr/local/cuda/lib64 -L/opt/cuda/lib64 -lcutensor
 #cgo windows LDFLAGS: -L${SRCDIR}/../lib_mingw -lcutensor
 
@@ -19,6 +19,46 @@ import (
 
 	"github.com/stitch1968/gocuda/memory"
 )
+
+func cutensorHandleToUintptr(handle C.cutensorHandle_t) uintptr {
+	return uintptr(unsafe.Pointer(handle))
+}
+
+func cutensorHandleFromUintptr(handle uintptr) C.cutensorHandle_t {
+	return (C.cutensorHandle_t)(unsafe.Pointer(handle))
+}
+
+func cutensorPlanToUintptr(plan C.cutensorPlan_t) uintptr {
+	return uintptr(unsafe.Pointer(plan))
+}
+
+func cutensorPlanFromUintptr(plan uintptr) C.cutensorPlan_t {
+	return (C.cutensorPlan_t)(unsafe.Pointer(plan))
+}
+
+func cutensorPlanPreferenceToUintptr(planPref C.cutensorPlanPreference_t) uintptr {
+	return uintptr(unsafe.Pointer(planPref))
+}
+
+func cutensorPlanPreferenceFromUintptr(planPref uintptr) C.cutensorPlanPreference_t {
+	return (C.cutensorPlanPreference_t)(unsafe.Pointer(planPref))
+}
+
+func cutensorOperationDescriptorToUintptr(desc C.cutensorOperationDescriptor_t) uintptr {
+	return uintptr(unsafe.Pointer(desc))
+}
+
+func cutensorOperationDescriptorFromUintptr(desc uintptr) C.cutensorOperationDescriptor_t {
+	return (C.cutensorOperationDescriptor_t)(unsafe.Pointer(desc))
+}
+
+func cutensorTensorDescriptorToUintptr(desc C.cutensorTensorDescriptor_t) uintptr {
+	return uintptr(unsafe.Pointer(desc))
+}
+
+func cutensorTensorDescriptorFromUintptr(desc uintptr) C.cutensorTensorDescriptor_t {
+	return (C.cutensorTensorDescriptor_t)(unsafe.Pointer(desc))
+}
 
 func cutensorNativeAvailable() bool {
 	return true
@@ -35,12 +75,15 @@ func createNativeCuTensorHandle() (*CuTensorHandle, error) {
 		descriptors:  make([]*CuTensorDescriptor, 0),
 		computeType:  TensorFloat32,
 		mathMode:     TensorMathDefault,
-		nativeHandle: uintptr(nativeHandle),
+		nativeHandle: cutensorHandleToUintptr(nativeHandle),
 		native:       true,
 	}, nil
 }
 
 func executeNativeTensorContraction(handle *CuTensorHandle, desc *ContractionDescriptor, tensorA, tensorB, tensorC *memory.Memory) error {
+	if !cutensorNativeDescriptorsSupported(desc.TensorA, desc.TensorB, desc.TensorC) {
+		return errCuTensorUnsupported
+	}
 	plan, err := buildNativeContractionPlan(handle, desc.TensorA, desc.ModesA, desc.TensorB, desc.ModesB, desc.TensorC, desc.ModesC, desc.Algorithm)
 	if err != nil {
 		return err
@@ -51,6 +94,9 @@ func executeNativeTensorContraction(handle *CuTensorHandle, desc *ContractionDes
 }
 
 func executeNativeTensorElementwise(handle *CuTensorHandle, descA *CuTensorDescriptor, tensorA *memory.Memory, descB *CuTensorDescriptor, tensorB *memory.Memory, descC *CuTensorDescriptor, tensorC *memory.Memory, alpha, beta, gamma float64, multiply bool) error {
+	if !cutensorNativeDescriptorsSupported(descA, descB, descC) {
+		return errCuTensorUnsupported
+	}
 	if len(descA.dimensions) != len(descB.dimensions) || len(descA.dimensions) != len(descC.dimensions) {
 		return fmt.Errorf("elementwise tensor ranks must match")
 	}
@@ -84,7 +130,7 @@ func executeNativeTensorElementwise(handle *CuTensorHandle, descA *CuTensorDescr
 		opAB = C.cutensorOperator_t(C.CUTENSOR_OP_MUL)
 	}
 	if status := C.cutensorCreateElementwiseTrinary(
-		C.cutensorHandle_t(handle.nativeHandle),
+		cutensorHandleFromUintptr(handle.nativeHandle),
 		&opDesc,
 		nativeDescA,
 		cutensorModePointer(modes),
@@ -123,7 +169,7 @@ func executeNativeTensorElementwise(handle *CuTensorHandle, descA *CuTensorDescr
 		beta32 := float32(beta)
 		gamma32 := float32(gamma)
 		if status := C.cutensorElementwiseTrinaryExecute(
-			C.cutensorHandle_t(handle.nativeHandle),
+			cutensorHandleFromUintptr(handle.nativeHandle),
 			plan,
 			unsafe.Pointer(&alpha32),
 			tensorA.Ptr(),
@@ -141,7 +187,7 @@ func executeNativeTensorElementwise(handle *CuTensorHandle, descA *CuTensorDescr
 		beta64 := beta
 		gamma64 := gamma
 		if status := C.cutensorElementwiseTrinaryExecute(
-			C.cutensorHandle_t(handle.nativeHandle),
+			cutensorHandleFromUintptr(handle.nativeHandle),
 			plan,
 			unsafe.Pointer(&alpha64),
 			tensorA.Ptr(),
@@ -163,6 +209,9 @@ func executeNativeTensorElementwise(handle *CuTensorHandle, descA *CuTensorDescr
 }
 
 func executeNativeTensorReduce(handle *CuTensorHandle, descA *CuTensorDescriptor, tensorA *memory.Memory, descC *CuTensorDescriptor, tensorC *memory.Memory, reduceModes []int, reductionOp TensorReduction, alpha, beta float64) error {
+	if !cutensorNativeDescriptorsSupported(descA, descC) {
+		return errCuTensorUnsupported
+	}
 	if len(reduceModes) == len(descA.dimensions) {
 		return errCuTensorUnsupported
 	}
@@ -195,7 +244,7 @@ func executeNativeTensorReduce(handle *CuTensorHandle, descA *CuTensorDescriptor
 
 	var opDesc C.cutensorOperationDescriptor_t
 	if status := C.cutensorCreateReduction(
-		C.cutensorHandle_t(handle.nativeHandle),
+		cutensorHandleFromUintptr(handle.nativeHandle),
 		&opDesc,
 		nativeDescA,
 		cutensorModePointer(modesA),
@@ -229,7 +278,7 @@ func executeNativeTensorReduce(handle *CuTensorHandle, descA *CuTensorDescriptor
 		alpha32 := float32(alpha)
 		beta32 := float32(beta)
 		if status := C.cutensorReduce(
-			C.cutensorHandle_t(handle.nativeHandle),
+			cutensorHandleFromUintptr(handle.nativeHandle),
 			plan,
 			unsafe.Pointer(&alpha32),
 			tensorA.Ptr(),
@@ -246,7 +295,7 @@ func executeNativeTensorReduce(handle *CuTensorHandle, descA *CuTensorDescriptor
 		alpha64 := alpha
 		beta64 := beta
 		if status := C.cutensorReduce(
-			C.cutensorHandle_t(handle.nativeHandle),
+			cutensorHandleFromUintptr(handle.nativeHandle),
 			plan,
 			unsafe.Pointer(&alpha64),
 			tensorA.Ptr(),
@@ -267,6 +316,9 @@ func executeNativeTensorReduce(handle *CuTensorHandle, descA *CuTensorDescriptor
 }
 
 func executeNativeTensorPermute(handle *CuTensorHandle, descA *CuTensorDescriptor, tensorA *memory.Memory, descC *CuTensorDescriptor, tensorC *memory.Memory, perm []int, alpha float64) error {
+	if !cutensorNativeDescriptorsSupported(descA, descC) {
+		return errCuTensorUnsupported
+	}
 	computeDesc, err := cutensorComputeDescriptor(descA.dataType)
 	if err != nil {
 		return err
@@ -289,7 +341,7 @@ func executeNativeTensorPermute(handle *CuTensorHandle, descA *CuTensorDescripto
 
 	var opDesc C.cutensorOperationDescriptor_t
 	if status := C.cutensorCreatePermutation(
-		C.cutensorHandle_t(handle.nativeHandle),
+		cutensorHandleFromUintptr(handle.nativeHandle),
 		&opDesc,
 		nativeDescA,
 		cutensorModePointer(modesA),
@@ -313,7 +365,7 @@ func executeNativeTensorPermute(handle *CuTensorHandle, descA *CuTensorDescripto
 	case TensorFloat32:
 		alpha32 := float32(alpha)
 		if status := C.cutensorPermute(
-			C.cutensorHandle_t(handle.nativeHandle),
+			cutensorHandleFromUintptr(handle.nativeHandle),
 			plan,
 			unsafe.Pointer(&alpha32),
 			tensorA.Ptr(),
@@ -325,7 +377,7 @@ func executeNativeTensorPermute(handle *CuTensorHandle, descA *CuTensorDescripto
 	case TensorFloat64:
 		alpha64 := alpha
 		if status := C.cutensorPermute(
-			C.cutensorHandle_t(handle.nativeHandle),
+			cutensorHandleFromUintptr(handle.nativeHandle),
 			plan,
 			unsafe.Pointer(&alpha64),
 			tensorA.Ptr(),
@@ -363,8 +415,8 @@ func executeNativeContractionPlan(handle *CuTensorHandle, plan *TensorPlan, alph
 		alpha32 := float32(alpha)
 		beta32 := float32(beta)
 		if status := C.cutensorContract(
-			C.cutensorHandle_t(handle.nativeHandle),
-			C.cutensorPlan_t(plan.nativeHandle),
+			cutensorHandleFromUintptr(handle.nativeHandle),
+			cutensorPlanFromUintptr(plan.nativeHandle),
 			unsafe.Pointer(&alpha32),
 			tensorA.Ptr(),
 			tensorB.Ptr(),
@@ -381,8 +433,8 @@ func executeNativeContractionPlan(handle *CuTensorHandle, plan *TensorPlan, alph
 		alpha64 := alpha
 		beta64 := beta
 		if status := C.cutensorContract(
-			C.cutensorHandle_t(handle.nativeHandle),
-			C.cutensorPlan_t(plan.nativeHandle),
+			cutensorHandleFromUintptr(handle.nativeHandle),
+			cutensorPlanFromUintptr(plan.nativeHandle),
 			unsafe.Pointer(&alpha64),
 			tensorA.Ptr(),
 			tensorB.Ptr(),
@@ -404,7 +456,7 @@ func executeNativeContractionPlan(handle *CuTensorHandle, plan *TensorPlan, alph
 
 func destroyNativeCuTensorHandle(handle *CuTensorHandle) error {
 	if handle.nativeHandle != 0 {
-		if status := C.cutensorDestroy(C.cutensorHandle_t(handle.nativeHandle)); status != C.CUTENSOR_STATUS_SUCCESS {
+		if status := C.cutensorDestroy(cutensorHandleFromUintptr(handle.nativeHandle)); status != C.CUTENSOR_STATUS_SUCCESS {
 			return cutensorError("cutensorDestroy", status)
 		}
 		handle.nativeHandle = 0
@@ -415,37 +467,37 @@ func destroyNativeCuTensorHandle(handle *CuTensorHandle) error {
 
 func destroyNativeTensorPlan(plan *TensorPlan) error {
 	if plan.nativeHandle != 0 {
-		if status := C.cutensorDestroyPlan(C.cutensorPlan_t(plan.nativeHandle)); status != C.CUTENSOR_STATUS_SUCCESS {
+		if status := C.cutensorDestroyPlan(cutensorPlanFromUintptr(plan.nativeHandle)); status != C.CUTENSOR_STATUS_SUCCESS {
 			return cutensorError("cutensorDestroyPlan", status)
 		}
 		plan.nativeHandle = 0
 	}
 	if plan.nativePlanPref != 0 {
-		if status := C.cutensorDestroyPlanPreference(C.cutensorPlanPreference_t(plan.nativePlanPref)); status != C.CUTENSOR_STATUS_SUCCESS {
+		if status := C.cutensorDestroyPlanPreference(cutensorPlanPreferenceFromUintptr(plan.nativePlanPref)); status != C.CUTENSOR_STATUS_SUCCESS {
 			return cutensorError("cutensorDestroyPlanPreference", status)
 		}
 		plan.nativePlanPref = 0
 	}
 	if plan.nativeOpDesc != 0 {
-		if status := C.cutensorDestroyOperationDescriptor(C.cutensorOperationDescriptor_t(plan.nativeOpDesc)); status != C.CUTENSOR_STATUS_SUCCESS {
+		if status := C.cutensorDestroyOperationDescriptor(cutensorOperationDescriptorFromUintptr(plan.nativeOpDesc)); status != C.CUTENSOR_STATUS_SUCCESS {
 			return cutensorError("cutensorDestroyOperationDescriptor", status)
 		}
 		plan.nativeOpDesc = 0
 	}
 	if plan.nativeDescA != 0 {
-		if status := C.cutensorDestroyTensorDescriptor(C.cutensorTensorDescriptor_t(plan.nativeDescA)); status != C.CUTENSOR_STATUS_SUCCESS {
+		if status := C.cutensorDestroyTensorDescriptor(cutensorTensorDescriptorFromUintptr(plan.nativeDescA)); status != C.CUTENSOR_STATUS_SUCCESS {
 			return cutensorError("cutensorDestroyTensorDescriptor(A)", status)
 		}
 		plan.nativeDescA = 0
 	}
 	if plan.nativeDescB != 0 {
-		if status := C.cutensorDestroyTensorDescriptor(C.cutensorTensorDescriptor_t(plan.nativeDescB)); status != C.CUTENSOR_STATUS_SUCCESS {
+		if status := C.cutensorDestroyTensorDescriptor(cutensorTensorDescriptorFromUintptr(plan.nativeDescB)); status != C.CUTENSOR_STATUS_SUCCESS {
 			return cutensorError("cutensorDestroyTensorDescriptor(B)", status)
 		}
 		plan.nativeDescB = 0
 	}
 	if plan.nativeDescC != 0 {
-		if status := C.cutensorDestroyTensorDescriptor(C.cutensorTensorDescriptor_t(plan.nativeDescC)); status != C.CUTENSOR_STATUS_SUCCESS {
+		if status := C.cutensorDestroyTensorDescriptor(cutensorTensorDescriptorFromUintptr(plan.nativeDescC)); status != C.CUTENSOR_STATUS_SUCCESS {
 			return cutensorError("cutensorDestroyTensorDescriptor(C)", status)
 		}
 		plan.nativeDescC = 0
@@ -456,6 +508,9 @@ func destroyNativeTensorPlan(plan *TensorPlan) error {
 
 func buildNativeContractionPlan(handle *CuTensorHandle, descA *CuTensorDescriptor, modesA []int, descB *CuTensorDescriptor, modesB []int, descC *CuTensorDescriptor, modesC []int, algorithm ContractionAlgorithm) (*TensorPlan, error) {
 	_ = algorithm
+	if !cutensorNativeDescriptorsSupported(descA, descB, descC) {
+		return nil, errCuTensorUnsupported
+	}
 	computeDesc, err := cutensorComputeDescriptor(descC.dataType)
 	if err != nil {
 		return nil, err
@@ -515,7 +570,7 @@ func buildNativeContractionPlan(handle *CuTensorHandle, descA *CuTensorDescripto
 
 	var opDesc C.cutensorOperationDescriptor_t
 	if status := C.cutensorCreateContraction(
-		C.cutensorHandle_t(handle.nativeHandle),
+		cutensorHandleFromUintptr(handle.nativeHandle),
 		&opDesc,
 		nativeDescA,
 		cutensorModePointer(modeA),
@@ -559,12 +614,12 @@ func buildNativeContractionPlan(handle *CuTensorHandle, descA *CuTensorDescripto
 		modesA:         append([]int(nil), modesA...),
 		modesB:         append([]int(nil), modesB...),
 		modesC:         append([]int(nil), modesC...),
-		nativeHandle:   uintptr(planHandle),
-		nativeOpDesc:   uintptr(opDesc),
-		nativePlanPref: uintptr(planPref),
-		nativeDescA:    uintptr(nativeDescA),
-		nativeDescB:    uintptr(nativeDescB),
-		nativeDescC:    uintptr(nativeDescC),
+		nativeHandle:   cutensorPlanToUintptr(planHandle),
+		nativeOpDesc:   cutensorOperationDescriptorToUintptr(opDesc),
+		nativePlanPref: cutensorPlanPreferenceToUintptr(planPref),
+		nativeDescA:    cutensorTensorDescriptorToUintptr(nativeDescA),
+		nativeDescB:    cutensorTensorDescriptorToUintptr(nativeDescB),
+		nativeDescC:    cutensorTensorDescriptorToUintptr(nativeDescC),
 		native:         true,
 		memoryReq:      calculateMemoryRequirement(descA, descB, descC),
 	}, nil
@@ -591,7 +646,7 @@ func cutensorCreateTensorDescriptor(handle *CuTensorHandle, desc *CuTensorDescri
 
 	var nativeDesc C.cutensorTensorDescriptor_t
 	if status := C.cutensorCreateTensorDescriptor(
-		C.cutensorHandle_t(handle.nativeHandle),
+		cutensorHandleFromUintptr(handle.nativeHandle),
 		&nativeDesc,
 		C.uint32_t(len(extents)),
 		(*C.int64_t)(unsafe.Pointer(&extents[0])),
@@ -607,7 +662,7 @@ func cutensorCreateTensorDescriptor(handle *CuTensorHandle, desc *CuTensorDescri
 func cutensorCreateContractionPlanResources(handle *CuTensorHandle, opDesc C.cutensorOperationDescriptor_t) (C.cutensorPlanPreference_t, C.cutensorPlan_t, uint64, error) {
 	var planPref C.cutensorPlanPreference_t
 	if status := C.cutensorCreatePlanPreference(
-		C.cutensorHandle_t(handle.nativeHandle),
+		cutensorHandleFromUintptr(handle.nativeHandle),
 		&planPref,
 		C.cutensorAlgo_t(C.CUTENSOR_ALGO_DEFAULT),
 		C.cutensorJitMode_t(C.CUTENSOR_JIT_MODE_NONE),
@@ -623,7 +678,7 @@ func cutensorCreateContractionPlanResources(handle *CuTensorHandle, opDesc C.cut
 
 	workspaceEstimate := C.uint64_t(0)
 	if status := C.cutensorEstimateWorkspaceSize(
-		C.cutensorHandle_t(handle.nativeHandle),
+		cutensorHandleFromUintptr(handle.nativeHandle),
 		opDesc,
 		planPref,
 		C.cutensorWorksizePreference_t(C.CUTENSOR_WORKSPACE_DEFAULT),
@@ -634,7 +689,7 @@ func cutensorCreateContractionPlanResources(handle *CuTensorHandle, opDesc C.cut
 
 	var plan C.cutensorPlan_t
 	if status := C.cutensorCreatePlan(
-		C.cutensorHandle_t(handle.nativeHandle),
+		cutensorHandleFromUintptr(handle.nativeHandle),
 		&plan,
 		opDesc,
 		planPref,
@@ -651,7 +706,7 @@ func cutensorCreateContractionPlanResources(handle *CuTensorHandle, opDesc C.cut
 
 	workspaceRequired := C.uint64_t(0)
 	if status := C.cutensorPlanGetAttribute(
-		C.cutensorHandle_t(handle.nativeHandle),
+		cutensorHandleFromUintptr(handle.nativeHandle),
 		plan,
 		C.cutensorPlanAttribute_t(C.CUTENSOR_PLAN_REQUIRED_WORKSPACE),
 		unsafe.Pointer(&workspaceRequired),
@@ -687,9 +742,36 @@ func cutensorEnsureWorkspace(handle *CuTensorHandle, required uint64) (unsafe.Po
 func cutensorNaturalModes(rank int) []C.int32_t {
 	modes := make([]C.int32_t, rank)
 	for index := range modes {
-		modes[index] = C.int32_t(index)
+		modes[index] = cutensorModeLabel(index)
 	}
 	return modes
+}
+
+func cutensorNativeDescriptorsSupported(descs ...*CuTensorDescriptor) bool {
+	for _, desc := range descs {
+		if desc == nil || !cutensorIsPackedColMajor(desc) {
+			return false
+		}
+	}
+	return true
+}
+
+func cutensorIsPackedColMajor(desc *CuTensorDescriptor) bool {
+	if desc.layout != TensorLayoutColMajor {
+		return false
+	}
+	if len(desc.dimensions) == 0 || len(desc.dimensions) != len(desc.strides) {
+		return false
+	}
+	elementSize := getTensorDataTypeSize(desc.dataType)
+	expectedStride := 1
+	for index, dim := range desc.dimensions {
+		if dim <= 0 || desc.strides[index] != expectedStride*elementSize {
+			return false
+		}
+		expectedStride *= dim
+	}
+	return true
 }
 
 func cutensorModesFromInts(modes []int) ([]C.int32_t, error) {
@@ -698,7 +780,7 @@ func cutensorModesFromInts(modes []int) ([]C.int32_t, error) {
 		if mode < 0 {
 			return nil, fmt.Errorf("invalid tensor mode: %d", mode)
 		}
-		result[index] = C.int32_t(mode)
+		result[index] = cutensorModeLabel(mode)
 	}
 	return result, nil
 }
@@ -706,7 +788,7 @@ func cutensorModesFromInts(modes []int) ([]C.int32_t, error) {
 func cutensorPermutedModes(rank int, perm []int) []C.int32_t {
 	result := make([]C.int32_t, rank)
 	for inputIndex, targetIndex := range perm {
-		result[targetIndex] = C.int32_t(inputIndex)
+		result[targetIndex] = cutensorModeLabel(inputIndex)
 	}
 	return result
 }
@@ -722,13 +804,17 @@ func cutensorReductionOutputModes(descA *CuTensorDescriptor, reduceModes []int) 
 	modes := make([]C.int32_t, 0, len(descA.dimensions)-len(reduceModes))
 	for index := range descA.dimensions {
 		if !reduceSet[index] {
-			modes = append(modes, C.int32_t(index))
+			modes = append(modes, cutensorModeLabel(index))
 		}
 	}
 	if len(modes) == 0 {
 		return nil, errCuTensorUnsupported
 	}
 	return modes, nil
+}
+
+func cutensorModeLabel(mode int) C.int32_t {
+	return C.int32_t(mode + 1)
 }
 
 func cutensorModePointer(modes []C.int32_t) *C.int32_t {
@@ -745,7 +831,7 @@ func cutensorComputeDescriptor(dataType TensorDataType) (C.cutensorComputeDescri
 	case TensorFloat64:
 		return C.cutensorComputeDescriptor_t(C.CUTENSOR_COMPUTE_DESC_64F), nil
 	default:
-		return 0, errCuTensorUnsupported
+		return nil, errCuTensorUnsupported
 	}
 }
 

@@ -258,6 +258,15 @@ func (handle *CutlassConvHandle) CutlassConv(input, filter, output *memory.Memor
 	if outputH <= 0 || outputW <= 0 {
 		return fmt.Errorf("invalid convolution parameters result in non-positive output dimensions")
 	}
+	if cuda.ShouldUseCuda() && cutlassNativeAvailable() {
+		err := executeNativeCutlassConv(desc, input, filter, output, outputH, outputW)
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, errCUTLASSUnsupported) {
+			return err
+		}
+	}
 
 	return executeCutlassConv(desc, input, filter, output, outputH, outputW)
 }
@@ -274,6 +283,15 @@ func CutlassSpmm(sparseA, denseB, denseC *memory.Memory, M, N, K int, sparsity f
 
 	if sparsity < 0 || sparsity > 1 {
 		return fmt.Errorf("sparsity must be between 0 and 1, got %f", sparsity)
+	}
+	if cuda.ShouldUseCuda() && cutlassNativeAvailable() {
+		err := executeNativeCutlassSpmm(sparseA, denseB, denseC, M, N, K)
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, errCUTLASSUnsupported) {
+			return err
+		}
 	}
 
 	return executeCutlassSpmm(sparseA, denseB, denseC, M, N, K)

@@ -54,20 +54,26 @@ func TestNewContext(t *testing.T) {
 	if ctx == nil {
 		t.Fatal("Context is nil")
 	}
-
-	// Note: Context cleanup is handled automatically
-	defer stream.Close()
 }
 
 func TestContextRun(t *testing.T) {
 	ctx, err := cuda.NewContext(0)
-
-	if stream.DeviceID() != 0 {
-		t.Fatalf("expected stream to inherit context device 0, got %d", stream.DeviceID())
-	}
 	if err != nil {
 		t.Fatalf("Failed to create context: %v", err)
 	}
+
+	executed := false
+	if err := ctx.Run(func() error {
+		executed = true
+		return nil
+	}); err != nil {
+		t.Fatalf("Context-bound execution failed: %v", err)
+	}
+
+	if !executed {
+		t.Fatal("expected context-bound callback to run")
+	}
+}
 
 func TestGoWithStreamUsesStreamDevice(t *testing.T) {
 	devices, err := cuda.GetDevices()
@@ -110,19 +116,6 @@ func TestGoWithStreamUsesStreamDevice(t *testing.T) {
 
 	if observedDevice != targetDevice {
 		t.Fatalf("expected stream execution on device %d, got %d", targetDevice, observedDevice)
-	}
-}
-
-	executed := false
-	if err := ctx.Run(func() error {
-		executed = true
-		return nil
-	}); err != nil {
-		t.Fatalf("Context-bound execution failed: %v", err)
-	}
-
-	if !executed {
-		t.Fatal("expected context-bound callback to run")
 	}
 }
 

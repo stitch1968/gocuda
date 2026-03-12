@@ -89,6 +89,26 @@ chmod +x verify_build.sh && ./verify_build.sh
 - ✅ Demo availability
 - ✅ Project structure integrity
 
+### run_hardware_mode.ps1
+**Windows CUDA runtime wrapper for native validation**
+
+```powershell
+# Default: run CUDA-tagged library tests with auto-discovered runtime DLL paths
+powershell -ExecutionPolicy Bypass -File .\run_hardware_mode.ps1
+
+# Run a different CUDA-tagged command
+powershell -ExecutionPolicy Bypass -File .\run_hardware_mode.ps1 -Command go test -tags cuda ./...
+
+# Skip the environment verifier if you already ran it
+powershell -ExecutionPolicy Bypass -File .\run_hardware_mode.ps1 -SkipVerify -Command go run -tags cuda demos/advanced_features/main.go
+```
+
+**Features:**
+- ✅ Reuses the Windows SDK discovery rules from the verifier
+- ✅ Prepends the newest discovered CUDA/vendor `bin` directories to `PATH`
+- ✅ Avoids ad hoc shell-specific `PATH` editing before CUDA-tagged runs
+- ✅ Defaults to `go test -tags cuda ./libraries` so native validation is one command
+
 ## Quick Start Recommendations
 
 ### For New Users
@@ -140,6 +160,8 @@ setup_windows_cuda_import_libs.bat "C:\Program Files\NVIDIA GPU Computing Toolki
 This prepares the Windows-side `lib_mingw` inputs for CUDA runtime, cuDNN, nvJPEG, nvJPEG2000, cuBLAS-backed CUTLASS GEMM, cuDSS, AmgX, and cuTENSOR work. After `lib_mingw\libcudnn.a`, `lib_mingw\libnvjpeg.a`, `lib_mingw\libnvjpeg2k.a`, `lib_mingw\libcublas.a`, `lib_mingw\libcudss.a`, `lib_mingw\libamgxsh.a`, and `lib_mingw\libcutensor.a` are generated, CUDA-tagged Windows builds can link those native backends.
 
 Use `powershell -ExecutionPolicy Bypass -File verify_windows_cuda_native_env.ps1` before CUDA-tagged builds to see which headers, DLLs, and import libraries are actually installed locally. The script checks the default CUDA toolkit path, the repository's existing fallback path `D:\NVIDIA\include`, and optional override variables `GOCUDA_EXTRA_INCLUDE_DIRS`, `GOCUDA_EXTRA_BIN_DIRS`, and `GOCUDA_EXTRA_LIB_DIRS`.
+
+Once the verifier passes, use `powershell -ExecutionPolicy Bypass -File run_hardware_mode.ps1` to run CUDA-tagged validation with the discovered runtime DLL directories automatically added to `PATH` for that process.
 
 If you want to generate import libraries for whatever DLLs are already installed without manually collecting every path first, run `powershell -ExecutionPolicy Bypass -File setup_windows_cuda_import_libs_auto.ps1`. It searches the CUDA toolkit `bin` and `bin\x64` directories, `D:\NVIDIA\bin`, `C:\amgx\bin`, `PATH`, and `GOCUDA_EXTRA_BIN_DIRS`, then generates import libraries for the DLLs it finds and skips the missing optional backends.
 

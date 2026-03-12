@@ -4,7 +4,7 @@ package libraries
 
 /*
 #cgo linux CFLAGS: -I/usr/local/cuda/include -I/opt/cuda/include -I/usr/local/include -I/usr/local/amgx/include -I/opt/amgx/include
-#cgo windows CFLAGS: -I"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include" -I"D:/NVIDIA/include"
+#cgo windows CFLAGS: -I"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include" -I"C:/amgx/include" -I"D:/NVIDIA/include"
 #cgo linux LDFLAGS: -L/usr/local/lib -L/usr/local/amgx/lib -L/opt/amgx/lib -lamgxsh
 #cgo windows LDFLAGS: -L${SRCDIR}/../lib_mingw -lamgxsh
 
@@ -15,11 +15,52 @@ import "C"
 
 import (
 	"fmt"
+	"math"
 	"sync"
 	"unsafe"
 
 	"github.com/stitch1968/gocuda/memory"
 )
+
+func amgxConfigHandleToUintptr(handle C.AMGX_config_handle) uintptr {
+	return uintptr(unsafe.Pointer(handle))
+}
+
+func amgxResourcesHandleToUintptr(handle C.AMGX_resources_handle) uintptr {
+	return uintptr(unsafe.Pointer(handle))
+}
+
+func amgxSolverHandleToUintptr(handle C.AMGX_solver_handle) uintptr {
+	return uintptr(unsafe.Pointer(handle))
+}
+
+func amgxMatrixHandleToUintptr(handle C.AMGX_matrix_handle) uintptr {
+	return uintptr(unsafe.Pointer(handle))
+}
+
+func amgxVectorHandleToUintptr(handle C.AMGX_vector_handle) uintptr {
+	return uintptr(unsafe.Pointer(handle))
+}
+
+func amgxConfigHandleFromUintptr(handle uintptr) C.AMGX_config_handle {
+	return (C.AMGX_config_handle)(unsafe.Pointer(handle))
+}
+
+func amgxResourcesHandleFromUintptr(handle uintptr) C.AMGX_resources_handle {
+	return (C.AMGX_resources_handle)(unsafe.Pointer(handle))
+}
+
+func amgxSolverHandleFromUintptr(handle uintptr) C.AMGX_solver_handle {
+	return (C.AMGX_solver_handle)(unsafe.Pointer(handle))
+}
+
+func amgxMatrixHandleFromUintptr(handle uintptr) C.AMGX_matrix_handle {
+	return (C.AMGX_matrix_handle)(unsafe.Pointer(handle))
+}
+
+func amgxVectorHandleFromUintptr(handle uintptr) C.AMGX_vector_handle {
+	return (C.AMGX_vector_handle)(unsafe.Pointer(handle))
+}
 
 var (
 	amgxGlobalMu       sync.Mutex
@@ -74,9 +115,9 @@ func createNativeAmgXHandle(config AmgXConfig) (*AmgXHandle, error) {
 	cleanup = false
 	return &AmgXHandle{
 		config:          config,
-		nativeConfig:    uintptr(nativeConfig),
-		nativeResources: uintptr(resources),
-		nativeSolver:    uintptr(solver),
+		nativeConfig:    amgxConfigHandleToUintptr(nativeConfig),
+		nativeResources: amgxResourcesHandleToUintptr(resources),
+		nativeSolver:    amgxSolverHandleToUintptr(solver),
 		native:          true,
 	}, nil
 }
@@ -117,13 +158,13 @@ func setupNativeAmgX(handle *AmgXHandle, matrix *AmgXMatrix) error {
 	}
 	if matrix.nativeHandle == 0 {
 		var nativeMatrix C.AMGX_matrix_handle
-		if rc := C.AMGX_matrix_create(&nativeMatrix, C.AMGX_resources_handle(handle.nativeResources), nativeAmgXMode(handle.config.Precision)); rc != C.AMGX_RC_OK {
+		if rc := C.AMGX_matrix_create(&nativeMatrix, amgxResourcesHandleFromUintptr(handle.nativeResources), nativeAmgXMode(handle.config.Precision)); rc != C.AMGX_RC_OK {
 			return amgxError("AMGX_matrix_create", rc)
 		}
-		matrix.nativeHandle = uintptr(nativeMatrix)
+		matrix.nativeHandle = amgxMatrixHandleToUintptr(nativeMatrix)
 	}
 	if rc := C.AMGX_matrix_upload_all(
-		C.AMGX_matrix_handle(matrix.nativeHandle),
+		amgxMatrixHandleFromUintptr(matrix.nativeHandle),
 		C.int(matrix.n),
 		C.int(matrix.nnz),
 		1,
@@ -135,7 +176,7 @@ func setupNativeAmgX(handle *AmgXHandle, matrix *AmgXMatrix) error {
 	); rc != C.AMGX_RC_OK {
 		return amgxError("AMGX_matrix_upload_all", rc)
 	}
-	if rc := C.AMGX_solver_setup(C.AMGX_solver_handle(handle.nativeSolver), C.AMGX_matrix_handle(matrix.nativeHandle)); rc != C.AMGX_RC_OK {
+	if rc := C.AMGX_solver_setup(amgxSolverHandleFromUintptr(handle.nativeSolver), amgxMatrixHandleFromUintptr(matrix.nativeHandle)); rc != C.AMGX_RC_OK {
 		return amgxError("AMGX_solver_setup", rc)
 	}
 	return nil
@@ -150,35 +191,35 @@ func solveNativeAmgX(handle *AmgXHandle, b, x *AmgXVector) (*AmgXSolveInfo, erro
 	}
 	if b.nativeHandle == 0 {
 		var rhs C.AMGX_vector_handle
-		if rc := C.AMGX_vector_create(&rhs, C.AMGX_resources_handle(handle.nativeResources), nativeAmgXMode(handle.config.Precision)); rc != C.AMGX_RC_OK {
+		if rc := C.AMGX_vector_create(&rhs, amgxResourcesHandleFromUintptr(handle.nativeResources), nativeAmgXMode(handle.config.Precision)); rc != C.AMGX_RC_OK {
 			return nil, amgxError("AMGX_vector_create(rhs)", rc)
 		}
-		b.nativeHandle = uintptr(rhs)
+		b.nativeHandle = amgxVectorHandleToUintptr(rhs)
 	}
 	if x.nativeHandle == 0 {
 		var solution C.AMGX_vector_handle
-		if rc := C.AMGX_vector_create(&solution, C.AMGX_resources_handle(handle.nativeResources), nativeAmgXMode(handle.config.Precision)); rc != C.AMGX_RC_OK {
+		if rc := C.AMGX_vector_create(&solution, amgxResourcesHandleFromUintptr(handle.nativeResources), nativeAmgXMode(handle.config.Precision)); rc != C.AMGX_RC_OK {
 			return nil, amgxError("AMGX_vector_create(x)", rc)
 		}
-		x.nativeHandle = uintptr(solution)
+		x.nativeHandle = amgxVectorHandleToUintptr(solution)
 	}
-	if rc := C.AMGX_vector_upload(C.AMGX_vector_handle(b.nativeHandle), C.int(b.size), 1, b.data.Ptr()); rc != C.AMGX_RC_OK {
+	if rc := C.AMGX_vector_upload(amgxVectorHandleFromUintptr(b.nativeHandle), C.int(b.size), 1, b.data.Ptr()); rc != C.AMGX_RC_OK {
 		return nil, amgxError("AMGX_vector_upload(rhs)", rc)
 	}
-	if rc := C.AMGX_vector_upload(C.AMGX_vector_handle(x.nativeHandle), C.int(x.size), 1, x.data.Ptr()); rc != C.AMGX_RC_OK {
+	if rc := C.AMGX_vector_upload(amgxVectorHandleFromUintptr(x.nativeHandle), C.int(x.size), 1, x.data.Ptr()); rc != C.AMGX_RC_OK {
 		return nil, amgxError("AMGX_vector_upload(x)", rc)
 	}
-	if rc := C.AMGX_solver_solve(C.AMGX_solver_handle(handle.nativeSolver), C.AMGX_vector_handle(b.nativeHandle), C.AMGX_vector_handle(x.nativeHandle)); rc != C.AMGX_RC_OK {
+	if rc := C.AMGX_solver_solve(amgxSolverHandleFromUintptr(handle.nativeSolver), amgxVectorHandleFromUintptr(b.nativeHandle), amgxVectorHandleFromUintptr(x.nativeHandle)); rc != C.AMGX_RC_OK {
 		return nil, amgxError("AMGX_solver_solve", rc)
 	}
-	if rc := C.AMGX_vector_download(C.AMGX_vector_handle(x.nativeHandle), x.data.Ptr()); rc != C.AMGX_RC_OK {
+	if rc := C.AMGX_vector_download(amgxVectorHandleFromUintptr(x.nativeHandle), x.data.Ptr()); rc != C.AMGX_RC_OK {
 		return nil, amgxError("AMGX_vector_download", rc)
 	}
 
 	iterations := C.int(0)
-	_ = C.AMGX_solver_get_iterations_number(C.AMGX_solver_handle(handle.nativeSolver), &iterations)
+	_ = C.AMGX_solver_get_iterations_number(amgxSolverHandleFromUintptr(handle.nativeSolver), &iterations)
 	status := C.AMGX_SOLVE_STATUS(0)
-	_ = C.AMGX_solver_get_status(C.AMGX_solver_handle(handle.nativeSolver), &status)
+	_ = C.AMGX_solver_get_status(amgxSolverHandleFromUintptr(handle.nativeSolver), &status)
 
 	bValues, err := amgxReadVector(b, handle.config.Precision)
 	if err != nil {
@@ -219,30 +260,39 @@ func updateNativeAmgXMatrix(handle *AmgXHandle, matrix *AmgXMatrix, keepStructur
 	if !keepStructure {
 		return errAMGXUnsupported
 	}
-	if rc := C.AMGX_matrix_replace_coefficients(C.AMGX_matrix_handle(matrix.nativeHandle), C.int(matrix.n), C.int(matrix.nnz), matrix.values.Ptr(), nil); rc != C.AMGX_RC_OK {
+	if handle == nil || handle.matrix == nil || handle.matrix.nativeHandle == 0 {
+		return fmt.Errorf("AMGX setup must be performed before matrix updates")
+	}
+	if matrix.n != handle.n || matrix.nnz != handle.nnz || matrix.mode != handle.matrix.mode {
+		return fmt.Errorf("matrix structure must remain unchanged for native AmgX updates")
+	}
+	target := handle.matrix
+	if rc := C.AMGX_matrix_replace_coefficients(amgxMatrixHandleFromUintptr(target.nativeHandle), C.int(matrix.n), C.int(matrix.nnz), matrix.values.Ptr(), nil); rc != C.AMGX_RC_OK {
 		return amgxError("AMGX_matrix_replace_coefficients", rc)
 	}
-	if rc := C.AMGX_solver_setup(C.AMGX_solver_handle(handle.nativeSolver), C.AMGX_matrix_handle(matrix.nativeHandle)); rc != C.AMGX_RC_OK {
+	if rc := C.AMGX_solver_setup(amgxSolverHandleFromUintptr(handle.nativeSolver), amgxMatrixHandleFromUintptr(target.nativeHandle)); rc != C.AMGX_RC_OK {
 		return amgxError("AMGX_solver_setup", rc)
 	}
+	matrix.nativeHandle = target.nativeHandle
+	target.nativeHandle = 0
 	return nil
 }
 
 func destroyNativeAmgXHandle(handle *AmgXHandle) error {
 	if handle.nativeSolver != 0 {
-		if rc := C.AMGX_solver_destroy(C.AMGX_solver_handle(handle.nativeSolver)); rc != C.AMGX_RC_OK {
+		if rc := C.AMGX_solver_destroy(amgxSolverHandleFromUintptr(handle.nativeSolver)); rc != C.AMGX_RC_OK {
 			return amgxError("AMGX_solver_destroy", rc)
 		}
 		handle.nativeSolver = 0
 	}
 	if handle.nativeResources != 0 {
-		if rc := C.AMGX_resources_destroy(C.AMGX_resources_handle(handle.nativeResources)); rc != C.AMGX_RC_OK {
+		if rc := C.AMGX_resources_destroy(amgxResourcesHandleFromUintptr(handle.nativeResources)); rc != C.AMGX_RC_OK {
 			return amgxError("AMGX_resources_destroy", rc)
 		}
 		handle.nativeResources = 0
 	}
 	if handle.nativeConfig != 0 {
-		if rc := C.AMGX_config_destroy(C.AMGX_config_handle(handle.nativeConfig)); rc != C.AMGX_RC_OK {
+		if rc := C.AMGX_config_destroy(amgxConfigHandleFromUintptr(handle.nativeConfig)); rc != C.AMGX_RC_OK {
 			return amgxError("AMGX_config_destroy", rc)
 		}
 		handle.nativeConfig = 0
@@ -255,7 +305,7 @@ func destroyNativeAmgXHandle(handle *AmgXHandle) error {
 
 func destroyNativeAmgXMatrix(matrix *AmgXMatrix) error {
 	if matrix.nativeHandle != 0 {
-		if rc := C.AMGX_matrix_destroy(C.AMGX_matrix_handle(matrix.nativeHandle)); rc != C.AMGX_RC_OK {
+		if rc := C.AMGX_matrix_destroy(amgxMatrixHandleFromUintptr(matrix.nativeHandle)); rc != C.AMGX_RC_OK {
 			return amgxError("AMGX_matrix_destroy", rc)
 		}
 		matrix.nativeHandle = 0
@@ -266,7 +316,7 @@ func destroyNativeAmgXMatrix(matrix *AmgXMatrix) error {
 
 func destroyNativeAmgXVector(vector *AmgXVector) error {
 	if vector.nativeHandle != 0 {
-		if rc := C.AMGX_vector_destroy(C.AMGX_vector_handle(vector.nativeHandle)); rc != C.AMGX_RC_OK {
+		if rc := C.AMGX_vector_destroy(amgxVectorHandleFromUintptr(vector.nativeHandle)); rc != C.AMGX_RC_OK {
 			return amgxError("AMGX_vector_destroy", rc)
 		}
 		vector.nativeHandle = 0

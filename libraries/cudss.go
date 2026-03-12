@@ -100,6 +100,7 @@ type DSSMatrix struct {
 	rowPtr       *memory.Memory
 	colInd       *memory.Memory
 	values       *memory.Memory
+	nativeValues *memory.Memory
 	n            int
 	nnz          int
 	format       DSSMatrixFormat
@@ -455,7 +456,7 @@ func (handle *DSSHandle) Destroy() error {
 
 func dssDenseFromMatrix(matrix *DSSMatrix) ([]float64, error) {
 	dense := make([]float64, matrix.n*matrix.n)
-	values, err := readMathFloat32Memory(matrix.values, matrix.nnz)
+	values, err := readDSSFloatValues(matrix.values, matrix.nnz)
 	if err != nil {
 		return nil, err
 	}
@@ -472,9 +473,9 @@ func dssDenseFromMatrix(matrix *DSSMatrix) ([]float64, error) {
 		for row := 0; row < matrix.n; row++ {
 			for idx := rowPtr[row]; idx < rowPtr[row+1]; idx++ {
 				col := colInd[idx]
-				dense[row*matrix.n+int(col)] = float64(values[idx])
+				dense[row*matrix.n+int(col)] = values[idx]
 				if matrix.symmetry && row != int(col) {
-					dense[int(col)*matrix.n+row] = float64(values[idx])
+					dense[int(col)*matrix.n+row] = values[idx]
 				}
 			}
 		}
@@ -482,6 +483,25 @@ func dssDenseFromMatrix(matrix *DSSMatrix) ([]float64, error) {
 		return nil, fmt.Errorf("deterministic cuDSS currently supports CSR matrices only")
 	}
 	return dense, nil
+}
+
+func readDSSFloatValues(mem *memory.Memory, length int) ([]float64, error) {
+	switch mem.Size() {
+	case int64(length) * 4:
+		values32, err := readMathFloat32Memory(mem, length)
+		if err != nil {
+			return nil, err
+		}
+		values64 := make([]float64, length)
+		for index, value := range values32 {
+			values64[index] = float64(value)
+		}
+		return values64, nil
+	case int64(length) * 8:
+		return readMathFloat64Memory(mem, length)
+	default:
+		return nil, fmt.Errorf("unsupported cuDSS value buffer size %d for %d elements", mem.Size(), length)
+	}
 }
 
 func dssSolveGaussian(dense []float64, n int, rhs []float64) ([]float64, error) {

@@ -3,11 +3,20 @@ package tests
 import (
 	"testing"
 
+	cuda "github.com/stitch1968/gocuda"
 	"github.com/stitch1968/gocuda/memory"
 	"github.com/stitch1968/gocuda/performance"
 )
 
 func TestMultiGPUP2PCopy(t *testing.T) {
+	devices, err := cuda.GetDevices()
+	if err != nil {
+		t.Fatalf("Failed to get CUDA devices: %v", err)
+	}
+	if len(devices) < 2 {
+		t.Skip("multi-GPU P2P test requires at least 2 CUDA devices")
+	}
+
 	multiGPU, err := performance.NewMultiGPU()
 	if err != nil {
 		t.Fatalf("Failed to create multi-GPU manager: %v", err)

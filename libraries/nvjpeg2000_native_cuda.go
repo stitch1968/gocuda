@@ -4,11 +4,13 @@ package libraries
 
 /*
 #cgo linux CFLAGS: -I/usr/local/cuda/include -I/opt/cuda/include
-#cgo windows CFLAGS: -I"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include" -I"D:/NVIDIA/include"
+#cgo windows CFLAGS: -I"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include" -I"C:/Program Files/NVIDIA nvJPEG2K/v0.9/include" -I"D:/NVIDIA/include"
 #cgo linux LDFLAGS: -L/usr/local/cuda/lib64 -L/opt/cuda/lib64 -lnvjpeg2k
 #cgo windows LDFLAGS: -L${SRCDIR}/../lib_mingw -lnvjpeg2k
 
 #include <cuda_runtime.h>
+#define nvjpeg2kProgOrder nvjpeg2kProgOrder_t
+#define nvjpeg2kQualityType nvjpeg2kQualityType_t
 #include <nvjpeg2k.h>
 #include <stdlib.h>
 #include <string.h>
@@ -105,7 +107,7 @@ static nvjpeg2kStatus_t setEncodeConfigWrapper(nvjpeg2kEncodeParams_t params, nv
 	return nvjpeg2kEncodeParamsSetEncodeConfig(params, config);
 }
 
-static nvjpeg2kStatus_t setEncodeQualityWrapper(nvjpeg2kEncodeParams_t params, nvjpeg2kQualityType qualityType, double value) {
+static nvjpeg2kStatus_t setEncodeQualityWrapper(nvjpeg2kEncodeParams_t params, nvjpeg2kQualityType_t qualityType, double value) {
 	return nvjpeg2kEncodeParamsSpecifyQuality(params, qualityType, value);
 }
 
@@ -113,11 +115,11 @@ static nvjpeg2kStatus_t setEncodeInputFormatWrapper(nvjpeg2kEncodeParams_t param
 	return nvjpeg2kEncodeParamsSetInputFormat(params, format);
 }
 
-static nvjpeg2kStatus_t encodeImageWrapper(nvjpeg2kEncoder_t handle, nvjpeg2kEncodeState_t state, const nvjpeg2kEncodeParams_t params, const nvjpeg2kImage_t* input, cudaStream_t stream) {
+static nvjpeg2kStatus_t encodeJpeg2000ImageWrapper(nvjpeg2kEncoder_t handle, nvjpeg2kEncodeState_t state, const nvjpeg2kEncodeParams_t params, const nvjpeg2kImage_t* input, cudaStream_t stream) {
 	return nvjpeg2kEncode(handle, state, params, input, stream);
 }
 
-static nvjpeg2kStatus_t retrieveBitstreamWrapper(nvjpeg2kEncoder_t handle, nvjpeg2kEncodeState_t state, unsigned char* data, size_t* length, cudaStream_t stream) {
+static nvjpeg2kStatus_t retrieveJpeg2000BitstreamWrapper(nvjpeg2kEncoder_t handle, nvjpeg2kEncodeState_t state, unsigned char* data, size_t* length, cudaStream_t stream) {
 	return nvjpeg2kEncodeRetrieveBitstream(handle, state, data, length, stream);
 }
 
@@ -141,6 +143,62 @@ import (
 
 	"github.com/stitch1968/gocuda/memory"
 )
+
+func nvjpeg2kHandleToUintptr(handle C.nvjpeg2kHandle_t) uintptr {
+	return uintptr(unsafe.Pointer(handle))
+}
+
+func nvjpeg2kHandleFromUintptr(handle uintptr) C.nvjpeg2kHandle_t {
+	return (C.nvjpeg2kHandle_t)(unsafe.Pointer(handle))
+}
+
+func nvjpeg2kDecodeStateToUintptr(state C.nvjpeg2kDecodeState_t) uintptr {
+	return uintptr(unsafe.Pointer(state))
+}
+
+func nvjpeg2kDecodeStateFromUintptr(state uintptr) C.nvjpeg2kDecodeState_t {
+	return (C.nvjpeg2kDecodeState_t)(unsafe.Pointer(state))
+}
+
+func nvjpeg2kStreamToUintptr(stream C.nvjpeg2kStream_t) uintptr {
+	return uintptr(unsafe.Pointer(stream))
+}
+
+func nvjpeg2kStreamFromUintptr(stream uintptr) C.nvjpeg2kStream_t {
+	return (C.nvjpeg2kStream_t)(unsafe.Pointer(stream))
+}
+
+func nvjpeg2kDecodeParamsToUintptr(params C.nvjpeg2kDecodeParams_t) uintptr {
+	return uintptr(unsafe.Pointer(params))
+}
+
+func nvjpeg2kDecodeParamsFromUintptr(params uintptr) C.nvjpeg2kDecodeParams_t {
+	return (C.nvjpeg2kDecodeParams_t)(unsafe.Pointer(params))
+}
+
+func nvjpeg2kEncoderToUintptr(handle C.nvjpeg2kEncoder_t) uintptr {
+	return uintptr(unsafe.Pointer(handle))
+}
+
+func nvjpeg2kEncoderFromUintptr(handle uintptr) C.nvjpeg2kEncoder_t {
+	return (C.nvjpeg2kEncoder_t)(unsafe.Pointer(handle))
+}
+
+func nvjpeg2kEncodeStateToUintptr(state C.nvjpeg2kEncodeState_t) uintptr {
+	return uintptr(unsafe.Pointer(state))
+}
+
+func nvjpeg2kEncodeStateFromUintptr(state uintptr) C.nvjpeg2kEncodeState_t {
+	return (C.nvjpeg2kEncodeState_t)(unsafe.Pointer(state))
+}
+
+func nvjpeg2kEncodeParamsToUintptr(params C.nvjpeg2kEncodeParams_t) uintptr {
+	return uintptr(unsafe.Pointer(params))
+}
+
+func nvjpeg2kEncodeParamsFromUintptr(params uintptr) C.nvjpeg2kEncodeParams_t {
+	return (C.nvjpeg2kEncodeParams_t)(unsafe.Pointer(params))
+}
 
 func nvjpeg2000NativeAvailable() bool {
 	return true
@@ -175,10 +233,10 @@ func createNativeJpeg2000Decoder(codec Jpeg2000Codec) (*Jpeg2000DecoderState, er
 
 	return &Jpeg2000DecoderState{
 		codec:        codec,
-		nativeHandle: uintptr(handle),
-		nativeState:  uintptr(state),
-		nativeStream: uintptr(stream),
-		nativeParams: uintptr(params),
+		nativeHandle: nvjpeg2kHandleToUintptr(handle),
+		nativeState:  nvjpeg2kDecodeStateToUintptr(state),
+		nativeStream: nvjpeg2kStreamToUintptr(stream),
+		nativeParams: nvjpeg2kDecodeParamsToUintptr(params),
 		native:       true,
 	}, nil
 }
@@ -211,9 +269,9 @@ func createNativeJpeg2000Encoder(codec Jpeg2000Codec) (*Jpeg2000EncoderState, er
 		compressionRatio: 10.0,
 		numLayers:        1,
 		numLevels:        5,
-		nativeHandle:     uintptr(handle),
-		nativeState:      uintptr(state),
-		nativeParams:     uintptr(params),
+		nativeHandle:     nvjpeg2kEncoderToUintptr(handle),
+		nativeState:      nvjpeg2kEncodeStateToUintptr(state),
+		nativeParams:     nvjpeg2kEncodeParamsToUintptr(params),
 		native:           true,
 	}, nil
 }
@@ -229,9 +287,9 @@ func decodeNativeJpeg2000(decoder *Jpeg2000DecoderState, j2kData []byte, params 
 		return nil, 0, 0, errNVJPEG2000Unsupported
 	}
 
-	stream := C.nvjpeg2kStream_t(decoder.nativeStream)
+	stream := nvjpeg2kStreamFromUintptr(decoder.nativeStream)
 	if status := C.parseStreamWrapper(
-		C.nvjpeg2kHandle_t(decoder.nativeHandle),
+		nvjpeg2kHandleFromUintptr(decoder.nativeHandle),
 		(*C.uchar)(unsafe.Pointer(&j2kData[0])),
 		C.size_t(len(j2kData)),
 		stream,
@@ -284,7 +342,7 @@ func decodeNativeJpeg2000(decoder *Jpeg2000DecoderState, j2kData []byte, params 
 		pitchArray[index] = 0
 	}
 
-	decodeParams := C.nvjpeg2kDecodeParams_t(decoder.nativeParams)
+	decodeParams := nvjpeg2kDecodeParamsFromUintptr(decoder.nativeParams)
 	if status := C.setDecodeOutputFormatWrapper(decodeParams, C.NVJPEG2K_FORMAT_INTERLEAVED); status != C.NVJPEG2K_STATUS_SUCCESS {
 		_ = output.Free()
 		return nil, 0, 0, nvjpeg2000Error("nvjpeg2kDecodeParamsSetOutputFormat", status)
@@ -307,10 +365,10 @@ func decodeNativeJpeg2000(decoder *Jpeg2000DecoderState, j2kData []byte, params 
 	}
 
 	var image C.nvjpeg2kImage_t
-	C.initImageWrapper(&image, (**C.void)(pixelData), (*C.size_t)(pitches), C.NVJPEG2K_UINT8, C.uint(info.num_components))
+	C.initImageWrapper(&image, (*unsafe.Pointer)(pixelData), (*C.size_t)(pitches), C.NVJPEG2K_UINT8, C.uint(info.num_components))
 	if status := C.decodeImageWrapper(
-		C.nvjpeg2kHandle_t(decoder.nativeHandle),
-		C.nvjpeg2kDecodeState_t(decoder.nativeState),
+		nvjpeg2kHandleFromUintptr(decoder.nativeHandle),
+		nvjpeg2kDecodeStateFromUintptr(decoder.nativeState),
 		stream,
 		decodeParams,
 		&image,
@@ -367,7 +425,13 @@ func encodeNativeJpeg2000(encoder *Jpeg2000EncoderState, imageData *memory.Memor
 		pitchArray[index] = 0
 	}
 
-	componentInfo := make([]C.nvjpeg2kImageComponentInfo_t, components)
+	componentInfoMem := C.malloc(C.size_t(components) * C.size_t(C.sizeof_nvjpeg2kImageComponentInfo_t))
+	if componentInfoMem == nil {
+		return nil, fmt.Errorf("failed to allocate nvjpeg2k component info")
+	}
+	defer C.free(componentInfoMem)
+
+	componentInfo := (*[1 << 20]C.nvjpeg2kImageComponentInfo_t)(componentInfoMem)[:components:components]
 	for index := range componentInfo {
 		componentInfo[index].component_width = C.uint(width)
 		componentInfo[index].component_height = C.uint(height)
@@ -388,7 +452,7 @@ func encodeNativeJpeg2000(encoder *Jpeg2000EncoderState, imageData *memory.Memor
 	config.tile_width = 0
 	config.tile_height = 0
 	config.num_components = C.uint(components)
-	config.image_comp_info = (*C.nvjpeg2kImageComponentInfo_t)(unsafe.Pointer(&componentInfo[0]))
+	config.image_comp_info = (*C.nvjpeg2kImageComponentInfo_t)(componentInfoMem)
 	config.enable_SOP_marker = 0
 	config.enable_EPH_marker = 0
 	config.prog_order = nativeJpeg2000ProgressionOrder(params.ProgressionOrder)
@@ -403,10 +467,9 @@ func encodeNativeJpeg2000(encoder *Jpeg2000EncoderState, imageData *memory.Memor
 	} else {
 		config.irreversible = 1
 	}
-	config.enable_custom_precincts = 0
 	config.num_precincts_init = 0
 
-	encodeParams := C.nvjpeg2kEncodeParams_t(encoder.nativeParams)
+	encodeParams := nvjpeg2kEncodeParamsFromUintptr(encoder.nativeParams)
 	if status := C.setEncodeConfigWrapper(encodeParams, &config); status != C.NVJPEG2K_STATUS_SUCCESS {
 		return nil, nvjpeg2000Error("nvjpeg2kEncodeParamsSetEncodeConfig", status)
 	}
@@ -421,10 +484,10 @@ func encodeNativeJpeg2000(encoder *Jpeg2000EncoderState, imageData *memory.Memor
 	}
 
 	var image C.nvjpeg2kImage_t
-	C.initImageWrapper(&image, (**C.void)(pixelData), (*C.size_t)(pitches), C.NVJPEG2K_UINT8, C.uint(components))
-	if status := C.encodeImageWrapper(
-		C.nvjpeg2kEncoder_t(encoder.nativeHandle),
-		C.nvjpeg2kEncodeState_t(encoder.nativeState),
+	C.initImageWrapper(&image, (*unsafe.Pointer)(pixelData), (*C.size_t)(pitches), C.NVJPEG2K_UINT8, C.uint(components))
+	if status := C.encodeJpeg2000ImageWrapper(
+		nvjpeg2kEncoderFromUintptr(encoder.nativeHandle),
+		nvjpeg2kEncodeStateFromUintptr(encoder.nativeState),
 		encodeParams,
 		&image,
 		(C.cudaStream_t)(nil),
@@ -433,7 +496,7 @@ func encodeNativeJpeg2000(encoder *Jpeg2000EncoderState, imageData *memory.Memor
 	}
 
 	var length C.size_t
-	if status := C.retrieveBitstreamWrapper(C.nvjpeg2kEncoder_t(encoder.nativeHandle), C.nvjpeg2kEncodeState_t(encoder.nativeState), nil, &length, (C.cudaStream_t)(nil)); status != C.NVJPEG2K_STATUS_SUCCESS {
+	if status := C.retrieveJpeg2000BitstreamWrapper(nvjpeg2kEncoderFromUintptr(encoder.nativeHandle), nvjpeg2kEncodeStateFromUintptr(encoder.nativeState), nil, &length, (C.cudaStream_t)(nil)); status != C.NVJPEG2K_STATUS_SUCCESS {
 		return nil, nvjpeg2000Error("nvjpeg2kEncodeRetrieveBitstream(length)", status)
 	}
 	if length == 0 {
@@ -441,9 +504,9 @@ func encodeNativeJpeg2000(encoder *Jpeg2000EncoderState, imageData *memory.Memor
 	}
 
 	encoded := make([]byte, int(length))
-	if status := C.retrieveBitstreamWrapper(
-		C.nvjpeg2kEncoder_t(encoder.nativeHandle),
-		C.nvjpeg2kEncodeState_t(encoder.nativeState),
+	if status := C.retrieveJpeg2000BitstreamWrapper(
+		nvjpeg2kEncoderFromUintptr(encoder.nativeHandle),
+		nvjpeg2kEncodeStateFromUintptr(encoder.nativeState),
 		(*C.uchar)(unsafe.Pointer(&encoded[0])),
 		&length,
 		(C.cudaStream_t)(nil),
@@ -496,25 +559,25 @@ func getNativeJpeg2000ImageInfo(j2kData []byte) (*Jpeg2000ImageInfo, error) {
 
 func destroyNativeJpeg2000Decoder(decoder *Jpeg2000DecoderState) error {
 	if decoder.nativeParams != 0 {
-		if status := C.destroyDecodeParamsWrapper(C.nvjpeg2kDecodeParams_t(decoder.nativeParams)); status != C.NVJPEG2K_STATUS_SUCCESS {
+		if status := C.destroyDecodeParamsWrapper(nvjpeg2kDecodeParamsFromUintptr(decoder.nativeParams)); status != C.NVJPEG2K_STATUS_SUCCESS {
 			return nvjpeg2000Error("nvjpeg2kDecodeParamsDestroy", status)
 		}
 		decoder.nativeParams = 0
 	}
 	if decoder.nativeStream != 0 {
-		if status := C.destroyStreamWrapper(C.nvjpeg2kStream_t(decoder.nativeStream)); status != C.NVJPEG2K_STATUS_SUCCESS {
+		if status := C.destroyStreamWrapper(nvjpeg2kStreamFromUintptr(decoder.nativeStream)); status != C.NVJPEG2K_STATUS_SUCCESS {
 			return nvjpeg2000Error("nvjpeg2kStreamDestroy", status)
 		}
 		decoder.nativeStream = 0
 	}
 	if decoder.nativeState != 0 {
-		if status := C.destroyDecodeStateWrapper(C.nvjpeg2kDecodeState_t(decoder.nativeState)); status != C.NVJPEG2K_STATUS_SUCCESS {
+		if status := C.destroyDecodeStateWrapper(nvjpeg2kDecodeStateFromUintptr(decoder.nativeState)); status != C.NVJPEG2K_STATUS_SUCCESS {
 			return nvjpeg2000Error("nvjpeg2kDecodeStateDestroy", status)
 		}
 		decoder.nativeState = 0
 	}
 	if decoder.nativeHandle != 0 {
-		if status := C.destroyNVJPEG2KHandleWrapper(C.nvjpeg2kHandle_t(decoder.nativeHandle)); status != C.NVJPEG2K_STATUS_SUCCESS {
+		if status := C.destroyNVJPEG2KHandleWrapper(nvjpeg2kHandleFromUintptr(decoder.nativeHandle)); status != C.NVJPEG2K_STATUS_SUCCESS {
 			return nvjpeg2000Error("nvjpeg2kDestroy", status)
 		}
 		decoder.nativeHandle = 0
@@ -525,19 +588,19 @@ func destroyNativeJpeg2000Decoder(decoder *Jpeg2000DecoderState) error {
 
 func destroyNativeJpeg2000Encoder(encoder *Jpeg2000EncoderState) error {
 	if encoder.nativeParams != 0 {
-		if status := C.destroyEncodeParamsWrapper(C.nvjpeg2kEncodeParams_t(encoder.nativeParams)); status != C.NVJPEG2K_STATUS_SUCCESS {
+		if status := C.destroyEncodeParamsWrapper(nvjpeg2kEncodeParamsFromUintptr(encoder.nativeParams)); status != C.NVJPEG2K_STATUS_SUCCESS {
 			return nvjpeg2000Error("nvjpeg2kEncodeParamsDestroy", status)
 		}
 		encoder.nativeParams = 0
 	}
 	if encoder.nativeState != 0 {
-		if status := C.destroyEncodeStateWrapper(C.nvjpeg2kEncodeState_t(encoder.nativeState)); status != C.NVJPEG2K_STATUS_SUCCESS {
+		if status := C.destroyEncodeStateWrapper(nvjpeg2kEncodeStateFromUintptr(encoder.nativeState)); status != C.NVJPEG2K_STATUS_SUCCESS {
 			return nvjpeg2000Error("nvjpeg2kEncodeStateDestroy", status)
 		}
 		encoder.nativeState = 0
 	}
 	if encoder.nativeHandle != 0 {
-		if status := C.destroyEncoderHandleWrapper(C.nvjpeg2kEncoder_t(encoder.nativeHandle)); status != C.NVJPEG2K_STATUS_SUCCESS {
+		if status := C.destroyEncoderHandleWrapper(nvjpeg2kEncoderFromUintptr(encoder.nativeHandle)); status != C.NVJPEG2K_STATUS_SUCCESS {
 			return nvjpeg2000Error("nvjpeg2kEncoderDestroy", status)
 		}
 		encoder.nativeHandle = 0

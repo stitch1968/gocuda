@@ -569,9 +569,11 @@ func (handle *CuTensorHandle) ExecuteContractionPlan(
 	}
 
 	// Ensure workspace is large enough
-	if handle.workspace.Size() < plan.workspaceSize {
+	if plan.workspaceSize > 0 && (handle.workspace == nil || handle.workspace.Size() < plan.workspaceSize) {
 		// Reallocate larger workspace
-		handle.workspace.Free()
+		if handle.workspace != nil {
+			handle.workspace.Free()
+		}
 		newWorkspace, err := memory.Alloc(plan.workspaceSize)
 		if err != nil {
 			return fmt.Errorf("failed to allocate larger workspace: %v", err)

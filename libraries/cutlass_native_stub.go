@@ -24,6 +24,14 @@ func executeNativeCutlassTrmm(A, B *memory.Memory, M, N int, side, uplo, trans, 
 	return errCUTLASSUnsupported
 }
 
+func executeNativeCutlassSpmm(sparseA, denseB, denseC *memory.Memory, M, N, K int) error {
+	return errCUTLASSUnsupported
+}
+
+func executeNativeCutlassConv(desc CutlassConvDesc, input, filter, output *memory.Memory, outputH, outputW int) error {
+	return errCUTLASSUnsupported
+}
+
 func destroyNativeCutlassGemm(handle *CutlassGemmHandle) error {
 	return nil
 }

@@ -5,6 +5,7 @@ package main
 
 import (
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	cuda "github.com/stitch1968/gocuda"
@@ -16,7 +17,7 @@ func main() {
 	fmt.Println("Works on any system - GPU optional!")
 
 	// Demo 1: Enhanced Error Handling
-	fmt.Println("�️ Demo 1: Enhanced Error Handling")
+	fmt.Println("⚠️ Demo 1: Enhanced Error Handling")
 	demoErrorHandling()
 	fmt.Println()
 
@@ -37,7 +38,7 @@ func main() {
 
 	fmt.Println("✅ All demos completed successfully!")
 	fmt.Println("💡 This shows improved error handling and patterns")
-	fmt.Println("📚 Next: Check docs/QUICK_START.md for detailed learning path")
+	fmt.Println("📚 Next: Check docs/TRAINING_GUIDE_BEGINNER.md for a detailed learning path")
 }
 
 func demoErrorHandling() {
@@ -50,7 +51,7 @@ func demoErrorHandling() {
 		2*1024*1024*1024) // available: 2GB
 
 	fmt.Printf("   📋 Error: %s\n", err.Error())
-	fmt.Printf("   � Details: %v\n", err.GetDetails())
+	fmt.Printf("   📝 Details: %v\n", err.GetDetails())
 
 	if err.IsRecoverable() {
 		fmt.Println("   🔄 Error is recoverable")
@@ -135,15 +136,16 @@ func demoWorkingAPI() {
 
 	// Example 3: Parallel processing (works)
 	fmt.Println("   📝 Parallel processing:")
-	processed := 0
+	var processed atomic.Int64
 	err = cuda.ParallelFor(0, 100, func(i int) error {
-		processed++
+		processed.Add(1)
 		return nil
 	})
 	if err != nil {
 		fmt.Printf("   ❌ Parallel processing failed: %v\n", err)
 	} else {
-		fmt.Printf("   ✅ Processed %d elements in parallel\n", processed)
+		_ = cuda.Synchronize()
+		fmt.Printf("   ✅ Processed %d elements in parallel\n", processed.Load())
 	}
 }
 
@@ -172,6 +174,9 @@ func demoPerformancePatterns() {
 	gpuResult, err := cuda.Map(data, func(x float64) float64 {
 		return x * x
 	})
+	if err == nil {
+		err = cuda.Synchronize()
+	}
 	gpuTime := time.Since(startGPU)
 
 	if err != nil {
@@ -199,6 +204,11 @@ func demoPerformancePatterns() {
 		fmt.Println("   ✅ Results match between CPU and GPU")
 	} else {
 		fmt.Println("   ⚠️  Results differ")
+	}
+
+	if cpuTime <= 0 || gpuTime <= 0 {
+		fmt.Println("   ℹ️  Relative speed comparison skipped because one timing was below timer resolution")
+		return
 	}
 
 	if gpuTime < cpuTime {

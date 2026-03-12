@@ -1,0 +1,870 @@
+# github.com/stitch1968/gocuda/libraries [github.com/stitch1968/gocuda/libraries.test]
+In file included from C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/device_types.h:59,
+                 from C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/builtin_types.h:56,
+                 from C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cuda_runtime.h:90,
+                 from C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/curand.h:59,
+                 from libraries\curand_native_cuda.go:11:
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/crt/host_defines.h:96:9: warning: '__cdecl' redefined
+   96 | #define __cdecl
+      |         ^~~~~~~
+<built-in>: note: this is the location of the previous definition
+# github.com/stitch1968/gocuda/libraries [github.com/stitch1968/gocuda/libraries.test]
+In file included from C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/driver_types.h:59,
+                 from C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cublas_api.h:70,
+                 from C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cublas_v2.h:66,
+                 from libraries\cutlass_native_cuda.go:11:
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/crt/host_defines.h:96:9: warning: '__cdecl' redefined
+   96 | #define __cdecl
+      |         ^~~~~~~
+<built-in>: note: this is the location of the previous definition
+# github.com/stitch1968/gocuda/libraries [github.com/stitch1968/gocuda/libraries.test]
+In file included from C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/device_types.h:59,
+                 from C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/builtin_types.h:56,
+                 from C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cuda_runtime.h:90,
+                 from libraries\cudss_native_cuda.go:11:
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/crt/host_defines.h:96:9: warning: '__cdecl' redefined
+   96 | #define __cdecl
+      |         ^~~~~~~
+<built-in>: note: this is the location of the previous definition
+# github.com/stitch1968/gocuda/libraries [github.com/stitch1968/gocuda/libraries.test]
+In file included from C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/vector_types.h:65,
+                 from C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cuComplex.h:75,
+                 from C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:52,
+                 from libraries\cusparse_native_cuda.go:11:
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/crt/host_defines.h:96:9: warning: '__cdecl' redefined
+   96 | #define __cdecl
+      |         ^~~~~~~
+<built-in>: note: this is the location of the previous definition
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:434:1: warning: 'csric02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+  434 | cusparseCreateCsric02Info(csric02Info_t* info);
+      | ^~~~~~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:438:1: warning: 'csric02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+  438 | cusparseDestroyCsric02Info(csric02Info_t info);
+      | ^~~~~~~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:442:1: warning: 'bsric02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+  442 | cusparseCreateBsric02Info(bsric02Info_t* info);
+      | ^~~~~~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:446:1: warning: 'bsric02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+  446 | cusparseDestroyBsric02Info(bsric02Info_t info);
+      | ^~~~~~~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:450:1: warning: 'csrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+  450 | cusparseCreateCsrilu02Info(csrilu02Info_t* info);
+      | ^~~~~~~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:454:1: warning: 'csrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+  454 | cusparseDestroyCsrilu02Info(csrilu02Info_t info);
+      | ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:458:1: warning: 'bsrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+  458 | cusparseCreateBsrilu02Info(bsrilu02Info_t* info);
+      | ^~~~~~~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:462:1: warning: 'bsrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+  462 | cusparseDestroyBsrilu02Info(bsrilu02Info_t info);
+      | ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:466:1: warning: 'bsrsv2Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+  466 | cusparseCreateBsrsv2Info(bsrsv2Info_t* info);
+      | ^~~~~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:470:1: warning: 'bsrsv2Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+  470 | cusparseDestroyBsrsv2Info(bsrsv2Info_t info);
+      | ^~~~~~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:474:1: warning: 'bsrsm2Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+  474 | cusparseCreateBsrsm2Info(bsrsm2Info_t* info);
+      | ^~~~~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:478:1: warning: 'bsrsm2Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+  478 | cusparseDestroyBsrsm2Info(bsrsm2Info_t info);
+      | ^~~~~~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:482:1: warning: 'csru2csrInfo_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+  482 | cusparseCreateCsru2csrInfo(csru2csrInfo_t* info);
+      | ^~~~~~~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:486:1: warning: 'csru2csrInfo_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+  486 | cusparseDestroyCsru2csrInfo(csru2csrInfo_t info);
+      | ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:490:1: warning: 'cusparseColorInfo_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+  490 | cusparseCreateColorInfo(cusparseColorInfo_t* info);
+      | ^~~~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:494:1: warning: 'cusparseColorInfo_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+  494 | cusparseDestroyColorInfo(cusparseColorInfo_t info);
+      | ^~~~~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:498:1: warning: 'pruneInfo_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+  498 | cusparseCreatePruneInfo(pruneInfo_t* info);
+      | ^~~~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:502:1: warning: 'pruneInfo_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+  502 | cusparseDestroyPruneInfo(pruneInfo_t info);
+      | ^~~~~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:771:27: warning: 'bsrsv2Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+  771 |                           bsrsv2Info_t     info,
+      |                           ^~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:786:28: warning: 'bsrsv2Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+  786 |                            bsrsv2Info_t             info,
+      |                            ^~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:801:28: warning: 'bsrsv2Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+  801 |                            bsrsv2Info_t             info,
+      |                            ^~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:816:28: warning: 'bsrsv2Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+  816 |                            bsrsv2Info_t             info,
+      |                            ^~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:831:28: warning: 'bsrsv2Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+  831 |                            bsrsv2Info_t             info,
+      |                            ^~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:846:31: warning: 'bsrsv2Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+  846 |                               bsrsv2Info_t             info,
+      |                               ^~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:861:31: warning: 'bsrsv2Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+  861 |                               bsrsv2Info_t             info,
+      |                               ^~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:876:31: warning: 'bsrsv2Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+  876 |                               bsrsv2Info_t             info,
+      |                               ^~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:891:31: warning: 'bsrsv2Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+  891 |                               bsrsv2Info_t             info,
+      |                               ^~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:906:26: warning: 'bsrsv2Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+  906 |                          bsrsv2Info_t             info,
+      |                          ^~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:907:26: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+  907 |                          cusparseSolvePolicy_t    policy,
+      |                          ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:922:26: warning: 'bsrsv2Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+  922 |                          bsrsv2Info_t             info,
+      |                          ^~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:923:26: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+  923 |                          cusparseSolvePolicy_t    policy,
+      |                          ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:938:26: warning: 'bsrsv2Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+  938 |                          bsrsv2Info_t             info,
+      |                          ^~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:939:26: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+  939 |                          cusparseSolvePolicy_t    policy,
+      |                          ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:954:26: warning: 'bsrsv2Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+  954 |                          bsrsv2Info_t             info,
+      |                          ^~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:955:26: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+  955 |                          cusparseSolvePolicy_t    policy,
+      |                          ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:971:23: warning: 'bsrsv2Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+  971 |                       bsrsv2Info_t             info,
+      |                       ^~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:974:23: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+  974 |                       cusparseSolvePolicy_t    policy,
+      |                       ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:990:23: warning: 'bsrsv2Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+  990 |                       bsrsv2Info_t             info,
+      |                       ^~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:993:23: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+  993 |                       cusparseSolvePolicy_t    policy,
+      |                       ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1009:23: warning: 'bsrsv2Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1009 |                       bsrsv2Info_t             info,
+      |                       ^~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1012:23: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1012 |                       cusparseSolvePolicy_t    policy,
+      |                       ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1028:23: warning: 'bsrsv2Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1028 |                       bsrsv2Info_t             info,
+      |                       ^~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1031:23: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1031 |                       cusparseSolvePolicy_t    policy,
+      |                       ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1129:27: warning: 'bsrsm2Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1129 |                           bsrsm2Info_t     info,
+      |                           ^~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1146:28: warning: 'bsrsm2Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1146 |                            bsrsm2Info_t             info,
+      |                            ^~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1163:28: warning: 'bsrsm2Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1163 |                            bsrsm2Info_t             info,
+      |                            ^~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1180:28: warning: 'bsrsm2Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1180 |                            bsrsm2Info_t             info,
+      |                            ^~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1197:28: warning: 'bsrsm2Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1197 |                            bsrsm2Info_t             info,
+      |                            ^~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1214:31: warning: 'bsrsm2Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1214 |                               bsrsm2Info_t             info,
+      |                               ^~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1231:31: warning: 'bsrsm2Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1231 |                               bsrsm2Info_t             info,
+      |                               ^~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1248:31: warning: 'bsrsm2Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1248 |                               bsrsm2Info_t             info,
+      |                               ^~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1265:31: warning: 'bsrsm2Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1265 |                               bsrsm2Info_t             info,
+      |                               ^~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1282:26: warning: 'bsrsm2Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1282 |                          bsrsm2Info_t             info,
+      |                          ^~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1283:26: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1283 |                          cusparseSolvePolicy_t    policy,
+      |                          ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1300:26: warning: 'bsrsm2Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1300 |                          bsrsm2Info_t             info,
+      |                          ^~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1301:26: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1301 |                          cusparseSolvePolicy_t    policy,
+      |                          ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1318:26: warning: 'bsrsm2Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1318 |                          bsrsm2Info_t             info,
+      |                          ^~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1319:26: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1319 |                          cusparseSolvePolicy_t    policy,
+      |                          ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1336:26: warning: 'bsrsm2Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1336 |                          bsrsm2Info_t             info,
+      |                          ^~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1337:26: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1337 |                          cusparseSolvePolicy_t    policy,
+      |                          ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1355:23: warning: 'bsrsm2Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1355 |                       bsrsm2Info_t             info,
+      |                       ^~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1360:23: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1360 |                       cusparseSolvePolicy_t    policy,
+      |                       ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1378:23: warning: 'bsrsm2Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1378 |                       bsrsm2Info_t             info,
+      |                       ^~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1383:23: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1383 |                       cusparseSolvePolicy_t    policy,
+      |                       ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1401:23: warning: 'bsrsm2Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1401 |                       bsrsm2Info_t             info,
+      |                       ^~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1406:23: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1406 |                       cusparseSolvePolicy_t    policy,
+      |                       ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1424:23: warning: 'bsrsm2Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1424 |                       bsrsm2Info_t             info,
+      |                       ^~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1429:23: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1429 |                       cusparseSolvePolicy_t    policy,
+      |                       ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1439:32: warning: 'csrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1439 |                                csrilu02Info_t   info,
+      |                                ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1447:32: warning: 'csrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1447 |                                csrilu02Info_t   info,
+      |                                ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1455:32: warning: 'csrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1455 |                                csrilu02Info_t   info,
+      |                                ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1463:32: warning: 'csrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1463 |                                csrilu02Info_t   info,
+      |                                ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1471:29: warning: 'csrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1471 |                             csrilu02Info_t   info,
+      |                             ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1483:30: warning: 'csrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1483 |                              csrilu02Info_t           info,
+      |                              ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1495:30: warning: 'csrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1495 |                              csrilu02Info_t           info,
+      |                              ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1507:30: warning: 'csrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1507 |                              csrilu02Info_t           info,
+      |                              ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1519:30: warning: 'csrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1519 |                              csrilu02Info_t           info,
+      |                              ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1531:33: warning: 'csrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1531 |                                 csrilu02Info_t           info,
+      |                                 ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1543:33: warning: 'csrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1543 |                                 csrilu02Info_t           info,
+      |                                 ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1555:33: warning: 'csrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1555 |                                 csrilu02Info_t           info,
+      |                                 ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1567:33: warning: 'csrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1567 |                                 csrilu02Info_t           info,
+      |                                 ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1579:28: warning: 'csrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1579 |                            csrilu02Info_t           info,
+      |                            ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1580:28: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1580 |                            cusparseSolvePolicy_t    policy,
+      |                            ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1592:28: warning: 'csrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1592 |                            csrilu02Info_t           info,
+      |                            ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1593:28: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1593 |                            cusparseSolvePolicy_t    policy,
+      |                            ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1605:28: warning: 'csrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1605 |                            csrilu02Info_t           info,
+      |                            ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1606:28: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1606 |                            cusparseSolvePolicy_t    policy,
+      |                            ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1618:28: warning: 'csrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1618 |                            csrilu02Info_t           info,
+      |                            ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1619:28: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1619 |                            cusparseSolvePolicy_t    policy,
+      |                            ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1631:19: warning: 'csrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1631 |                   csrilu02Info_t        info,
+      |                   ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1632:19: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1632 |                   cusparseSolvePolicy_t policy,
+      |                   ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1644:19: warning: 'csrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1644 |                   csrilu02Info_t        info,
+      |                   ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1645:19: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1645 |                   cusparseSolvePolicy_t policy,
+      |                   ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1657:19: warning: 'csrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1657 |                   csrilu02Info_t        info,
+      |                   ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1658:19: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1658 |                   cusparseSolvePolicy_t policy,
+      |                   ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1670:19: warning: 'csrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1670 |                   csrilu02Info_t        info,
+      |                   ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1671:19: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1671 |                   cusparseSolvePolicy_t policy,
+      |                   ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1677:32: warning: 'bsrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1677 |                                bsrilu02Info_t   info,
+      |                                ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1685:32: warning: 'bsrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1685 |                                bsrilu02Info_t   info,
+      |                                ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1693:32: warning: 'bsrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1693 |                                bsrilu02Info_t   info,
+      |                                ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1701:32: warning: 'bsrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1701 |                                bsrilu02Info_t   info,
+      |                                ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1709:29: warning: 'bsrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1709 |                             bsrilu02Info_t   info,
+      |                             ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1723:30: warning: 'bsrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1723 |                              bsrilu02Info_t           info,
+      |                              ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1737:30: warning: 'bsrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1737 |                              bsrilu02Info_t           info,
+      |                              ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1751:30: warning: 'bsrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1751 |                              bsrilu02Info_t           info,
+      |                              ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1765:30: warning: 'bsrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1765 |                              bsrilu02Info_t           info,
+      |                              ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1779:33: warning: 'bsrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1779 |                                 bsrilu02Info_t           info,
+      |                                 ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1793:33: warning: 'bsrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1793 |                                 bsrilu02Info_t           info,
+      |                                 ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1807:33: warning: 'bsrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1807 |                                 bsrilu02Info_t           info,
+      |                                 ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1821:32: warning: 'bsrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1821 |                                bsrilu02Info_t           info,
+      |                                ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1835:28: warning: 'bsrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1835 |                            bsrilu02Info_t           info,
+      |                            ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1836:28: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1836 |                            cusparseSolvePolicy_t    policy,
+      |                            ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1850:28: warning: 'bsrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1850 |                            bsrilu02Info_t           info,
+      |                            ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1851:28: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1851 |                            cusparseSolvePolicy_t    policy,
+      |                            ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1865:28: warning: 'bsrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1865 |                            bsrilu02Info_t           info,
+      |                            ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1866:28: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1866 |                            cusparseSolvePolicy_t    policy,
+      |                            ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1880:28: warning: 'bsrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1880 |                            bsrilu02Info_t           info,
+      |                            ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1881:28: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1881 |                            cusparseSolvePolicy_t    policy,
+      |                            ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1895:19: warning: 'bsrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1895 |                   bsrilu02Info_t           info,
+      |                   ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1896:19: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1896 |                   cusparseSolvePolicy_t    policy,
+      |                   ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1910:19: warning: 'bsrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1910 |                   bsrilu02Info_t           info,
+      |                   ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1911:19: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1911 |                   cusparseSolvePolicy_t    policy,
+      |                   ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1925:19: warning: 'bsrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1925 |                   bsrilu02Info_t           info,
+      |                   ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1926:19: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1926 |                   cusparseSolvePolicy_t    policy,
+      |                   ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1940:19: warning: 'bsrilu02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1940 |                   bsrilu02Info_t           info,
+      |                   ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1941:19: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1941 |                   cusparseSolvePolicy_t    policy,
+      |                   ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1947:28: warning: 'csric02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1947 |                            csric02Info_t    info,
+      |                            ^~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1959:29: warning: 'csric02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1959 |                             csric02Info_t            info,
+      |                             ^~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1971:29: warning: 'csric02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1971 |                             csric02Info_t            info,
+      |                             ^~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1983:29: warning: 'csric02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1983 |                             csric02Info_t            info,
+      |                             ^~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:1995:29: warning: 'csric02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 1995 |                             csric02Info_t            info,
+      |                             ^~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2007:32: warning: 'csric02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2007 |                                csric02Info_t            info,
+      |                                ^~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2019:32: warning: 'csric02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2019 |                                csric02Info_t            info,
+      |                                ^~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2031:32: warning: 'csric02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2031 |                                csric02Info_t            info,
+      |                                ^~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2043:32: warning: 'csric02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2043 |                                csric02Info_t            info,
+      |                                ^~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2055:27: warning: 'csric02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2055 |                           csric02Info_t            info,
+      |                           ^~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2056:27: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2056 |                           cusparseSolvePolicy_t    policy,
+      |                           ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2068:27: warning: 'csric02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2068 |                           csric02Info_t            info,
+      |                           ^~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2069:27: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2069 |                           cusparseSolvePolicy_t    policy,
+      |                           ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2081:27: warning: 'csric02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2081 |                           csric02Info_t            info,
+      |                           ^~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2082:27: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2082 |                           cusparseSolvePolicy_t    policy,
+      |                           ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2094:27: warning: 'csric02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2094 |                           csric02Info_t            info,
+      |                           ^~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2095:27: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2095 |                           cusparseSolvePolicy_t    policy,
+      |                           ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2107:18: warning: 'csric02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2107 |                  csric02Info_t            info,
+      |                  ^~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2108:18: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2108 |                  cusparseSolvePolicy_t    policy,
+      |                  ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2120:18: warning: 'csric02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2120 |                  csric02Info_t            info,
+      |                  ^~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2121:18: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2121 |                  cusparseSolvePolicy_t    policy,
+      |                  ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2133:18: warning: 'csric02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2133 |                  csric02Info_t            info,
+      |                  ^~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2134:18: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2134 |                  cusparseSolvePolicy_t    policy,
+      |                  ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2146:18: warning: 'csric02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2146 |                  csric02Info_t            info,
+      |                  ^~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2147:18: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2147 |                  cusparseSolvePolicy_t    policy,
+      |                  ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2153:28: warning: 'bsric02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2153 |                            bsric02Info_t    info,
+      |                            ^~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2167:29: warning: 'bsric02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2167 |                             bsric02Info_t            info,
+      |                             ^~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2181:29: warning: 'bsric02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2181 |                             bsric02Info_t            info,
+      |                             ^~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2195:29: warning: 'bsric02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2195 |                             bsric02Info_t            info,
+      |                             ^~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2209:29: warning: 'bsric02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2209 |                             bsric02Info_t            info,
+      |                             ^~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2223:32: warning: 'bsric02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2223 |                                bsric02Info_t            info,
+      |                                ^~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2237:32: warning: 'bsric02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2237 |                                bsric02Info_t            info,
+      |                                ^~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2251:32: warning: 'bsric02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2251 |                                bsric02Info_t            info,
+      |                                ^~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2265:32: warning: 'bsric02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2265 |                                bsric02Info_t            info,
+      |                                ^~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2279:27: warning: 'bsric02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2279 |                           bsric02Info_t            info,
+      |                           ^~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2280:27: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2280 |                           cusparseSolvePolicy_t    policy,
+      |                           ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2294:27: warning: 'bsric02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2294 |                           bsric02Info_t            info,
+      |                           ^~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2295:27: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2295 |                           cusparseSolvePolicy_t    policy,
+      |                           ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2309:27: warning: 'bsric02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2309 |                           bsric02Info_t            info,
+      |                           ^~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2310:27: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2310 |                           cusparseSolvePolicy_t    policy,
+      |                           ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2324:27: warning: 'bsric02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2324 |                           bsric02Info_t            info,
+      |                           ^~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2325:27: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2325 |                           cusparseSolvePolicy_t    policy,
+      |                           ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2339:18: warning: 'bsric02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2339 |                  bsric02Info_t            info,
+      |                  ^~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2340:18: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2340 |                  cusparseSolvePolicy_t    policy,
+      |                  ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2354:18: warning: 'bsric02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2354 |                  bsric02Info_t            info,
+      |                  ^~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2355:18: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2355 |                  cusparseSolvePolicy_t    policy,
+      |                  ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2370:18: warning: 'bsric02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2370 |                  bsric02Info_t            info,
+      |                  ^~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2371:18: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2371 |                  cusparseSolvePolicy_t    policy,
+      |                  ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2385:18: warning: 'bsric02Info_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2385 |                  bsric02Info_t            info,
+      |                  ^~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:2386:18: warning: 'cusparseSolvePolicy_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 2386 |                  cusparseSolvePolicy_t    policy,
+      |                  ^~~~~~~~~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:318:14: note: declared here
+  318 | typedef enum {
+      |              ^
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:3059:19: warning: 'cusparseColorInfo_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 3059 |                   const cusparseColorInfo_t info);
+      |                   ^~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:3074:19: warning: 'cusparseColorInfo_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 3074 |                   const cusparseColorInfo_t info);
+      |                   ^~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:3089:19: warning: 'cusparseColorInfo_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 3089 |                   const cusparseColorInfo_t info);
+      |                   ^~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:3104:19: warning: 'cusparseColorInfo_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 3104 |                   const cusparseColorInfo_t info);
+      |                   ^~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:4185:33: warning: 'csru2csrInfo_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 4185 |                                 csru2csrInfo_t   info,
+      |                                 ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:4197:33: warning: 'csru2csrInfo_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 4197 |                                 csru2csrInfo_t   info,
+      |                                 ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:4209:33: warning: 'csru2csrInfo_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 4209 |                                 csru2csrInfo_t   info,
+      |                                 ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:4221:33: warning: 'csru2csrInfo_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 4221 |                                 csru2csrInfo_t   info,
+      |                                 ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:4234:19: warning: 'csru2csrInfo_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 4234 |                   csru2csrInfo_t           info,
+      |                   ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:4247:19: warning: 'csru2csrInfo_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 4247 |                   csru2csrInfo_t           info,
+      |                   ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:4260:19: warning: 'csru2csrInfo_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 4260 |                   csru2csrInfo_t           info,
+      |                   ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:4273:19: warning: 'csru2csrInfo_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 4273 |                   csru2csrInfo_t           info,
+      |                   ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:4286:19: warning: 'csru2csrInfo_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 4286 |                   csru2csrInfo_t           info,
+      |                   ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:4299:19: warning: 'csru2csrInfo_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 4299 |                   csru2csrInfo_t           info,
+      |                   ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:4312:19: warning: 'csru2csrInfo_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 4312 |                   csru2csrInfo_t           info,
+      |                   ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:4325:19: warning: 'csru2csrInfo_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 4325 |                   csru2csrInfo_t           info,
+      |                   ^~~~~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:4652:36: warning: 'pruneInfo_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 4652 |                                    pruneInfo_t              info,
+      |                                    ^~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:4668:36: warning: 'pruneInfo_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 4668 |                                    pruneInfo_t              info,
+      |                                    ^~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:4701:37: warning: 'pruneInfo_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 4701 |                                     pruneInfo_t              info,
+      |                                     ^~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:4716:37: warning: 'pruneInfo_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 4716 |                                     pruneInfo_t              info,
+      |                                     ^~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:4750:37: warning: 'pruneInfo_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 4750 |                                     pruneInfo_t              info,
+      |                                     ^~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:4765:37: warning: 'pruneInfo_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 4765 |                                     pruneInfo_t              info,
+      |                                     ^~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:4807:36: warning: 'pruneInfo_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 4807 |                                    pruneInfo_t              info,
+      |                                    ^~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:4826:36: warning: 'pruneInfo_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 4826 |                                    pruneInfo_t              info,
+      |                                    ^~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:4866:37: warning: 'pruneInfo_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 4866 |                                     pruneInfo_t              info,
+      |                                     ^~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:4884:37: warning: 'pruneInfo_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 4884 |                                     pruneInfo_t              info,
+      |                                     ^~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:4924:35: warning: 'pruneInfo_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 4924 |                                   pruneInfo_t              info,
+      |                                   ^~~~~~~~~~~
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusparse.h:4942:35: warning: 'pruneInfo_t' is deprecated: The type will be removed in the next major release [-Wdeprecated-declarations]
+ 4942 |                                   pruneInfo_t              info,
+      |                                   ^~~~~~~~~~~
+# github.com/stitch1968/gocuda/libraries [github.com/stitch1968/gocuda/libraries.test]
+In file included from C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/device_types.h:59,
+                 from C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/builtin_types.h:56,
+                 from C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cuda_runtime.h:90,
+                 from libraries\cufft_native_cuda.go:11:
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/crt/host_defines.h:96:9: warning: '__cdecl' redefined
+   96 | #define __cdecl
+      |         ^~~~~~~
+<built-in>: note: this is the location of the previous definition
+# github.com/stitch1968/gocuda/libraries [github.com/stitch1968/gocuda/libraries.test]
+In file included from C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/device_types.h:59,
+                 from C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/builtin_types.h:56,
+                 from C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cuda_runtime.h:90,
+                 from libraries\nvjpeg_native_cuda.go:11:
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/crt/host_defines.h:96:9: warning: '__cdecl' redefined
+   96 | #define __cdecl
+      |         ^~~~~~~
+<built-in>: note: this is the location of the previous definition
+# github.com/stitch1968/gocuda/libraries [github.com/stitch1968/gocuda/libraries.test]
+In file included from C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/vector_types.h:65,
+                 from C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cuComplex.h:75,
+                 from C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cusolverDn.h:86,
+                 from libraries\cusolver_native_cuda.go:11:
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/crt/host_defines.h:96:9: warning: '__cdecl' redefined
+   96 | #define __cdecl
+      |         ^~~~~~~
+<built-in>: note: this is the location of the previous definition
+# github.com/stitch1968/gocuda/libraries [github.com/stitch1968/gocuda/libraries.test]
+In file included from C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/device_types.h:59,
+                 from C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/builtin_types.h:56,
+                 from C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cuda_runtime.h:90,
+                 from libraries\cutensor_native_cuda.go:11:
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/crt/host_defines.h:96:9: warning: '__cdecl' redefined
+   96 | #define __cdecl
+      |         ^~~~~~~
+<built-in>: note: this is the location of the previous definition
+# github.com/stitch1968/gocuda/libraries [github.com/stitch1968/gocuda/libraries.test]
+In file included from C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/device_types.h:59,
+                 from C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/builtin_types.h:56,
+                 from C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cuda_runtime.h:90,
+                 from libraries\amgx_native_cuda.go:11:
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/crt/host_defines.h:96:9: warning: '__cdecl' redefined
+   96 | #define __cdecl
+      |         ^~~~~~~
+<built-in>: note: this is the location of the previous definition
+# github.com/stitch1968/gocuda/libraries [github.com/stitch1968/gocuda/libraries.test]
+In file included from C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/device_types.h:59,
+                 from C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/builtin_types.h:56,
+                 from C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cuda_runtime.h:90,
+                 from libraries\cudnn_native_cuda.go:11:
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/crt/host_defines.h:96:9: warning: '__cdecl' redefined
+   96 | #define __cdecl
+      |         ^~~~~~~
+<built-in>: note: this is the location of the previous definition
+# github.com/stitch1968/gocuda/libraries [github.com/stitch1968/gocuda/libraries.test]
+In file included from C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/device_types.h:59,
+                 from C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/builtin_types.h:56,
+                 from C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/cuda_runtime.h:90,
+                 from libraries\nvjpeg2000_native_cuda.go:11:
+C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include/crt/host_defines.h:96:9: warning: '__cdecl' redefined
+   96 | #define __cdecl
+      |         ^~~~~~~
+<built-in>: note: this is the location of the previous definition
+# github.com/stitch1968/gocuda/libraries [github.com/stitch1968/gocuda/libraries.test]
+libraries\amgx_native_cuda.go:77:28: cannot convert nativeConfig (variable of pointer type _Ctype_AMGX_config_handle) to type uintptr
+libraries\amgx_native_cuda.go:78:28: cannot convert resources (variable of pointer type _Ctype_AMGX_resources_handle) to type uintptr
+libraries\amgx_native_cuda.go:79:28: cannot convert solver (variable of pointer type _Ctype_AMGX_solver_handle) to type uintptr
+libraries\amgx_native_cuda.go:120:72: cannot convert handle.nativeResources (variable of type uintptr) to type _Ctype_AMGX_resources_handle
+libraries\amgx_native_cuda.go:123:33: cannot convert nativeMatrix (variable of pointer type _Ctype_AMGX_matrix_handle) to type uintptr
+libraries\amgx_native_cuda.go:126:24: cannot convert matrix.nativeHandle (variable of type uintptr) to type _Ctype_AMGX_matrix_handle
+libraries\amgx_native_cuda.go:138:52: cannot convert handle.nativeSolver (variable of type uintptr) to type _Ctype_AMGX_solver_handle
+libraries\amgx_native_cuda.go:138:95: cannot convert matrix.nativeHandle (variable of type uintptr) to type _Ctype_AMGX_matrix_handle
+libraries\amgx_native_cuda.go:153:63: cannot convert handle.nativeResources (variable of type uintptr) to type _Ctype_AMGX_resources_handle
+libraries\amgx_native_cuda.go:156:28: cannot convert rhs (variable of pointer type _Ctype_AMGX_vector_handle) to type uintptr
+libraries\amgx_native_cuda.go:156:28: too many errors
+FAIL	github.com/stitch1968/gocuda/libraries [build failed]
+FAIL

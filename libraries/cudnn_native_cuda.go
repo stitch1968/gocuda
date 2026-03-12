@@ -4,7 +4,7 @@ package libraries
 
 /*
 #cgo linux CFLAGS: -I/usr/local/cuda/include -I/opt/cuda/include
-#cgo windows CFLAGS: -I"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include" -I"D:/NVIDIA/include"
+#cgo windows CFLAGS: -I"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.1/include" -I"C:/Program Files/NVIDIA/CUDNN/v9.20/include/12.9" -I"C:/Program Files/NVIDIA/CUDNN/v9.20/include/13.2" -I"D:/NVIDIA/include"
 #cgo linux LDFLAGS: -L/usr/local/cuda/lib64 -L/opt/cuda/lib64 -lcudnn
 #cgo windows LDFLAGS: -L${SRCDIR}/../lib_mingw -lcudnn
 
@@ -46,6 +46,54 @@ import (
 	"github.com/stitch1968/gocuda/memory"
 )
 
+func cudnnHandleToUintptr(handle C.cudnnHandle_t) uintptr {
+	return uintptr(unsafe.Pointer(handle))
+}
+
+func cudnnHandleFromUintptr(handle uintptr) C.cudnnHandle_t {
+	return (C.cudnnHandle_t)(unsafe.Pointer(handle))
+}
+
+func cudnnTensorDescriptorToUintptr(handle C.cudnnTensorDescriptor_t) uintptr {
+	return uintptr(unsafe.Pointer(handle))
+}
+
+func cudnnTensorDescriptorFromUintptr(handle uintptr) C.cudnnTensorDescriptor_t {
+	return (C.cudnnTensorDescriptor_t)(unsafe.Pointer(handle))
+}
+
+func cudnnFilterDescriptorToUintptr(handle C.cudnnFilterDescriptor_t) uintptr {
+	return uintptr(unsafe.Pointer(handle))
+}
+
+func cudnnFilterDescriptorFromUintptr(handle uintptr) C.cudnnFilterDescriptor_t {
+	return (C.cudnnFilterDescriptor_t)(unsafe.Pointer(handle))
+}
+
+func cudnnConvolutionDescriptorToUintptr(handle C.cudnnConvolutionDescriptor_t) uintptr {
+	return uintptr(unsafe.Pointer(handle))
+}
+
+func cudnnConvolutionDescriptorFromUintptr(handle uintptr) C.cudnnConvolutionDescriptor_t {
+	return (C.cudnnConvolutionDescriptor_t)(unsafe.Pointer(handle))
+}
+
+func cudnnPoolingDescriptorToUintptr(handle C.cudnnPoolingDescriptor_t) uintptr {
+	return uintptr(unsafe.Pointer(handle))
+}
+
+func cudnnPoolingDescriptorFromUintptr(handle uintptr) C.cudnnPoolingDescriptor_t {
+	return (C.cudnnPoolingDescriptor_t)(unsafe.Pointer(handle))
+}
+
+func cudnnActivationDescriptorToUintptr(handle C.cudnnActivationDescriptor_t) uintptr {
+	return uintptr(unsafe.Pointer(handle))
+}
+
+func cudnnActivationDescriptorFromUintptr(handle uintptr) C.cudnnActivationDescriptor_t {
+	return (C.cudnnActivationDescriptor_t)(unsafe.Pointer(handle))
+}
+
 func cudnnNativeAvailable() bool {
 	return true
 }
@@ -55,11 +103,11 @@ func createNativeDNNHandle() (*DNNHandle, error) {
 	if status := C.createDNNHandle(&handle); status != C.CUDNN_STATUS_SUCCESS {
 		return nil, cudnnError("cudnnCreate", status)
 	}
-	return &DNNHandle{handle: uintptr(handle), native: true}, nil
+	return &DNNHandle{handle: cudnnHandleToUintptr(handle), native: true}, nil
 }
 
 func destroyNativeDNNHandle(handle *DNNHandle) error {
-	if status := C.destroyDNNHandle(C.cudnnHandle_t(handle.handle)); status != C.CUDNN_STATUS_SUCCESS {
+	if status := C.destroyDNNHandle(cudnnHandleFromUintptr(handle.handle)); status != C.CUDNN_STATUS_SUCCESS {
 		return cudnnError("cudnnDestroy", status)
 	}
 	return nil
@@ -70,7 +118,7 @@ func createNativeTensorDescriptor() (*TensorDescriptor, error) {
 	if status := C.createTensorDescriptorWrapper(&desc); status != C.CUDNN_STATUS_SUCCESS {
 		return nil, cudnnError("cudnnCreateTensorDescriptor", status)
 	}
-	return &TensorDescriptor{handle: uintptr(desc), native: true}, nil
+	return &TensorDescriptor{handle: cudnnTensorDescriptorToUintptr(desc), native: true}, nil
 }
 
 func setNativeTensorNdDescriptor(desc *TensorDescriptor, dataType DNNDataType, dimensions []int, strides []int) error {
@@ -81,7 +129,7 @@ func setNativeTensorNdDescriptor(desc *TensorDescriptor, dataType DNNDataType, d
 	if len(dimensions) == 0 || len(strides) == 0 {
 		return fmt.Errorf("dimensions and strides cannot be empty")
 	}
-	if status := C.setTensorNdDescriptorWrapper(C.cudnnTensorDescriptor_t(desc.handle), C.int(nativeType), C.int(len(dimensions)), (*C.int)(unsafe.Pointer(&dimensions[0])), (*C.int)(unsafe.Pointer(&strides[0]))); status != C.CUDNN_STATUS_SUCCESS {
+	if status := C.setTensorNdDescriptorWrapper(cudnnTensorDescriptorFromUintptr(desc.handle), C.int(nativeType), C.int(len(dimensions)), (*C.int)(unsafe.Pointer(&dimensions[0])), (*C.int)(unsafe.Pointer(&strides[0]))); status != C.CUDNN_STATUS_SUCCESS {
 		return cudnnError("cudnnSetTensorNdDescriptor", status)
 	}
 	return nil
@@ -96,14 +144,14 @@ func setNativeTensor4dDescriptor(desc *TensorDescriptor, format DNNTensorFormat,
 	if err != nil {
 		return err
 	}
-	if status := C.setTensor4dDescriptorWrapper(C.cudnnTensorDescriptor_t(desc.handle), C.int(nativeFormat), C.int(nativeType), C.int(n), C.int(c), C.int(h), C.int(w)); status != C.CUDNN_STATUS_SUCCESS {
+	if status := C.setTensor4dDescriptorWrapper(cudnnTensorDescriptorFromUintptr(desc.handle), C.int(nativeFormat), C.int(nativeType), C.int(n), C.int(c), C.int(h), C.int(w)); status != C.CUDNN_STATUS_SUCCESS {
 		return cudnnError("cudnnSetTensor4dDescriptor", status)
 	}
 	return nil
 }
 
 func destroyNativeTensorDescriptor(desc *TensorDescriptor) error {
-	if status := C.destroyTensorDescriptorWrapper(C.cudnnTensorDescriptor_t(desc.handle)); status != C.CUDNN_STATUS_SUCCESS {
+	if status := C.destroyTensorDescriptorWrapper(cudnnTensorDescriptorFromUintptr(desc.handle)); status != C.CUDNN_STATUS_SUCCESS {
 		return cudnnError("cudnnDestroyTensorDescriptor", status)
 	}
 	return nil
@@ -114,7 +162,7 @@ func createNativeFilterDescriptor() (*FilterDescriptor, error) {
 	if status := C.createFilterDescriptorWrapper(&desc); status != C.CUDNN_STATUS_SUCCESS {
 		return nil, cudnnError("cudnnCreateFilterDescriptor", status)
 	}
-	return &FilterDescriptor{handle: uintptr(desc), native: true}, nil
+	return &FilterDescriptor{handle: cudnnFilterDescriptorToUintptr(desc), native: true}, nil
 }
 
 func setNativeFilterNdDescriptor(desc *FilterDescriptor, dataType DNNDataType, format DNNTensorFormat, dimensions []int) error {
@@ -129,7 +177,7 @@ func setNativeFilterNdDescriptor(desc *FilterDescriptor, dataType DNNDataType, f
 	if len(dimensions) == 0 {
 		return fmt.Errorf("dimensions cannot be empty")
 	}
-	if status := C.setFilterNdDescriptorWrapper(C.cudnnFilterDescriptor_t(desc.handle), C.int(nativeType), C.int(nativeFormat), C.int(len(dimensions)), (*C.int)(unsafe.Pointer(&dimensions[0]))); status != C.CUDNN_STATUS_SUCCESS {
+	if status := C.setFilterNdDescriptorWrapper(cudnnFilterDescriptorFromUintptr(desc.handle), C.int(nativeType), C.int(nativeFormat), C.int(len(dimensions)), (*C.int)(unsafe.Pointer(&dimensions[0]))); status != C.CUDNN_STATUS_SUCCESS {
 		return cudnnError("cudnnSetFilterNdDescriptor", status)
 	}
 	return nil
@@ -144,14 +192,14 @@ func setNativeFilter4dDescriptor(desc *FilterDescriptor, dataType DNNDataType, f
 	if err != nil {
 		return err
 	}
-	if status := C.setFilter4dDescriptorWrapper(C.cudnnFilterDescriptor_t(desc.handle), C.int(nativeType), C.int(nativeFormat), C.int(k), C.int(c), C.int(h), C.int(w)); status != C.CUDNN_STATUS_SUCCESS {
+	if status := C.setFilter4dDescriptorWrapper(cudnnFilterDescriptorFromUintptr(desc.handle), C.int(nativeType), C.int(nativeFormat), C.int(k), C.int(c), C.int(h), C.int(w)); status != C.CUDNN_STATUS_SUCCESS {
 		return cudnnError("cudnnSetFilter4dDescriptor", status)
 	}
 	return nil
 }
 
 func destroyNativeFilterDescriptor(desc *FilterDescriptor) error {
-	if status := C.destroyFilterDescriptorWrapper(C.cudnnFilterDescriptor_t(desc.handle)); status != C.CUDNN_STATUS_SUCCESS {
+	if status := C.destroyFilterDescriptorWrapper(cudnnFilterDescriptorFromUintptr(desc.handle)); status != C.CUDNN_STATUS_SUCCESS {
 		return cudnnError("cudnnDestroyFilterDescriptor", status)
 	}
 	return nil
@@ -162,7 +210,7 @@ func createNativeConvolutionDescriptor() (*ConvolutionDescriptor, error) {
 	if status := C.createConvolutionDescriptorWrapper(&desc); status != C.CUDNN_STATUS_SUCCESS {
 		return nil, cudnnError("cudnnCreateConvolutionDescriptor", status)
 	}
-	return &ConvolutionDescriptor{handle: uintptr(desc), dilationH: 1, dilationW: 1, native: true}, nil
+	return &ConvolutionDescriptor{handle: cudnnConvolutionDescriptorToUintptr(desc), dilationH: 1, dilationW: 1, native: true}, nil
 }
 
 func setNativeConvolution2dDescriptor(desc *ConvolutionDescriptor, padH, padW, strideH, strideW, dilationH, dilationW int, mode DNNConvolutionMode, dataType DNNDataType) error {
@@ -174,7 +222,7 @@ func setNativeConvolution2dDescriptor(desc *ConvolutionDescriptor, padH, padW, s
 	if err != nil {
 		return err
 	}
-	if status := C.setConvolution2dDescriptorWrapper(C.cudnnConvolutionDescriptor_t(desc.handle), C.int(padH), C.int(padW), C.int(strideH), C.int(strideW), C.int(dilationH), C.int(dilationW), C.int(nativeMode), C.int(nativeType)); status != C.CUDNN_STATUS_SUCCESS {
+	if status := C.setConvolution2dDescriptorWrapper(cudnnConvolutionDescriptorFromUintptr(desc.handle), C.int(padH), C.int(padW), C.int(strideH), C.int(strideW), C.int(dilationH), C.int(dilationW), C.int(nativeMode), C.int(nativeType)); status != C.CUDNN_STATUS_SUCCESS {
 		return cudnnError("cudnnSetConvolution2dDescriptor", status)
 	}
 	return nil
@@ -182,14 +230,14 @@ func setNativeConvolution2dDescriptor(desc *ConvolutionDescriptor, padH, padW, s
 
 func nativeConvolutionForwardOutputDim(desc *ConvolutionDescriptor, inputDesc *TensorDescriptor, filterDesc *FilterDescriptor) (int, int, int, int, error) {
 	var n, c, h, w C.int
-	if status := C.getConvolution2dForwardOutputDimWrapper(C.cudnnConvolutionDescriptor_t(desc.handle), C.cudnnTensorDescriptor_t(inputDesc.handle), C.cudnnFilterDescriptor_t(filterDesc.handle), &n, &c, &h, &w); status != C.CUDNN_STATUS_SUCCESS {
+	if status := C.getConvolution2dForwardOutputDimWrapper(cudnnConvolutionDescriptorFromUintptr(desc.handle), cudnnTensorDescriptorFromUintptr(inputDesc.handle), cudnnFilterDescriptorFromUintptr(filterDesc.handle), &n, &c, &h, &w); status != C.CUDNN_STATUS_SUCCESS {
 		return 0, 0, 0, 0, cudnnError("cudnnGetConvolution2dForwardOutputDim", status)
 	}
 	return int(n), int(c), int(h), int(w), nil
 }
 
 func destroyNativeConvolutionDescriptor(desc *ConvolutionDescriptor) error {
-	if status := C.destroyConvolutionDescriptorWrapper(C.cudnnConvolutionDescriptor_t(desc.handle)); status != C.CUDNN_STATUS_SUCCESS {
+	if status := C.destroyConvolutionDescriptorWrapper(cudnnConvolutionDescriptorFromUintptr(desc.handle)); status != C.CUDNN_STATUS_SUCCESS {
 		return cudnnError("cudnnDestroyConvolutionDescriptor", status)
 	}
 	return nil
@@ -200,7 +248,7 @@ func createNativePoolingDescriptor() (*PoolingDescriptor, error) {
 	if status := C.createPoolingDescriptorWrapper(&desc); status != C.CUDNN_STATUS_SUCCESS {
 		return nil, cudnnError("cudnnCreatePoolingDescriptor", status)
 	}
-	return &PoolingDescriptor{handle: uintptr(desc), native: true}, nil
+	return &PoolingDescriptor{handle: cudnnPoolingDescriptorToUintptr(desc), native: true}, nil
 }
 
 func setNativePooling2dDescriptor(desc *PoolingDescriptor, mode DNNPoolingMode, windowH, windowW, padH, padW, strideH, strideW int) error {
@@ -208,14 +256,14 @@ func setNativePooling2dDescriptor(desc *PoolingDescriptor, mode DNNPoolingMode, 
 	if err != nil {
 		return err
 	}
-	if status := C.setPooling2dDescriptorWrapper(C.cudnnPoolingDescriptor_t(desc.handle), C.int(nativeMode), C.int(windowH), C.int(windowW), C.int(padH), C.int(padW), C.int(strideH), C.int(strideW)); status != C.CUDNN_STATUS_SUCCESS {
+	if status := C.setPooling2dDescriptorWrapper(cudnnPoolingDescriptorFromUintptr(desc.handle), C.int(nativeMode), C.int(windowH), C.int(windowW), C.int(padH), C.int(padW), C.int(strideH), C.int(strideW)); status != C.CUDNN_STATUS_SUCCESS {
 		return cudnnError("cudnnSetPooling2dDescriptor", status)
 	}
 	return nil
 }
 
 func destroyNativePoolingDescriptor(desc *PoolingDescriptor) error {
-	if status := C.destroyPoolingDescriptorWrapper(C.cudnnPoolingDescriptor_t(desc.handle)); status != C.CUDNN_STATUS_SUCCESS {
+	if status := C.destroyPoolingDescriptorWrapper(cudnnPoolingDescriptorFromUintptr(desc.handle)); status != C.CUDNN_STATUS_SUCCESS {
 		return cudnnError("cudnnDestroyPoolingDescriptor", status)
 	}
 	return nil
@@ -226,7 +274,7 @@ func createNativeActivationDescriptor() (*ActivationDescriptor, error) {
 	if status := C.createActivationDescriptorWrapper(&desc); status != C.CUDNN_STATUS_SUCCESS {
 		return nil, cudnnError("cudnnCreateActivationDescriptor", status)
 	}
-	return &ActivationDescriptor{handle: uintptr(desc), native: true}, nil
+	return &ActivationDescriptor{handle: cudnnActivationDescriptorToUintptr(desc), native: true}, nil
 }
 
 func setNativeActivationDescriptor(desc *ActivationDescriptor, mode DNNActivationMode, nanOpt DNNNanPropagation, coeff float64) error {
@@ -238,14 +286,14 @@ func setNativeActivationDescriptor(desc *ActivationDescriptor, mode DNNActivatio
 	if err != nil {
 		return err
 	}
-	if status := C.setActivationDescriptorWrapper(C.cudnnActivationDescriptor_t(desc.handle), C.int(nativeMode), C.int(nativeNanOpt), C.double(coeff)); status != C.CUDNN_STATUS_SUCCESS {
+	if status := C.setActivationDescriptorWrapper(cudnnActivationDescriptorFromUintptr(desc.handle), C.int(nativeMode), C.int(nativeNanOpt), C.double(coeff)); status != C.CUDNN_STATUS_SUCCESS {
 		return cudnnError("cudnnSetActivationDescriptor", status)
 	}
 	return nil
 }
 
 func destroyNativeActivationDescriptor(desc *ActivationDescriptor) error {
-	if status := C.destroyActivationDescriptorWrapper(C.cudnnActivationDescriptor_t(desc.handle)); status != C.CUDNN_STATUS_SUCCESS {
+	if status := C.destroyActivationDescriptorWrapper(cudnnActivationDescriptorFromUintptr(desc.handle)); status != C.CUDNN_STATUS_SUCCESS {
 		return cudnnError("cudnnDestroyActivationDescriptor", status)
 	}
 	return nil
@@ -253,7 +301,7 @@ func destroyNativeActivationDescriptor(desc *ActivationDescriptor) error {
 
 func nativeConvolutionForward(handle *DNNHandle, alpha float32, inputDesc *TensorDescriptor, inputData *memory.Memory, filterDesc *FilterDescriptor, filterData *memory.Memory, convDesc *ConvolutionDescriptor, beta float32, outputDesc *TensorDescriptor, outputData *memory.Memory) error {
 	var workspaceSize C.size_t
-	if status := C.getConvolutionForwardWorkspaceSizeWrapper(C.cudnnHandle_t(handle.handle), C.cudnnTensorDescriptor_t(inputDesc.handle), C.cudnnFilterDescriptor_t(filterDesc.handle), C.cudnnConvolutionDescriptor_t(convDesc.handle), C.cudnnTensorDescriptor_t(outputDesc.handle), &workspaceSize); status != C.CUDNN_STATUS_SUCCESS {
+	if status := C.getConvolutionForwardWorkspaceSizeWrapper(cudnnHandleFromUintptr(handle.handle), cudnnTensorDescriptorFromUintptr(inputDesc.handle), cudnnFilterDescriptorFromUintptr(filterDesc.handle), cudnnConvolutionDescriptorFromUintptr(convDesc.handle), cudnnTensorDescriptorFromUintptr(outputDesc.handle), &workspaceSize); status != C.CUDNN_STATUS_SUCCESS {
 		return cudnnError("cudnnGetConvolutionForwardWorkspaceSize", status)
 	}
 	var workspace *memory.Memory
@@ -269,7 +317,7 @@ func nativeConvolutionForward(handle *DNNHandle, alpha float32, inputDesc *Tenso
 	}
 	alphaValue := C.float(alpha)
 	betaValue := C.float(beta)
-	if status := C.convolutionForwardWrapper(C.cudnnHandle_t(handle.handle), &alphaValue, C.cudnnTensorDescriptor_t(inputDesc.handle), inputData.Ptr(), C.cudnnFilterDescriptor_t(filterDesc.handle), filterData.Ptr(), C.cudnnConvolutionDescriptor_t(convDesc.handle), workspacePtr, workspaceSize, &betaValue, C.cudnnTensorDescriptor_t(outputDesc.handle), outputData.Ptr()); status != C.CUDNN_STATUS_SUCCESS {
+	if status := C.convolutionForwardWrapper(cudnnHandleFromUintptr(handle.handle), &alphaValue, cudnnTensorDescriptorFromUintptr(inputDesc.handle), inputData.Ptr(), cudnnFilterDescriptorFromUintptr(filterDesc.handle), filterData.Ptr(), cudnnConvolutionDescriptorFromUintptr(convDesc.handle), workspacePtr, workspaceSize, &betaValue, cudnnTensorDescriptorFromUintptr(outputDesc.handle), outputData.Ptr()); status != C.CUDNN_STATUS_SUCCESS {
 		return cudnnError("cudnnConvolutionForward", status)
 	}
 	return nil
@@ -278,7 +326,7 @@ func nativeConvolutionForward(handle *DNNHandle, alpha float32, inputDesc *Tenso
 func nativePoolingForward(handle *DNNHandle, poolingDesc *PoolingDescriptor, alpha float32, inputDesc *TensorDescriptor, inputData *memory.Memory, beta float32, outputDesc *TensorDescriptor, outputData *memory.Memory) error {
 	alphaValue := C.float(alpha)
 	betaValue := C.float(beta)
-	if status := C.poolingForwardWrapper(C.cudnnHandle_t(handle.handle), C.cudnnPoolingDescriptor_t(poolingDesc.handle), &alphaValue, C.cudnnTensorDescriptor_t(inputDesc.handle), inputData.Ptr(), &betaValue, C.cudnnTensorDescriptor_t(outputDesc.handle), outputData.Ptr()); status != C.CUDNN_STATUS_SUCCESS {
+	if status := C.poolingForwardWrapper(cudnnHandleFromUintptr(handle.handle), cudnnPoolingDescriptorFromUintptr(poolingDesc.handle), &alphaValue, cudnnTensorDescriptorFromUintptr(inputDesc.handle), inputData.Ptr(), &betaValue, cudnnTensorDescriptorFromUintptr(outputDesc.handle), outputData.Ptr()); status != C.CUDNN_STATUS_SUCCESS {
 		return cudnnError("cudnnPoolingForward", status)
 	}
 	return nil
@@ -287,7 +335,7 @@ func nativePoolingForward(handle *DNNHandle, poolingDesc *PoolingDescriptor, alp
 func nativeActivationForward(handle *DNNHandle, activationDesc *ActivationDescriptor, alpha float32, inputDesc *TensorDescriptor, inputData *memory.Memory, beta float32, outputDesc *TensorDescriptor, outputData *memory.Memory) error {
 	alphaValue := C.float(alpha)
 	betaValue := C.float(beta)
-	if status := C.activationForwardWrapper(C.cudnnHandle_t(handle.handle), C.cudnnActivationDescriptor_t(activationDesc.handle), &alphaValue, C.cudnnTensorDescriptor_t(inputDesc.handle), inputData.Ptr(), &betaValue, C.cudnnTensorDescriptor_t(outputDesc.handle), outputData.Ptr()); status != C.CUDNN_STATUS_SUCCESS {
+	if status := C.activationForwardWrapper(cudnnHandleFromUintptr(handle.handle), cudnnActivationDescriptorFromUintptr(activationDesc.handle), &alphaValue, cudnnTensorDescriptorFromUintptr(inputDesc.handle), inputData.Ptr(), &betaValue, cudnnTensorDescriptorFromUintptr(outputDesc.handle), outputData.Ptr()); status != C.CUDNN_STATUS_SUCCESS {
 		return cudnnError("cudnnActivationForward", status)
 	}
 	return nil
@@ -300,7 +348,7 @@ func nativeBatchNormForwardInference(handle *DNNHandle, mode DNNBatchNormMode, a
 	}
 	alphaValue := C.float(alpha)
 	betaValue := C.float(beta)
-	if status := C.batchNormForwardInferenceWrapper(C.cudnnHandle_t(handle.handle), C.int(nativeMode), &alphaValue, &betaValue, C.cudnnTensorDescriptor_t(inputDesc.handle), input.Ptr(), C.cudnnTensorDescriptor_t(outputDesc.handle), output.Ptr(), C.cudnnTensorDescriptor_t(bnScaleBiasDesc.handle), bnScale.Ptr(), bnBias.Ptr(), estimatedMean.Ptr(), estimatedVariance.Ptr(), C.double(epsilon)); status != C.CUDNN_STATUS_SUCCESS {
+	if status := C.batchNormForwardInferenceWrapper(cudnnHandleFromUintptr(handle.handle), C.int(nativeMode), &alphaValue, &betaValue, cudnnTensorDescriptorFromUintptr(inputDesc.handle), input.Ptr(), cudnnTensorDescriptorFromUintptr(outputDesc.handle), output.Ptr(), cudnnTensorDescriptorFromUintptr(bnScaleBiasDesc.handle), bnScale.Ptr(), bnBias.Ptr(), estimatedMean.Ptr(), estimatedVariance.Ptr(), C.double(epsilon)); status != C.CUDNN_STATUS_SUCCESS {
 		return cudnnError("cudnnBatchNormalizationForwardInference", status)
 	}
 	return nil
