@@ -121,9 +121,3 @@ Before Windows CUDA-tagged validation is expected to pass for the current native
 
 AmgX is still optional unless Windows AmgX validation is specifically being exercised on this machine.
 
-## Notes
-
-- `winget` on this machine does not currently expose installable packages for the missing NVIDIA SDKs.
-- `choco` is not installed on this machine.
-- No local SDK installers were found in the common download/temp locations during the environment audit.
-- That means the remaining SDK installs are expected to be manual NVIDIA downloads or pre-staged internal installers.

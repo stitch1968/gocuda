@@ -48,8 +48,10 @@ This file is the execution tracker for moving GoCUDA from a dual-mode developmen
 
 - [x] Add Windows-native verification for optional CUDA backlog headers, DLLs, and import libs so hardware-mode validation failures surface as actionable environment gaps instead of first-error compile failures
 - [x] Add a machine-specific Windows SDK installation checklist keyed to the exact missing native backlog files reported by the verifier
-- [ ] Install the missing optional Windows vendor SDK headers, DLLs, and import libs for cuDNN, nvJPEG2000, cuTENSOR, and cuDSS on the primary validation machine
-- [ ] Regenerate MinGW import libs from the locally discovered DLL set and rerun CUDA-tagged validation after the missing vendor SDKs are installed (in progress: auto-detected PowerShell import-lib helper added alongside the manual batch helper)
+- [x] Install the missing optional Windows vendor SDK headers, DLLs, and import libs for cuDNN, nvJPEG2000, cuTENSOR, and cuDSS on the primary validation machine
+- [x] Regenerate MinGW import libs from the locally discovered DLL set and rerun CUDA-tagged validation after the missing vendor SDKs are installed (done: verifier and auto-helper now auto-discover the versioned vendor install layout and regenerate `libcudnn.a`, `libnvjpeg2k.a`, `libcudss.a`, and `libcutensor.a`; current CUDA-tagged library validation now fails later on Windows build wiring for non-toolkit vendor include paths and on missing optional AmgX files)
+- [ ] Wire Windows CUDA-tagged cgo include discovery or a build-wrapper env path for non-toolkit vendor headers so cuDNN, nvJPEG2000, cuDSS, and cuTENSOR native builds do not require manual compiler include path injection
+- [ ] Install or locate optional AmgX Windows headers, DLLs, and import libs if native AmgX validation is required on the primary validation machine
 - [ ] Broaden the bounded native Thrust slice beyond context/copy/fill/generate once the Windows validation environment can exercise additional native algorithm coverage
 
 ## Operational Hardening

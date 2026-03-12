@@ -37,6 +37,7 @@ def main():
     parser = argparse.ArgumentParser(description="Generate a MinGW import library from a CUDA DLL using objdump and dlltool.")
     parser.add_argument("dll", help="Path to the source DLL")
     parser.add_argument("--output-dir", default="lib_mingw", help="Directory for generated .exports, .def, and .a files")
+    parser.add_argument("--import-lib-name", help="Override the generated import library base name (without lib prefix or .a suffix)")
     parser.add_argument("--dlltool", default="dlltool", help="dlltool executable")
     parser.add_argument("--objdump", default="objdump", help="objdump executable")
     args = parser.parse_args()
@@ -51,7 +52,8 @@ def main():
     stem = dll_path.stem
     exports_path = output_dir / f"{stem}.exports"
     def_path = output_dir / f"{stem}.def"
-    import_lib_path = output_dir / f"lib{stem.split('64_')[0]}.a"
+    import_lib_name = args.import_lib_name or stem.split('64_')[0]
+    import_lib_path = output_dir / f"lib{import_lib_name}.a"
 
     objdump_output = run_command([args.objdump, "-p", str(dll_path)])
     exports_path.write_text(objdump_output, encoding="utf-8")

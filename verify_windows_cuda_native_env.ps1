@@ -29,6 +29,25 @@ function Resolve-SearchRoots {
     return $roots | Select-Object -Unique
 }
 
+function Resolve-GlobRoots {
+    param(
+        [string[]]$Patterns
+    )
+
+    $roots = New-Object System.Collections.Generic.List[string]
+    foreach ($pattern in $Patterns) {
+        if ([string]::IsNullOrWhiteSpace($pattern)) {
+            continue
+        }
+
+        foreach ($match in @(Get-ChildItem -Path $pattern -Directory -ErrorAction SilentlyContinue)) {
+            $roots.Add($match.FullName)
+        }
+    }
+
+    return $roots | Select-Object -Unique
+}
+
 function Find-Match {
     param(
         [string[]]$Roots,
@@ -54,20 +73,43 @@ function Find-Match {
 }
 
 $cudaPath = if ($env:CUDA_PATH) { $env:CUDA_PATH } else { 'C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1' }
-$includeRoots = Resolve-SearchRoots -Candidates @(
+$defaultIncludeRoots = @(
     (Join-Path $cudaPath 'include'),
     'D:\NVIDIA\include'
-) -ExtraEnvVar 'GOCUDA_EXTRA_INCLUDE_DIRS'
-$binRoots = Resolve-SearchRoots -Candidates @(
+) + @(Resolve-GlobRoots -Patterns @(
+    'C:\Program Files\NVIDIA\CUDNN\*\include\*',
+    'C:\Program Files\NVIDIA nvJPEG2K\*\include',
+    'C:\Program Files\NVIDIA cuDSS\*\include',
+    'C:\Program Files\NVIDIA cuTensor\*\include',
+    'C:\Program Files\NVIDIA cuTENSOR\*\include'
+))
+$includeRoots = Resolve-SearchRoots -Candidates $defaultIncludeRoots -ExtraEnvVar 'GOCUDA_EXTRA_INCLUDE_DIRS'
+
+$defaultBinRoots = @(
     (Join-Path $cudaPath 'bin'),
     (Join-Path $cudaPath 'bin\x64'),
     'D:\NVIDIA\bin'
-) -ExtraEnvVar 'GOCUDA_EXTRA_BIN_DIRS'
-$libRoots = Resolve-SearchRoots -Candidates @(
+) + @(Resolve-GlobRoots -Patterns @(
+    'C:\Program Files\NVIDIA\CUDNN\*\bin\*\x64',
+    'C:\Program Files\NVIDIA nvJPEG2K\*\bin\*',
+    'C:\Program Files\NVIDIA cuDSS\*\bin\*',
+    'C:\Program Files\NVIDIA cuTensor\*\bin\*',
+    'C:\Program Files\NVIDIA cuTENSOR\*\bin\*'
+))
+$binRoots = Resolve-SearchRoots -Candidates $defaultBinRoots -ExtraEnvVar 'GOCUDA_EXTRA_BIN_DIRS'
+
+$defaultLibRoots = @(
     (Join-Path $cudaPath 'lib\x64'),
     (Join-Path $cudaPath 'lib64'),
     'D:\NVIDIA\lib\x64'
-) -ExtraEnvVar 'GOCUDA_EXTRA_LIB_DIRS'
+) + @(Resolve-GlobRoots -Patterns @(
+    'C:\Program Files\NVIDIA\CUDNN\*\lib\*\x64',
+    'C:\Program Files\NVIDIA nvJPEG2K\*\lib\*',
+    'C:\Program Files\NVIDIA cuDSS\*\lib\*',
+    'C:\Program Files\NVIDIA cuTensor\*\lib\*',
+    'C:\Program Files\NVIDIA cuTENSOR\*\lib\*'
+))
+$libRoots = Resolve-SearchRoots -Candidates $defaultLibRoots -ExtraEnvVar 'GOCUDA_EXTRA_LIB_DIRS'
 
 $checks = @(
     @{ Name = 'CUDA runtime header'; Required = $true; Type = 'header'; Patterns = @('cuda_runtime.h') },
@@ -151,13 +193,21 @@ if ($driverMatch -and $driverMatch.Path) {
 }
 
 Write-Host ''
-Write-Host 'Suggested next steps:'
-Write-Host '  1. Install the missing optional vendor SDKs whose headers are absent.'
-Write-Host '  2. Re-run this script after installation.'
-if ($helperArgs.Count -ge 2) {
-    Write-Host ("  3. Regenerate MinGW import libs with: setup_windows_cuda_import_libs.bat {0}" -f ($helperArgs -join ' '))
+if ($missingRequired.Count -eq 0 -and $missingOptional.Count -eq 0) {
+    Write-Host 'Environment status: ready for Windows native validation.'
+    if ($helperArgs.Count -ge 2) {
+        Write-Host ("Suggested next step: regenerate MinGW import libs with: setup_windows_cuda_import_libs.bat {0}" -f ($helperArgs -join ' '))
+    }
+    Write-Host 'Or auto-detect available DLLs with: powershell -ExecutionPolicy Bypass -File setup_windows_cuda_import_libs_auto.ps1'
+} else {
+    Write-Host 'Suggested next steps:'
+    Write-Host '  1. Install the missing optional vendor SDKs whose headers are absent.'
+    Write-Host '  2. Re-run this script after installation.'
+    if ($helperArgs.Count -ge 2) {
+        Write-Host ("  3. Regenerate MinGW import libs with: setup_windows_cuda_import_libs.bat {0}" -f ($helperArgs -join ' '))
+    }
+    Write-Host '  4. Or auto-detect available DLLs with: powershell -ExecutionPolicy Bypass -File setup_windows_cuda_import_libs_auto.ps1'
 }
-Write-Host '  4. Or auto-detect available DLLs with: powershell -ExecutionPolicy Bypass -File setup_windows_cuda_import_libs_auto.ps1'
 
 if ($Strict -and $missingRequired.Count -gt 0) {
     exit 1

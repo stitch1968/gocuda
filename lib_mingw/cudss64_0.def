@@ -1,0 +1,37 @@
+LIBRARY cudss64_0.dll
+EXPORTS
+  NvOptimusEnablementCuda @1
+  cudssConfigCreate @2
+  cudssConfigDestroy @3
+  cudssConfigGet @4
+  cudssConfigSet @5
+  cudssCreate @6
+  cudssCreateMg @7
+  cudssDataCreate @8
+  cudssDataDestroy @9
+  cudssDataGet @10
+  cudssDataSet @11
+  cudssDestroy @12
+  cudssExecute @13
+  cudssGetDeviceMemHandler @14
+  cudssGetProperty @15
+  cudssMatrixCreateBatchCsr @16
+  cudssMatrixCreateBatchDn @17
+  cudssMatrixCreateCsr @18
+  cudssMatrixCreateDn @19
+  cudssMatrixDestroy @20
+  cudssMatrixGetBatchCsr @21
+  cudssMatrixGetBatchDn @22
+  cudssMatrixGetCsr @23
+  cudssMatrixGetDistributionRow1d @24
+  cudssMatrixGetDn @25
+  cudssMatrixGetFormat @26
+  cudssMatrixSetBatchCsrPointers @27
+  cudssMatrixSetBatchValues @28
+  cudssMatrixSetCsrPointers @29
+  cudssMatrixSetDistributionRow1d @30
+  cudssMatrixSetValues @31
+  cudssSetCommLayer @32
+  cudssSetDeviceMemHandler @33
+  cudssSetStream @34
+  cudssSetThreadingLayer @35

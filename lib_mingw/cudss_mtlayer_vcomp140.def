@@ -1,0 +1,6 @@
+LIBRARY cudss_mtlayer_vcomp140.dll
+EXPORTS
+  NvOptimusEnablementCuda @1
+  cudssGetMaxThreads @2
+  cudssParallelFor @3
+  cudssThreadingInterface @4
