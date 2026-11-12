@@ -84,19 +84,43 @@ static cusolverStatus_t syevdWrapper(
 import "C"
 
 import (
+	"errors"
 	"fmt"
 	"math"
+	"runtime"
 	"unsafe"
 
+	"github.com/stitch1968/gocuda/internal"
 	"github.com/stitch1968/gocuda/memory"
 )
 
 func createNativeSolverContext() (*SolverContext, error) {
-	var handle C.cusolverDnHandle_t
-	if status := C.createSolverHandle(&handle); status != C.CUSOLVER_STATUS_SUCCESS {
-		return nil, cusolverError("cusolverDnCreate", status)
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	deviceID, err := internal.CurrentDevice()
+	if err != nil {
+		return nil, err
 	}
-	return &SolverContext{handle: unsafe.Pointer(handle), native: true}, nil
+	var handle C.cusolverDnHandle_t
+	err = internal.RunOnDevice(deviceID, func() error {
+		if status := C.createSolverHandle(&handle); status != C.CUSOLVER_STATUS_SUCCESS {
+			return cusolverError("cusolverDnCreate", status)
+		}
+		return nil
+	})
+	if err != nil {
+		if handle != nil {
+			cleanupErr := internal.RunOnDevice(deviceID, func() error {
+				if status := C.destroySolverHandle(handle); status != C.CUSOLVER_STATUS_SUCCESS {
+					return cusolverError("cusolverDnDestroy", status)
+				}
+				return nil
+			})
+			return nil, errors.Join(err, cleanupErr)
+		}
+		return nil, err
+	}
+	return &SolverContext{handle: unsafe.Pointer(handle), native: true, deviceID: deviceID}, nil
 }
 
 func nativeQRFactorization(ctx *SolverContext, A *memory.Memory, m, n int) (*QRInfo, error) {
@@ -144,6 +168,17 @@ func nativeQRFactorization(ctx *SolverContext, A *memory.Memory, m, n int) (*QRI
 }
 
 func nativeSVDDecomposition(ctx *SolverContext, A *memory.Memory, m, n int, computeUV bool) (*SVDInfo, error) {
+	if computeUV {
+		if _, err := solverCheckedSquareSize(m); err != nil {
+			return nil, err
+		}
+		if _, err := solverCheckedSquareSize(n); err != nil {
+			return nil, err
+		}
+	}
+	if m < n {
+		return nativeSVDWide(ctx, A, m, n, computeUV)
+	}
 	minMN := min(m, n)
 	s, err := memory.Alloc(int64(minMN * 4))
 	if err != nil {
@@ -278,17 +313,15 @@ func nativeSolveLinearSystem(ctx *SolverContext, A, b *memory.Memory, n int) (*m
 	if err != nil {
 		return nil, fmt.Errorf("failed to allocate solution vector: %v", err)
 	}
-	bValues, err := memory.View[float32](b, n)
+	bValues, err := readMathFloat32Memory(b, n)
 	if err != nil {
 		_ = x.Free()
 		return nil, err
 	}
-	xValues, err := memory.View[float32](x, n)
-	if err != nil {
+	if err := writeMathFloat32Memory(x, bValues); err != nil {
 		_ = x.Free()
 		return nil, err
 	}
-	copy(xValues, bValues)
 
 	devInfo, err := memory.Alloc(4)
 	if err != nil {
@@ -475,26 +508,24 @@ func nativePseudoInverse(ctx *SolverContext, A *memory.Memory, m, n int) (*memor
 }
 
 func fillPseudoInverseFromSVD(pinv *memory.Memory, svdInfo *SVDInfo, m, n int) error {
-	sValues, err := memory.View[float32](svdInfo.s, min(m, n))
+	sValues, err := readMathFloat32Memory(svdInfo.s, min(m, n))
 	if err != nil {
 		return err
 	}
-	uValues, err := memory.View[float32](svdInfo.u, m*m)
+	uValues, err := readMathFloat32Memory(svdInfo.u, m*m)
 	if err != nil {
 		return err
 	}
-	vtValues, err := memory.View[float32](svdInfo.vt, n*n)
+	vtValues, err := readMathFloat32Memory(svdInfo.vt, n*n)
 	if err != nil {
 		return err
 	}
-	pinvValues, err := memory.View[float32](pinv, n*m)
-	if err != nil {
-		return err
+	pinvValues := make([]float32, n*m)
+	var largest float32
+	for _, singular := range sValues {
+		largest = max(largest, float32(math.Abs(float64(singular))))
 	}
-	for i := range pinvValues {
-		pinvValues[i] = 0
-	}
-	tolerance := float32(1e-6)
+	tolerance := (math.Nextafter32(1, 2) - 1) * float32(max(m, n)) * largest
 	for row := 0; row < n; row++ {
 		for col := 0; col < m; col++ {
 			accum := float32(0)
@@ -503,14 +534,14 @@ func fillPseudoInverseFromSVD(pinv *memory.Memory, svdInfo *SVDInfo, m, n int) e
 				if float32(math.Abs(float64(sigma))) <= tolerance {
 					continue
 				}
-				v := vtValues[k*n+row]
-				u := uValues[col*m+k]
+				v := vtValues[row*n+k]
+				u := uValues[k*m+col]
 				accum += v * (1 / sigma) * u
 			}
-			pinvValues[row*m+col] = accum
+			pinvValues[col*n+row] = accum
 		}
 	}
-	return nil
+	return writeMathFloat32Memory(pinv, pinvValues)
 }
 
 func copyFloat32Matrix(src *memory.Memory, length int) (*memory.Memory, error) {
@@ -518,17 +549,10 @@ func copyFloat32Matrix(src *memory.Memory, length int) (*memory.Memory, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to allocate matrix copy: %v", err)
 	}
-	srcValues, err := memory.View[float32](src, length)
-	if err != nil {
+	if err := memory.CopyDeviceToDevice(dst, src); err != nil {
 		_ = dst.Free()
 		return nil, err
 	}
-	dstValues, err := memory.View[float32](dst, length)
-	if err != nil {
-		_ = dst.Free()
-		return nil, err
-	}
-	copy(dstValues, srcValues)
 	return dst, nil
 }
 
@@ -555,7 +579,7 @@ func cleanupSVD(s, u, vt, workspace *memory.Memory) {
 }
 
 func readInt32(mem *memory.Memory) (int32, error) {
-	values, err := memory.View[int32](mem, 1)
+	values, err := readMathTypedMemory[int32](mem, 1)
 	if err != nil {
 		return 0, err
 	}

@@ -59,6 +59,21 @@ func CudaMallocOnDevice(size int64, deviceID int) (unsafe.Pointer, error) {
 	return CudaMalloc(size)
 }
 
+// CudaMallocDeviceOnDevice is unavailable without CUDA.
+func CudaMallocDeviceOnDevice(size int64, deviceID int) (unsafe.Pointer, error) {
+	return CudaMalloc(size)
+}
+
+// CudaMallocHost is unavailable without CUDA.
+func CudaMallocHost(size int64) (unsafe.Pointer, error) {
+	return nil, fmt.Errorf("CUDA not available - using simulation mode")
+}
+
+// CudaFreeHost is unavailable without CUDA.
+func CudaFreeHost(ptr unsafe.Pointer) error {
+	return fmt.Errorf("CUDA not available - using simulation mode")
+}
+
 // CudaFree frees CUDA memory (simulation stub)
 func CudaFree(ptr unsafe.Pointer) error {
 	return fmt.Errorf("CUDA not available - using simulation mode")
@@ -67,6 +82,11 @@ func CudaFree(ptr unsafe.Pointer) error {
 // CudaFreeOnDevice frees CUDA memory on a specific device (simulation stub).
 func CudaFreeOnDevice(ptr unsafe.Pointer, deviceID int) error {
 	return CudaFree(ptr)
+}
+
+// CudaFreeOnDeviceResult is unavailable without CUDA.
+func CudaFreeOnDeviceResult(ptr unsafe.Pointer, deviceID int) (bool, error) {
+	return false, CudaFree(ptr)
 }
 
 // GetCudaMemoryInfo returns CUDA memory information (simulation stub)
@@ -96,6 +116,7 @@ const (
 	MemcpyKindHostToDevice   = 1
 	MemcpyKindDeviceToHost   = 2
 	MemcpyKindDeviceToDevice = 3
+	MemcpyKindDefault        = 4
 )
 
 // Synchronization functions
@@ -110,6 +131,11 @@ func CudaDeviceSynchronize() error {
 // CudaDeviceSynchronizeOnDevice synchronizes a specific device (simulation).
 func CudaDeviceSynchronizeOnDevice(deviceID int) error {
 	return CudaDeviceSynchronize()
+}
+
+// CudaDefaultStreamSynchronizeOnDevice is unavailable without CUDA.
+func CudaDefaultStreamSynchronizeOnDevice(deviceID int) error {
+	return fmt.Errorf("CUDA not available - using simulation mode")
 }
 
 // RunOnDevice executes fn within the selected device context (simulation pass-through).
@@ -150,8 +176,15 @@ func GetDevices() []*Device {
 
 // SetDevice sets the active CUDA device (simulation)
 func SetDevice(deviceID int) error {
-	// In simulation mode, always succeed
+	if deviceID != 0 {
+		return fmt.Errorf("device ID %d out of range", deviceID)
+	}
 	return nil
+}
+
+// CurrentDevice returns the simulated device ID.
+func CurrentDevice() (int, error) {
+	return 0, nil
 }
 
 // GetDevice returns the current device ID (simulation)

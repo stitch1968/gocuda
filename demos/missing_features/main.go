@@ -6,8 +6,10 @@
 package main
 
 import (
+	"encoding/binary"
 	"fmt"
 	"log"
+	"math"
 	"time"
 
 	"github.com/stitch1968/gocuda/hardware"
@@ -47,7 +49,7 @@ func main() {
 	demoHardwareFeatures()
 	fmt.Println()
 
-	fmt.Println("✅ All CUDA runtime libraries and features have been demonstrated!")
+	fmt.Println("Demo complete; review any logged errors and backend distinctions.")
 }
 
 func demoCuRAND() {
@@ -62,7 +64,10 @@ func demoCuRAND() {
 	defer rng.Destroy()
 
 	// Set seed
-	rng.SetSeed(12345)
+	if err := rng.SetSeed(12345); err != nil {
+		log.Printf("Failed to seed RNG: %v", err)
+		return
+	}
 
 	// Generate uniform random numbers
 	size := 10000
@@ -106,7 +111,6 @@ func demoCuRAND() {
 func demoCuSPARSE() {
 	fmt.Println("🕸️  cuSPARSE - Sparse Matrix Operations")
 
-	// Create sparse context
 	ctx, err := libraries.CreateSparseContext()
 	if err != nil {
 		log.Printf("Failed to create sparse context: %v", err)
@@ -114,38 +118,50 @@ func demoCuSPARSE() {
 	}
 	defer ctx.DestroyContext()
 
-	// Create sparse matrices
-	rows, cols, nnz := 1000, 1000, 5000
-	A, err := ctx.CreateSparseMatrix(rows, cols, nnz, libraries.MatrixFormatCSR)
+	A, err := ctx.CreateCSRMatrix(3, 3,
+		[]int32{0, 3, 6, 9},
+		[]int32{0, 1, 2, 0, 1, 2, 0, 1, 2},
+		[]float32{4, 2, 2, 2, 5, 1, 2, 1, 6})
 	if err != nil {
 		log.Printf("Failed to create sparse matrix A: %v", err)
 		return
 	}
 	defer A.Destroy()
 
-	B, err := ctx.CreateSparseMatrix(cols, 500, 2500, libraries.MatrixFormatCSR)
+	B, err := ctx.CreateCSRMatrix(3, 2, []int32{0, 1, 2, 3}, []int32{0, 1, 0}, []float32{1, 2, 3})
 	if err != nil {
 		log.Printf("Failed to create sparse matrix B: %v", err)
 		return
 	}
 	defer B.Destroy()
 
-	// Create vectors for SpMV
-	x, err := memory.Alloc(int64(cols * 4))
+	x, err := memory.Alloc(3 * 4)
 	if err != nil {
 		log.Printf("Failed to allocate vector x: %v", err)
 		return
 	}
 	defer x.Free()
 
-	y, err := memory.Alloc(int64(rows * 4))
+	y, err := memory.Alloc(3 * 4)
 	if err != nil {
 		log.Printf("Failed to allocate vector y: %v", err)
 		return
 	}
 	defer y.Free()
 
-	// Perform sparse matrix-vector multiplication
+	if err := memory.CopyHostToDevice(x, demoFloat32Bytes([]float32{1, 2, -1})); err != nil {
+		log.Printf("Failed to initialize vector x: %v", err)
+		return
+	}
+	if err := memory.CopyHostToDevice(y, demoFloat32Bytes([]float32{0, 0, 0})); err != nil {
+		log.Printf("Failed to initialize vector y: %v", err)
+		return
+	}
+	backend, err := ctx.SpMVBackend(libraries.MatrixFormatCSR)
+	if err != nil {
+		log.Printf("Failed to determine SpMV backend: %v", err)
+		return
+	}
 	start := time.Now()
 	err = ctx.SpMV(1.0, A, x, 0.0, y)
 	if err != nil {
@@ -153,10 +169,14 @@ func demoCuSPARSE() {
 		return
 	}
 	elapsed := time.Since(start)
-	fmt.Printf("   ✅ Sparse matrix-vector multiply (%dx%d, %d nnz) in %v\n", rows, cols, nnz, elapsed)
+	fmt.Printf("   ✅ CSR SpMV (%s) completed in %v\n", backend, elapsed)
 
-	// Perform sparse matrix-matrix multiplication
 	start = time.Now()
+	productBackend, err := ctx.SpGEMMBackend(libraries.MatrixFormatCSR, libraries.MatrixFormatCSR)
+	if err != nil {
+		log.Printf("Failed to determine SpGEMM backend: %v", err)
+		return
+	}
 	C, err := ctx.SpGEMM(A, B)
 	if err != nil {
 		log.Printf("SpGEMM failed: %v", err)
@@ -164,9 +184,8 @@ func demoCuSPARSE() {
 	}
 	defer C.Destroy()
 	elapsed = time.Since(start)
-	fmt.Printf("   ✅ Sparse matrix-matrix multiply completed in %v\n", elapsed)
+	fmt.Printf("   ✅ Sparse matrix-matrix multiply (%s) completed in %v\n", productBackend, elapsed)
 
-	// Perform LU factorization
 	start = time.Now()
 	L, U, err := ctx.SpLU(A)
 	if err != nil {
@@ -176,7 +195,15 @@ func demoCuSPARSE() {
 	defer L.Destroy()
 	defer U.Destroy()
 	elapsed = time.Since(start)
-	fmt.Printf("   ✅ Sparse LU factorization completed in %v\n", elapsed)
+	fmt.Printf("   ✅ Sparse LU factorization without pivoting (host) completed in %v\n", elapsed)
+}
+
+func demoFloat32Bytes(values []float32) []byte {
+	data := make([]byte, len(values)*4)
+	for i, value := range values {
+		binary.NativeEndian.PutUint32(data[i*4:], math.Float32bits(value))
+	}
+	return data
 }
 
 func demoCuSOLVER() {
@@ -190,7 +217,11 @@ func demoCuSOLVER() {
 	}
 	defer ctx.DestroyContext()
 
-	n := 500 // Matrix dimension
+	const n = 3
+	matrixValues := []float32{4, 2, 2, 2, 5, 1, 2, 1, 6}
+	rightHandSide := []float32{6, 11, -2}
+	matrixBytes := demoFloat32Bytes(matrixValues)
+	fmt.Printf("   Backend: %s\n", ctx.Backend())
 
 	// Create matrices
 	A, err := memory.Alloc(int64(n * n * 4)) // n x n matrix
@@ -207,7 +238,22 @@ func demoCuSOLVER() {
 	}
 	defer b.Free()
 
+	if err := memory.CopyHostToDevice(b, demoFloat32Bytes(rightHandSide)); err != nil {
+		log.Printf("Failed to initialize vector b: %v", err)
+		return
+	}
+	resetMatrix := func() bool {
+		if err := memory.CopyHostToDevice(A, matrixBytes); err != nil {
+			log.Printf("Failed to initialize matrix A: %v", err)
+			return false
+		}
+		return true
+	}
+
 	// Perform QR factorization
+	if !resetMatrix() {
+		return
+	}
 	start := time.Now()
 	qrInfo, err := ctx.QRFactorization(A, n, n)
 	if err != nil {
@@ -219,6 +265,9 @@ func demoCuSOLVER() {
 	fmt.Printf("   ✅ QR factorization (%dx%d) completed in %v\n", n, n, elapsed)
 
 	// Perform SVD decomposition
+	if !resetMatrix() {
+		return
+	}
 	start = time.Now()
 	svdInfo, err := ctx.SVDDecomposition(A, n, n, true)
 	if err != nil {
@@ -230,6 +279,9 @@ func demoCuSOLVER() {
 	fmt.Printf("   ✅ SVD decomposition (%dx%d) completed in %v\n", n, n, elapsed)
 
 	// Solve linear system
+	if !resetMatrix() {
+		return
+	}
 	start = time.Now()
 	x, err := ctx.SolveLinearSystem(A, b, n)
 	if err != nil {
@@ -237,10 +289,22 @@ func demoCuSOLVER() {
 		return
 	}
 	defer x.Free()
+	solutionBytes := make([]byte, n*4)
+	if err := memory.CopyDeviceToHost(solutionBytes, x); err != nil {
+		log.Printf("Failed to read solution: %v", err)
+		return
+	}
+	solution := make([]float32, n)
+	for i := range solution {
+		solution[i] = math.Float32frombits(binary.NativeEndian.Uint32(solutionBytes[i*4:]))
+	}
 	elapsed = time.Since(start)
-	fmt.Printf("   ✅ Linear system Ax=b solved in %v\n", elapsed)
+	fmt.Printf("   ✅ Linear system Ax=b solved in %v: x=%v\n", elapsed, solution)
 
 	// Compute eigenvalues
+	if !resetMatrix() {
+		return
+	}
 	start = time.Now()
 	eigenvals, eigenvecs, err := ctx.Eigenvalues(A, n, true)
 	if err != nil {
@@ -255,10 +319,13 @@ func demoCuSOLVER() {
 	fmt.Printf("   ✅ Eigenvalue decomposition completed in %v\n", elapsed)
 
 	// Cholesky factorization (for positive definite matrices)
+	if !resetMatrix() {
+		return
+	}
 	start = time.Now()
 	err = ctx.CholeskyFactorization(A, n)
 	if err != nil {
-		log.Printf("Cholesky factorization note: %v (expected for general matrix)", err)
+		log.Printf("Cholesky factorization failed: %v", err)
 	} else {
 		elapsed = time.Since(start)
 		fmt.Printf("   ✅ Cholesky factorization completed in %v\n", elapsed)
@@ -295,7 +362,7 @@ func demoThrust() {
 
 	// Fill with generated data
 	start := time.Now()
-	err = ctx.Generate(data, size, "random_data", libraries.PolicyDevice)
+	err = ctx.Generate(data, size, "sequence", libraries.PolicyDevice)
 	if err != nil {
 		log.Printf("Generate failed: %v", err)
 		return

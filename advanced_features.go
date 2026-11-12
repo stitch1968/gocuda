@@ -1,8 +1,10 @@
 package cuda
 
 import (
+	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -241,9 +243,10 @@ type CudaGraph struct {
 	nodes        []*GraphNode
 	dependencies map[int64][]int64
 	executed     bool
+	mu           sync.Mutex
 }
 
-var graphNodeIDCounter int64
+var graphNodeIDCounter atomic.Int64
 
 // CreateGraph creates a new CUDA graph
 func CreateGraph() (*CudaGraph, error) {
@@ -257,13 +260,25 @@ func CreateGraph() (*CudaGraph, error) {
 
 // AddKernelNode adds a kernel node to the graph
 func (g *CudaGraph) AddKernelNode(kernel Kernel, dependencies []*GraphNode, args ...any) (*GraphNode, error) {
-	graphNodeIDCounter++
+	if g == nil || kernel == nil {
+		return nil, fmt.Errorf("graph and kernel must not be nil")
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	for _, dependency := range dependencies {
+		if dependency == nil {
+			return nil, fmt.Errorf("graph dependency must not be nil")
+		}
+		if _, ok := g.dependencies[dependency.id]; !ok {
+			return nil, fmt.Errorf("dependency does not belong to this graph")
+		}
+	}
 
 	node := &GraphNode{
-		id:       graphNodeIDCounter,
+		id:       graphNodeIDCounter.Add(1),
 		nodeType: GraphNodeTypeKernel,
 		kernel:   kernel,
-		args:     args,
+		args:     append([]any(nil), args...),
 	}
 
 	g.nodes = append(g.nodes, node)
@@ -278,8 +293,13 @@ func (g *CudaGraph) AddKernelNode(kernel Kernel, dependencies []*GraphNode, args
 	return node, nil
 }
 
-// Launch launches the graph (like cudaGraphLaunch)
+// Launch schedules graph nodes as host-side work in dependency order. Each
+// kernel must finish its work before Execute returns; nested asynchronous work
+// is not tracked. This does not create or launch a native CUDA graph.
 func (g *CudaGraph) Launch(stream *Stream) error {
+	if g == nil {
+		return fmt.Errorf("graph must not be nil")
+	}
 	if stream == nil {
 		var err error
 		stream, err = DefaultStream()
@@ -288,23 +308,20 @@ func (g *CudaGraph) Launch(stream *Stream) error {
 		}
 	}
 
-	// Execute nodes in dependency order (simplified topological sort)
-	for _, node := range g.nodes {
-		if node.nodeType == GraphNodeTypeKernel && node.kernel != nil {
-			gridDim := Dim3{X: 1, Y: 1, Z: 1}
-			blockDim := Dim3{X: 1, Y: 1, Z: 1}
-
-			// Execute kernel on stream - simplified approach since stream.Execute has different signature
-			stream.Execute(func() {
-				// Simulate kernel execution in graph
-				fmt.Printf("Executing graph kernel with grid %+v, block %+v\n", gridDim, blockDim)
-				// In real implementation, this would execute the actual kernel with args
-			})
+	g.mu.Lock()
+	nodes := append([]*GraphNode(nil), g.nodes...)
+	g.mu.Unlock()
+	return stream.Submit(func() error {
+		for _, node := range nodes {
+			if err := node.kernel.Execute(Dim3{X: 1, Y: 1, Z: 1}, Dim3{X: 1, Y: 1, Z: 1}, 0, stream, node.args...); err != nil {
+				return fmt.Errorf("graph node %d: %w", node.id, err)
+			}
 		}
-	}
-
-	g.executed = true
-	return nil
+		g.mu.Lock()
+		g.executed = true
+		g.mu.Unlock()
+		return nil
+	})
 }
 
 // Occupancy represents occupancy calculation results
@@ -360,7 +377,8 @@ func GetDevice(deviceID int) (*Device, error) {
 	return devices[deviceID], nil
 }
 
-// SetDevice sets the current device (like cudaSetDevice)
+// SetDevice sets the device on the calling OS thread. Callers must lock their
+// OS thread while using thread-local CUDA device state; prefer Context.Run.
 func SetDevice(deviceID int) error {
 	if _, err := GetDevice(deviceID); err != nil {
 		return err
@@ -370,21 +388,30 @@ func SetDevice(deviceID int) error {
 
 // GetCurrentDevice returns the current device ID (like cudaGetDevice)
 func GetCurrentDevice() (int, error) {
-	return internal.GetDevice(), nil
+	return internal.CurrentDevice()
 }
 
-// DeviceSynchronize synchronizes the current device (like cudaDeviceSynchronize)
+// DeviceSynchronize waits for the default host queue and the current CUDA device.
+// Callers using a non-default device must lock their OS thread or use Context.Run.
 func DeviceSynchronize() error {
 	stream, err := DefaultStream()
 	if err != nil {
 		return err
 	}
 
-	return stream.Synchronize()
+	hostErr := stream.Synchronize()
+	device, err := internal.CurrentDevice()
+	if err != nil {
+		return errors.Join(hostErr, err)
+	}
+	return errors.Join(hostErr, internal.CudaDeviceSynchronizeOnDevice(device))
 }
 
-// DeviceReset resets the current device (like cudaDeviceReset)
+// DeviceReset is unsupported in hardware mode because it would invalidate
+// live GoCUDA allocations and handles.
 func DeviceReset() error {
-	// In simulation, this would reset all state
+	if internal.ShouldUseCuda() {
+		return fmt.Errorf("device reset is not supported while GoCUDA manages CUDA resources")
+	}
 	return nil
 }

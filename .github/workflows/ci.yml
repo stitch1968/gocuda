@@ -1,0 +1,113 @@
+name: GoCUDA CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      run_cuda:
+        description: Run hardware tests on a configured self-hosted CUDA runner
+        type: boolean
+        default: false
+      run_multi_gpu:
+        description: Run multi-GPU and peer-copy tests on a configured self-hosted runner
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  simulation:
+    env:
+      CGO_ENABLED: "0"
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Build simulation
+        run: go build ./...
+      - name: Test simulation
+        run: go test ./...
+
+  race:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Test with race detector
+        run: go test -race ./...
+
+  cuda:
+    if: github.event_name == 'workflow_dispatch' && inputs.run_cuda
+    runs-on: [self-hosted, linux, x64, cuda]
+    env:
+      CGO_ENABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Check GPU and toolkit
+        run: |
+          nvidia-smi
+          nvcc --version
+      - name: Require native CUDA and smoke-test libraries
+        run: go run -tags cuda ./cmd/gocuda-native-smoke
+      - name: Test CUDA mode without cache
+        run: go test -tags cuda -count=1 ./...
+      - name: Require nvcc compilation and GPU launch
+        env:
+          GOCUDA_REQUIRE_NVCC_TEST: "1"
+        run: go test -tags cuda ./tests -run '^TestCompileCUDANativeAndLaunch$' -count=1
+      - name: Check native device memory accesses
+        run: >-
+          go test -tags cuda
+          -exec "compute-sanitizer --tool memcheck --report-api-errors no --error-exitcode 99"
+          ./tests -run 'TestNativeGraph|TestNativeOps|TestNativeBLAS|TestNativeKernel|TestNativeStream|TestNativeFFTStream|TestMemoryPoolOwnership|TestMemoryRetention|TestHardwareDevice|TestHardwareSetDevice' -count=1
+      - name: Check native uninitialized device reads
+        run: >-
+          go test -tags cuda
+          -exec "compute-sanitizer --tool initcheck --report-api-errors no --error-exitcode 99"
+          ./tests -run 'TestNativeGraph|TestNativeOps|TestNativeBLAS|TestNativeKernel|TestNativeStream|TestNativeFFTStream' -count=1
+      - name: Check native solver and FFT device memory
+        run: >-
+          go test -tags cuda
+          -exec "compute-sanitizer --tool memcheck --report-api-errors no --error-exitcode 99"
+          ./libraries -run 'TestNativeSolverNumericalResults|TestNativeSolverPseudoInverse|TestSolverContextConcurrentExecution|TestNativeLibrarySelectionOnEachDevice|TestNativeFFTDefaultStreamCompletesBeforeReturn|TestNativeRandomGenerator|TestFFTPlanConcurrentExecution|TestFFTContextConcurrentPlanCreation|TestSparseNumerics|TestSparseContextConcurrentSpMV|TestSparseContextConcurrentSpGEMM|TestSparseContextConcurrentConversions|TestNativeSparseStrictPolicyOnEachDevice' -count=1
+      - name: Check native solver and FFT initialization
+        run: >-
+          go test -tags cuda
+          -exec "compute-sanitizer --tool initcheck --report-api-errors no --error-exitcode 99"
+          ./libraries -run 'TestNativeSolverNumericalResults|TestNativeSolverPseudoInverse|TestSolverContextConcurrentExecution|TestNativeLibrarySelectionOnEachDevice|TestNativeFFTDefaultStreamCompletesBeforeReturn|TestNativeRandomGenerator|TestFFTPlanConcurrentExecution|TestFFTContextConcurrentPlanCreation|TestSparseNumerics|TestSparseContextConcurrentSpMV|TestSparseContextConcurrentSpGEMM|TestSparseContextConcurrentConversions|TestNativeSparseStrictPolicyOnEachDevice' -count=1
+
+  multi-gpu:
+    if: github.event_name == 'workflow_dispatch' && inputs.run_multi_gpu
+    runs-on: [self-hosted, linux, x64, cuda, multi-gpu]
+    env:
+      CGO_ENABLED: "1"
+      GOCUDA_REQUIRE_MULTI_GPU: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Require native CUDA
+        run: go run -tags cuda ./cmd/gocuda-native-smoke
+      - name: Test device affinity and peer copies
+        run: >-
+          go test -tags cuda ./tests ./libraries
+          -run 'TestHardwareStreamAllocationUsesStreamDevice|TestHardwareSetDeviceOnLockedThread|TestHardwareDeviceAffinity|TestMultiGPUP2PCopy|TestNativeLibrarySelectionOnEachDevice|TestNativeSparseStrictPolicyOnEachDevice'
+          -count=1

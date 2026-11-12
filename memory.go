@@ -12,19 +12,22 @@ type Pool = memory.Pool
 
 // Memory type constants
 const (
-	TypeDevice   = memory.TypeDevice
-	TypeHost     = memory.TypeHost
-	TypePinned   = memory.TypePinned
-	TypeUnified  = memory.TypeUnified
-	TypeShared   = memory.TypeShared
-	TypeConstant = memory.TypeConstant
-	TypeTexture  = memory.TypeTexture
+	TypeDevice     = memory.TypeDevice
+	TypeHost       = memory.TypeHost
+	TypePinned     = memory.TypePinned
+	TypeUnified    = memory.TypeUnified
+	TypeShared     = memory.TypeShared
+	TypeConstant   = memory.TypeConstant
+	TypeTexture    = memory.TypeTexture
+	TypeDeviceOnly = memory.TypeDeviceOnly
 )
 
 // Memory allocation functions (excluding Alloc which conflicts with simple_api.go)
 var (
 	Malloc                           = memory.Alloc
 	MallocOnDevice                   = memory.AllocOnDevice
+	MallocDeviceOnly                 = memory.AllocDeviceOnly
+	MallocDeviceOnlyOnDevice         = memory.AllocDeviceOnlyOnDevice
 	MallocWithTypeAndStream          = memory.AllocWithTypeAndStream
 	AllocWithStream                  = memory.AllocWithStream
 	AllocWithTypeAndStream           = memory.AllocWithTypeAndStream

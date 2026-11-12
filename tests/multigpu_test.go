@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"os"
 	"testing"
 
 	cuda "github.com/stitch1968/gocuda"
@@ -14,6 +15,9 @@ func TestMultiGPUP2PCopy(t *testing.T) {
 		t.Fatalf("Failed to get CUDA devices: %v", err)
 	}
 	if len(devices) < 2 {
+		if os.Getenv("GOCUDA_REQUIRE_MULTI_GPU") == "1" {
+			t.Fatal("multi-GPU validation requires at least two CUDA devices")
+		}
 		t.Skip("multi-GPU P2P test requires at least 2 CUDA devices")
 	}
 

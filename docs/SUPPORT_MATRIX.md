@@ -1,73 +1,59 @@
 # GoCUDA Support Matrix
 
-This document defines the currently supported environments and the parts of the surface that are suitable for production use.
+GoCUDA is experimental. A passing test suite does not establish production
+readiness or complete CUDA API coverage.
 
-## Runtime Modes
+## Runtime modes
 
-| Mode | Status | Notes |
+| Mode | Purpose | Limitations |
 | --- | --- | --- |
-| Simulation mode (`go build ./...`) | Supported for development and testing | No GPU required. Intended for API development, unit tests, and functional fallback coverage. |
-| CUDA hardware mode (`go build -tags cuda ./...`) | Supported on validated configurations below | Requires NVIDIA CUDA Toolkit, CGO, and compatible runtime libraries. |
+| Default simulation build | Development and testing without a GPU | Host execution; not all CUDA semantics are modeled. |
+| CUDA-tagged build | Selected NVIDIA runtime and library integrations | Requires CGO, CUDA and vendor libraries; some operations still run on the host or use external tools. |
 
-## Platform Support
+CUDA-tagged builds are intended for supported Windows and Linux CUDA
+configurations. macOS supports simulation only. The module targets Go 1.26 or
+later; CUDA toolkit and driver compatibility depends on the installed libraries.
 
-| Platform | Simulation Mode | CUDA Hardware Mode | Notes |
-| --- | --- | --- | --- |
-| Windows x64 | Supported | Supported with documented native-library caveats | Requires CUDA Toolkit, MSVC-compatible build environment, and repo import libs for `cuda`/`cudart`. Native cuDNN, nvJPEG, cuDSS, and AmgX wiring are present, but successful Windows CUDA builds depend on generating `lib_mingw\libcudnn.a`, `lib_mingw\libnvjpeg.a`, `lib_mingw\libcudss.a`, and `lib_mingw\libamgxsh.a` from installed vendor DLLs and validating on hardware. |
-| Linux x86_64 | Supported | Supported | Requires CUDA Toolkit with `lib64` runtime libraries available. |
-| macOS | Supported for simulation only | Not supported | NVIDIA CUDA hardware mode is not supported by this repository on macOS. |
+## Implementation boundaries
 
-## Toolchain Support
+| Surface | Current behavior |
+| --- | --- |
+| Memory | Legacy `TypeDevice` and unified allocations use managed memory in CUDA mode. `TypeDeviceOnly` uses device-only memory; pinned allocations use page-locked host memory. Simulation uses Go memory while enforcing the device-only view restriction. Call `Free` after outstanding work completes. |
+| Streams and events | Existing stream/event APIs model host queues and timing. Separate `NativeStream` and `NativeEvent` APIs provide CUDA streams, GPU events and async copies for pinned/device buffers in CUDA builds. |
+| Kernels and graphs | PTX modules and `NativeOps` launch selected GPU kernels; explicit native graphs support kernel, copy and memset nodes with dependencies and replay. Existing built-in kernel and host graph APIs remain host-side. |
+| cuFFT, cuRAND, cuSOLVER, cuSPARSE | Selected native paths are available in CUDA builds. Simulation and individual operations have separate limitations. |
+| Other library wrappers | `NativeBLAS` explicitly uses cuBLAS for float32/float64 GEMM, including transpose and row-stride options. Other wrappers select native paths, Go fallbacks, or external tools depending on operation and configuration. CUTLASS-named native GEMM paths also use cuBLAS. |
 
-| Component | Supported Range | Notes |
-| --- | --- | --- |
-| Go | 1.26+ | Module currently targets Go 1.26 in `go.mod`. |
-| CUDA Toolkit | 12.x to 13.x target | Build paths and verification logic assume standard CUDA Toolkit layouts. |
-| GPU Architecture | NVIDIA CUDA-capable GPUs supported by installed toolkit | Real coverage depends on vendor library availability and toolkit compatibility. |
+The programmatic readiness matrix reports library-wide production readiness as
+unverified until operation-level coverage and validation are established.
+Consult [library runtime boundaries](LIBRARY_RUNTIME_BOUNDARIES.md) before
+assuming a call executes on a GPU.
 
-## Production-Ready Library Surface
-
-| Surface | Status | Notes |
-| --- | --- | --- |
-| Core runtime, memory, streams, checked views | Production-focused | Primary runtime path for both simulation and CUDA-tagged builds. |
-| cuFFT | Production-ready in CUDA mode | Native cuFFT backend in CUDA builds with simulation fallback when CUDA runtime mode is unavailable. |
-| cuRAND | Production-ready in CUDA mode | Native cuRAND backend in CUDA builds with simulation fallback when CUDA runtime mode is unavailable. |
-| cuSOLVER | Production-ready in CUDA mode | Native cuSOLVER backend in CUDA builds with simulation fallback when CUDA runtime mode is unavailable. |
-| cuSPARSE | Production-ready in CUDA mode | Native cuSPARSE context and execution paths in CUDA builds with simulation fallback when CUDA runtime mode is unavailable. |
-| cuDNN | Production-ready in simulation and CUDA modes | Deterministic descriptor-driven tensor, convolution, pooling, activation, and batch-normalization execution with explicit device-transfer support. Native cuDNN bindings are wired for CUDA-tagged builds; Windows requires generated `lib_mingw\libcudnn.a` and hardware validation. |
-| AmgX | Production-ready in simulation and CUDA modes | Deterministic CSR-based setup, solve, multi-RHS solve, and matrix-update execution. |
-| CUDA Math API | Production-ready in simulation and CUDA modes | Validated Go execution with explicit device-transfer support. |
-| Thrust | Production-ready in simulation and CUDA modes | Validated Go algorithm execution with explicit device-transfer support. Native CUDA-tagged runtime-backed context/copy/fill/generate dispatch is wired for CUDA builds; broader algorithm coverage and hardware validation are still pending. |
-| nvJPEG | Production-ready in simulation and CUDA modes | Deterministic JPEG encode/decode with explicit device-transfer support. Native nvJPEG bindings are wired for CUDA-tagged builds; Windows requires generated `lib_mingw\libnvjpeg.a` and hardware validation. |
-| nvJPEG2000 | Production-ready in simulation and CUDA modes | Real JPEG 2000 encode/decode and metadata extraction backed by `ffmpeg`/`ffprobe`. Native nvJPEG2000 bindings are wired for CUDA-tagged builds for a bounded 8-bit interleaved slice; Windows requires generated `lib_mingw\libnvjpeg2k.a` and hardware validation. |
-| cuTENSOR | Production-ready in simulation and CUDA modes | Validated descriptor-driven tensor execution with explicit device-transfer support. Native cuTENSOR bindings are wired for CUDA-tagged builds; Windows requires generated `lib_mingw\libcutensor.a` and hardware validation. |
-| CUTLASS | Production-ready in simulation and CUDA modes | Validated host/device-safe linear algebra execution. Native cuBLAS-backed CUTLASS dispatch is wired for CUDA-tagged builds for a bounded float32/float64 row-major GEMM slice plus float32 `Rank2k` with `beta=0` and float32 `Trmm`; Windows requires generated `lib_mingw\libcublas.a` and hardware validation. |
-| cuDSS | Production-ready in simulation and CUDA modes | Validated host/device-safe sparse direct solving. |
-
-## Remaining Native Gaps
-
-The production verification command now passes, but some wrappers still rely on validated Go or external-tool execution rather than native CUDA vendor bindings:
-
-- `CUTLASS` hardware validation on a Windows CUDA runner after import-library generation
-- `cuDNN` hardware validation on a Windows CUDA runner after import-library generation
-- `cuDSS` hardware validation on a Windows CUDA runner after import-library generation
-- `AmgX` hardware validation on a Windows CUDA runner after import-library generation
-- `cuTENSOR` hardware validation on a Windows CUDA runner after import-library generation
-- `nvJPEG` hardware validation on a Windows CUDA runner after import-library generation
-- `nvJPEG2000` hardware validation on a Windows CUDA runner after import-library generation
-
-## Verification Commands
-
-Use these commands before treating a build as production-capable:
+## Verification
 
 ```bash
 go test ./...
+go test -race ./...
 go run ./cmd/gocuda-verify-toolkit
 go run ./cmd/gocuda-verify-production
 ```
 
-For CUDA hardware validation on a supported machine:
+The production verifier currently reports the outstanding readiness blockers.
+For CUDA hardware, run `go test -tags cuda ./...` with the required vendor DLLs
+or shared libraries available. On Windows,
+`.\run_hardware_mode.ps1 -Command go test -tags cuda ./...` configures runtime
+DLL paths before testing.
 
-```bash
-go test -tags cuda ./...
-```
+The GitHub Actions workflow runs simulation tests on Linux and Windows and a
+Linux race job. Its CUDA job is manually enabled and requires a self-hosted
+Linux runner labelled `cuda` with the toolkit, GPU, and vendor libraries already
+installed. Its required nvcc integration test needs compute capability 7.5 or
+newer. The native smoke command fails if CUDA falls back to simulation;
+individual optional-library tests may still skip unavailable capabilities.
+An independent opt-in `multi-gpu` job requires a self-hosted runner labelled
+`multi-gpu` with at least two peer-capable GPUs; missing devices fail that job
+instead of silently skipping the cross-device tests.
+The CUDA job also runs Compute Sanitizer memcheck and initcheck on the native
+regression tests. API-error reporting is disabled for those checks because the tests and
+kernel metadata discovery intentionally probe CUDA error paths; the ordinary
+test suite still checks returned API errors.

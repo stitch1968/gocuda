@@ -8,7 +8,7 @@ import (
 	"github.com/stitch1968/gocuda/kernels"
 )
 
-// GoFunc represents a function that can be executed on GPU
+// GoFunc represents a host callback executed on a device-bound stream worker.
 type GoFunc func(ctx context.Context, args ...any) error
 
 // CudaWaitGroup is similar to sync.WaitGroup but for CUDA operations
@@ -60,14 +60,18 @@ func (cc *CudaChannel) Close() {
 	close(cc.ch)
 }
 
-// Go executes a function on the GPU similar to go routine
+// Go schedules a host callback on the default stream.
 // Usage: cuda.Go(func(ctx context.Context, args ...interface{}) error { ... }, arg1, arg2, ...)
 func Go(fn GoFunc, args ...any) error {
 	return GoWithStream(GetDefaultStream(), fn, args...)
 }
 
-// GoWithStream executes a function on the GPU with a specific stream
+// GoWithStream schedules a host callback on a device-bound stream worker.
+// Callback errors are returned by the next stream synchronization.
 func GoWithStream(stream *Stream, fn GoFunc, args ...any) error {
+	if fn == nil {
+		return fmt.Errorf("nil callback")
+	}
 	if stream == nil {
 		var err error
 		stream, err = DefaultStream()
@@ -76,66 +80,19 @@ func GoWithStream(stream *Stream, fn GoFunc, args ...any) error {
 		}
 	}
 
-	ctx, err := NewContext(stream.DeviceID())
-	if err != nil {
-		return err
-	}
-
-	kernel := &SimpleKernel{
-		Name: "UserDefinedKernel",
-		Func: func(kernelArgs ...any) error {
-			ctx := context.Background()
-			return fn(ctx, kernelArgs...)
-		},
-	}
-
-	// Execute kernel on stream using the proper stream interface
-	stream.Execute(func() {
-		_ = ctx.Run(func() error {
-			return kernel.Func(args...)
-		})
+	return stream.Submit(func() error {
+		return fn(context.Background(), args...)
 	})
-
-	return nil
 }
 
-// GoWithDimensions executes a function on the GPU with custom grid and block dimensions
+// GoWithDimensions schedules a host callback. Dimensions do not launch GPU threads.
 func GoWithDimensions(gridDim, blockDim kernels.Dim3, fn GoFunc, args ...any) error {
 	return GoWithDimensionsAndStream(GetDefaultStream(), gridDim, blockDim, fn, args...)
 }
 
-// GoWithDimensionsAndStream executes a function on the GPU with custom dimensions and stream
+// GoWithDimensionsAndStream schedules a host callback. Dimensions are informational.
 func GoWithDimensionsAndStream(stream *Stream, gridDim, blockDim kernels.Dim3, fn GoFunc, args ...any) error {
-	if stream == nil {
-		var err error
-		stream, err = DefaultStream()
-		if err != nil {
-			return err
-		}
-	}
-
-	ctx, err := NewContext(stream.DeviceID())
-	if err != nil {
-		return err
-	}
-
-	kernel := &SimpleKernel{
-		Name: "UserDefinedKernel",
-		Func: func(kernelArgs ...any) error {
-			ctx := context.Background()
-			return fn(ctx, kernelArgs...)
-		},
-	}
-
-	// Execute kernel on stream with dimensions
-	stream.Execute(func() {
-		_ = ctx.Run(func() error {
-			fmt.Printf("Executing kernel with grid %+v, block %+v\n", gridDim, blockDim)
-			return kernel.Func(args...)
-		})
-	})
-
-	return nil
+	return GoWithStream(stream, fn, args...)
 }
 
 // Synchronize waits for all CUDA operations to complete (similar to runtime.Gosched())

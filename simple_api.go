@@ -30,6 +30,12 @@ func (sm *SimpleMemory) OnDevice() *SimpleMemory {
 	return sm
 }
 
+// DeviceOnly specifies device-only memory, which cannot be viewed on the host.
+func (sm *SimpleMemory) DeviceOnly() *SimpleMemory {
+	sm.memType = TypeDeviceOnly
+	return sm
+}
+
 // OnHost specifies host memory allocation
 func (sm *SimpleMemory) OnHost() *SimpleMemory {
 	sm.memType = TypeHost
@@ -56,16 +62,10 @@ func (sm *SimpleMemory) WithStream(stream *Stream) *SimpleMemory {
 
 // Allocate performs the actual memory allocation
 func (sm *SimpleMemory) Allocate() (*Memory, error) {
-	stream := sm.stream
-	if stream == nil {
-		var err error
-		stream, err = DefaultStream()
-		if err != nil {
-			return nil, err
-		}
+	if err := Initialize(); err != nil {
+		return nil, err
 	}
-
-	return MallocWithTypeAndStream(stream, sm.size, sm.memType)
+	return MallocWithTypeAndStream(sm.stream, sm.size, sm.memType)
 }
 
 // SimpleContext provides a simplified context for beginners
@@ -98,7 +98,10 @@ func NewSimpleContext() (*SimpleContext, error) {
 
 // Run executes a function in the GPU context (Simple API)
 func (sc *SimpleContext) Run(fn func() error) error {
-	return fn() // For now, just execute - can be enhanced with GPU scheduling
+	if sc == nil || sc.ctx == nil {
+		return fmt.Errorf("nil simple context")
+	}
+	return sc.ctx.Run(fn)
 }
 
 // Compute provides auto-managed memory computation (Simplest API)

@@ -2,39 +2,44 @@
 
 GoCUDA provides a broad Go interface to CUDA concepts and selected CUDA ecosystem libraries. It automatically detects CUDA availability, runs in CPU simulation mode when CUDA is unavailable, and can execute against real NVIDIA hardware when built with the `cuda` tag and a working Windows or Unix CUDA toolchain.
 
+**Status:** Experimental. CUDA-tagged builds include native library bindings, but
+not all operations run on the GPU or have native CUDA stream semantics. The
+production-readiness verification intentionally reports unverified surfaces.
+See [runtime boundaries](docs/LIBRARY_RUNTIME_BOUNDARIES.md).
+
 ## 🎯 CUDA Ecosystem Surface
 
 ### ✅ Core CUDA Runtime
 - **Device Management** - Full device enumeration and properties
-- **Context & Stream Management** - Advanced execution control
-- **Memory Management** - All memory types (global, shared, constant, texture, unified)
-- **Kernel Execution** - Complete launch parameter control
-- **Event & Synchronization** - Comprehensive timing and sync primitives
+- **Context & Stream Management** - Device-bound host queues and explicit native CUDA streams
+- **Memory Management** - Device-only, managed, host, pinned host, and unified buffers
+- **Kernel Execution** - Local nvcc compilation, PTX modules and selected native float32 operations; existing built-in APIs remain host-based
+- **Event & Synchronization** - Host queue events and explicit CUDA events
 
 ### ✅ CUDA Runtime Libraries
 - **🎲 cuRAND** - Native cuRAND backend in CUDA mode with simulation fallback in non-CUDA runtime mode
-- **🕸️ cuSPARSE** - Native cuSPARSE-backed execution in CUDA mode with simulation fallback in non-CUDA runtime mode
-- **🔧 cuSOLVER** - Native cuSOLVER backend in CUDA mode with simulation fallback in non-CUDA runtime mode
-- **⚡ Thrust** - Production-ready deterministic algorithm wrapper with explicit device-transfer support
+- **🕸️ cuSPARSE** - Native CSR/COO SpMV and sparse-to-dense conversion, CSR triangular solve, sparse multiplication and dense-to-CSR conversion; other sparse operations currently execute on the host
+- **🔧 cuSOLVER** - Native cuSOLVER backend and CPU numerical decompositions for simulation
+- **⚡ Thrust** - Algorithm wrapper with selected native paths and Go fallbacks
 - **🌊 cuFFT** - Native cuFFT backend in CUDA mode with simulation fallback in non-CUDA runtime mode
-- **🧠 cuDNN** - Production-ready deterministic tensor, convolution, pooling, activation, and batch-normalization wrapper
-- **📸 nvJPEG** - Production-ready JPEG encode/decode wrapper with deterministic fallback and non-Windows CUDA-tagged native bindings
-- **🎨 nvJPEG2000** - Production-ready JPEG 2000 encode/decode wrapper backed by `ffmpeg` and `ffprobe`
-- **⚡ CUTLASS** - Production-ready deterministic linear algebra wrapper with explicit device-transfer support
-- **🔍 cuDSS** - Production-ready deterministic sparse direct solver with explicit device-transfer support
-- **🌐 AmgX** - Production-ready deterministic sparse-solver wrapper with explicit CSR setup and solution write-back
-- **🧮 CUDA Math API** - Production-ready deterministic math wrapper with explicit device transfer support
-- **🎯 cuTENSOR** - Production-ready deterministic descriptor-driven tensor wrapper with explicit device-transfer support
+- **🧠 cuDNN** - Selected native and Go tensor operations
+- **📸 nvJPEG** - Selected native and Go JPEG operations
+- **🎨 nvJPEG2000** - Selected native and external-tool-backed JPEG 2000 operations
+- **⚡ CUTLASS** - Selected cuBLAS-backed and Go linear algebra operations
+- **🔍 cuDSS** - Selected native and Go sparse direct solver operations
+- **🌐 AmgX** - Selected native and Go sparse solver operations
+- **🧮 CUDA Math API** - Go math operations
+- **🎯 cuTENSOR** - Selected native and Go tensor operations
 
-### ✅ Hardware-Specific Features
+### Hardware-Specific API Models
 - **🌊 Warp Primitives** - Shuffle, vote, reduce operations
 - **🤝 Cooperative Groups** - Thread blocks, warps, coalesced groups
 - **🧮 Tensor Cores** - Mixed-precision GEMM (FP16, BF16, INT8, INT4)
 
-### ✅ Advanced Features
+### Advanced API Models
 - **Dynamic Parallelism** - Device-side kernel launches
 - **Multi-GPU Support** - Device topology and P2P transfers
-- **CUDA Graphs** - Task graph construction and execution
+- **CUDA Graphs** - Host-scheduled graphs and explicit native kernel/copy/memset graphs
 - **Memory Pools** - Advanced allocation strategies
 - **Performance Profiling** - Comprehensive metrics and optimization
 
@@ -48,21 +53,28 @@ GoCUDA provides a broad Go interface to CUDA concepts and selected CUDA ecosyste
 
 ### 2. **CPU Simulation Mode** (No GPU Required)
 - **Automatic fallback** when CUDA hardware unavailable
-- **Realistic behavioral simulation** of all CUDA operations
+- **Behavioral simulation** for supported operations; not all CUDA semantics are modeled
 - **Functional algorithm coverage** for the tested operations in this repository
 - **Perfect for development** - test CUDA code on any machine
 - **Development and compatibility focused** - suitable for demos, tests, and API exploration
 
-The same high-level Go code is intended to work in both modes, but the CUDA build currently uses managed memory for high-level allocations so host-side helper algorithms and tests can inspect buffers safely.
+The same high-level Go code is intended to work in both modes. Existing
+`TypeDevice` allocations use managed memory in CUDA mode so host-side helpers
+can inspect them. Use `memory.AllocDeviceOnly` or `cuda.Alloc(size).DeviceOnly()`
+for device-only memory, and transfer its contents with copy helpers instead of
+`View`. Pinned allocations use page-locked memory in CUDA mode. All allocations
+must be explicitly freed after outstanding work completes, and views must not
+be used after their allocation is freed.
 
 ## Library Runtime Boundaries
 
-- Core runtime, memory, streams, and the tested kernel helpers run against either simulation mode or CUDA-tagged builds.
-- Some production-ready packages under `libraries/` execute through validated deterministic Go implementations or explicitly documented external tooling rather than native CUDA vendor bindings.
-- There are currently no helper-backed high-level libraries remaining in the production-readiness matrix.
-- In CUDA mode, helper-backed compatibility paths fail fast by default instead of silently taking a helper path.
-- Set `GOCUDA_EXPERIMENTAL_HELPERS=1` only if you explicitly want the compatibility/helper behavior for demos or experiments.
-- Treat native-binding parity as a separate roadmap item rather than a production-readiness blocker for the validated surfaces listed above.
+- CUDA-tagged builds may still execute Go or external-tool fallback paths.
+- `Go` and graph callbacks execute on the host. Existing `Stream` and `Event`
+  APIs model host queues; `streams.NativeStream` and `streams.NativeEvent`
+  provide explicit CUDA stream and GPU event operations.
+- `GoWithStream` callback errors are returned by the next stream synchronization.
+- The readiness matrix describes broad implementation strategies, not per-operation
+  backend selection or a production certification.
 - See `docs/LIBRARY_RUNTIME_BOUNDARIES.md` for the current boundary notes.
 - See `docs/SUPPORT_MATRIX.md` for supported platforms, toolchains, and the current production-ready surface.
 
@@ -643,18 +655,18 @@ randomData, _ := libraries.RandomNumbers(1000, libraries.RngTypeXorwow)
 ctx, _ := libraries.CreateSparseContext()
 defer ctx.DestroyContext()
 
-// Support for CSR, COO, CSC, ELL, HYB formats
-matrix, _ := ctx.CreateSparseMatrix(rows, cols, nnz, libraries.MatrixFormatCSR)
+// Initialize a CSR matrix with zero-based row offsets and column indices.
+matrix, _ := ctx.CreateCSRMatrix(rows, cols, rowOffsets, columnIndices, values)
 defer matrix.Destroy()
 
 // Sparse linear algebra operations
-ctx.SpMV(alpha, A, x, beta, y)         // y = α*A*x + β*y
-C, _ := ctx.SpMM(A, B)                 // C = A * B (sparse-sparse)
-result, _ := ctx.SpGEMM(A, B)          // General matrix-matrix multiply
+ctx.SpMV(alpha, matrix, x, beta, y)     // y = alpha*matrix*x + beta*y
+product, _ := ctx.SpGEMM(matrix, B)     // sparse matrix product
+defer product.Destroy()
 
-// Factorizations
-L, U, _ := ctx.SpLU(A)                 // LU decomposition
-ctx.SpCholesky(A)                      // Cholesky factorization
+// CSR and COO can be converted to dense; dense-to-CSR is also native in CUDA mode.
+dense, _ := ctx.SparseToDense(matrix)
+defer dense.Free()
 ```
 
 ### 🔧 cuSOLVER - Linear Algebra Solvers
@@ -1341,19 +1353,6 @@ We welcome contributions! Areas for enhancement:
 
 ## 🏆 Project Status
 
-**✅ PRODUCTION READY - Feature Complete**
-
-### Implementation Status:
-- **Core CUDA Runtime**: 100% ✅
-- **CUDA Runtime Libraries**: 100% ✅ (13 libraries: cuRAND, cuSPARSE, cuSOLVER, Thrust, cuFFT, cuDNN, nvJPEG, nvJPEG2000, CUTLASS, cuDSS, AmgX, CUDA Math API, cuTENSOR)  
-- **Hardware Features**: 100% ✅ (Warp primitives, cooperative groups, tensor cores)
-- **Advanced Features**: 100% ✅ (Dynamic parallelism, multi-GPU, graphs)
-- **Documentation**: 95% ✅
-- **Test Coverage**: 90% ✅
-
-### Quality Metrics:
-- 🎯 **98%+ CUDA API Coverage** (13 complete runtime libraries)
-- 🎯 **Zero Known Placeholders or TODOs**  
-- 🎯 **Production-Quality Error Handling**
-- 🎯 **Comprehensive Simulation Mode**
-- 🎯 **Cross-Platform Compatibility**
+Experimental: native coverage, stream semantics, operation-level backend
+reporting, and production validation remain incomplete. See the
+[support matrix](docs/SUPPORT_MATRIX.md) for the current boundaries.

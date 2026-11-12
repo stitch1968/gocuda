@@ -1041,15 +1041,16 @@ func readMathTypedMemory[T any](mem *memory.Memory, length int) ([]T, error) {
 	if length < 0 {
 		return nil, fmt.Errorf("length must be non-negative: %d", length)
 	}
-	values := make([]T, length)
 	if length == 0 {
-		return values, nil
+		return []T{}, nil
 	}
 	var zero T
-	byteSize := int(unsafe.Sizeof(zero)) * length
-	if int64(byteSize) > mem.Size() {
-		return nil, fmt.Errorf("allocation too small: need %d bytes, have %d", byteSize, mem.Size())
+	elementSize := uint64(unsafe.Sizeof(zero))
+	if elementSize == 0 || uint64(length) > uint64(^uint(0)>>1)/elementSize || uint64(length) > uint64(mem.Size())/elementSize {
+		return nil, fmt.Errorf("allocation too small for %d requested elements", length)
 	}
+	byteSize := int(uint64(length) * elementSize)
+	values := make([]T, length)
 	hostBytes := unsafe.Slice((*byte)(unsafe.Pointer(&values[0])), byteSize)
 	if err := memory.CopyDeviceToHost(hostBytes, mem); err != nil {
 		return nil, err
@@ -1065,10 +1066,11 @@ func writeMathTypedMemory[T any](mem *memory.Memory, values []T) error {
 		return nil
 	}
 	var zero T
-	byteSize := int(unsafe.Sizeof(zero)) * len(values)
-	if int64(byteSize) > mem.Size() {
-		return fmt.Errorf("allocation too small: need %d bytes, have %d", byteSize, mem.Size())
+	elementSize := uint64(unsafe.Sizeof(zero))
+	if elementSize == 0 || uint64(len(values)) > uint64(^uint(0)>>1)/elementSize || uint64(len(values)) > uint64(mem.Size())/elementSize {
+		return fmt.Errorf("allocation too small for %d requested elements", len(values))
 	}
+	byteSize := int(uint64(len(values)) * elementSize)
 	host := make([]T, len(values))
 	copy(host, values)
 	hostBytes := unsafe.Slice((*byte)(unsafe.Pointer(&host[0])), byteSize)

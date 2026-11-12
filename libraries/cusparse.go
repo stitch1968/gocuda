@@ -3,13 +3,17 @@
 package libraries
 
 import (
+	"errors"
 	"fmt"
 	"math"
+	"sync"
 	"time"
 	"unsafe"
 
 	cuda "github.com/stitch1968/gocuda"
+	"github.com/stitch1968/gocuda/internal"
 	"github.com/stitch1968/gocuda/memory"
+	"github.com/stitch1968/gocuda/streams"
 )
 
 // cuSPARSE - Sparse Matrix Operations Library
@@ -38,8 +42,104 @@ const (
 
 // SparseContext manages cuSPARSE operations
 type SparseContext struct {
-	handle unsafe.Pointer // Simulated or native handle
-	native bool
+	handle            unsafe.Pointer // Simulated or native handle
+	native            bool
+	deviceID          int
+	mu                sync.Mutex
+	destroyed         bool
+	pending           []*memory.Retention
+	pendingMatrices   []*SparseMatrix
+	pendingWorkspaces []*memory.Memory
+	pendingCleanups   []func() error
+	strictNative      bool
+}
+
+// ErrNativeSparseOperationUnsupported indicates that a native-only sparse
+// context cannot execute the requested operation on the GPU.
+var ErrNativeSparseOperationUnsupported = errors.New("operation is not implemented by the native cuSPARSE backend")
+
+func (ctx *SparseContext) requireHostOperation(name string) error {
+	if ctx.strictNative {
+		return fmt.Errorf("%s: %w", name, ErrNativeSparseOperationUnsupported)
+	}
+	return nil
+}
+
+// releasePending is called only after the CUDA default stream has completed.
+func (ctx *SparseContext) releasePending() error {
+	var errs []error
+	remainingCleanups := ctx.pendingCleanups[:0]
+	for _, cleanup := range ctx.pendingCleanups {
+		completed := false
+		err := internal.RunOnDevice(ctx.deviceID, func() error {
+			if err := cleanup(); err != nil {
+				return err
+			}
+			completed = true
+			return nil
+		})
+		if !completed {
+			remainingCleanups = append(remainingCleanups, cleanup)
+		}
+		if err != nil {
+			errs = append(errs, err)
+		}
+	}
+	ctx.pendingCleanups = remainingCleanups
+	if len(remainingCleanups) > 0 {
+		return errors.Join(errs...)
+	}
+	for _, held := range ctx.pending {
+		held.Release()
+	}
+	ctx.pending = nil
+	remaining := ctx.pendingMatrices[:0]
+	for _, matrix := range ctx.pendingMatrices {
+		if err := matrix.Destroy(); err != nil {
+			remaining = append(remaining, matrix)
+			errs = append(errs, err)
+		}
+	}
+	ctx.pendingMatrices = remaining
+	remainingWorkspaces := ctx.pendingWorkspaces[:0]
+	for _, workspace := range ctx.pendingWorkspaces {
+		if err := workspace.Free(); err != nil {
+			remainingWorkspaces = append(remainingWorkspaces, workspace)
+			errs = append(errs, err)
+		}
+	}
+	ctx.pendingWorkspaces = remainingWorkspaces
+	return errors.Join(errs...)
+}
+
+func (ctx *SparseContext) lock() error {
+	if ctx == nil {
+		return fmt.Errorf("nil sparse context")
+	}
+	ctx.mu.Lock()
+	if ctx.destroyed {
+		ctx.mu.Unlock()
+		return fmt.Errorf("sparse context has been destroyed")
+	}
+	return nil
+}
+
+func runSparseOnDevice[T any](ctx *SparseContext, run func() (T, error), cleanup func(T) error) (T, error) {
+	if !ctx.native {
+		return run()
+	}
+	var result T
+	err := internal.RunOnDevice(ctx.deviceID, func() error {
+		var runErr error
+		result, runErr = run()
+		return runErr
+	})
+	if err != nil {
+		err = errors.Join(err, cleanup(result))
+		var zero T
+		return zero, err
+	}
+	return result, nil
 }
 
 // CreateSparseContext creates a new cuSPARSE context
@@ -56,54 +156,237 @@ func CreateSparseContext() (*SparseContext, error) {
 	}, nil
 }
 
-// CreateSparseMatrix creates a sparse matrix
+// CreateNativeSparseContextOnDevice creates a device-bound, native-only
+// context. Operations without native CUDA implementations return an error.
+func CreateNativeSparseContextOnDevice(deviceID int) (*SparseContext, error) {
+	if err := ensureCudaReady(); err != nil {
+		return nil, err
+	}
+	if !cuda.ShouldUseCuda() {
+		return nil, streams.ErrNativeCUDAUnavailable
+	}
+	if deviceID < 0 || deviceID >= cuda.GetCudaDeviceCount() {
+		return nil, fmt.Errorf("device ID %d out of range", deviceID)
+	}
+	var ctx *SparseContext
+	err := internal.RunOnDevice(deviceID, func() error {
+		var createErr error
+		ctx, createErr = createNativeSparseContext()
+		return createErr
+	})
+	if err != nil {
+		if ctx != nil {
+			return nil, errors.Join(err, ctx.DestroyContext())
+		}
+		return nil, err
+	}
+	ctx.strictNative = true
+	return ctx, nil
+}
+
+// SpMVBackend reports the execution backend for a given sparse format.
+func (ctx *SparseContext) SpMVBackend(format MatrixFormat) (LibraryImplementationMode, error) {
+	if err := ctx.lock(); err != nil {
+		return "", err
+	}
+	defer ctx.mu.Unlock()
+	switch format {
+	case MatrixFormatCSR, MatrixFormatCOO:
+		if ctx.native {
+			return ImplementationModeNativeCUDA, nil
+		}
+		return ImplementationModeValidatedGo, nil
+	default:
+		return "", fmt.Errorf("unsupported matrix format for SpMV")
+	}
+}
+
+// SpSVBackend reports the execution backend for a triangular sparse format.
+func (ctx *SparseContext) SpSVBackend(format MatrixFormat) (LibraryImplementationMode, error) {
+	if err := ctx.lock(); err != nil {
+		return "", err
+	}
+	defer ctx.mu.Unlock()
+	switch format {
+	case MatrixFormatCSR:
+		if ctx.native {
+			return ImplementationModeNativeCUDA, nil
+		}
+		return ImplementationModeValidatedGo, nil
+	case MatrixFormatCOO:
+		if err := ctx.requireHostOperation("COO triangular solve"); err != nil {
+			return "", err
+		}
+		return ImplementationModeValidatedGo, nil
+	default:
+		return "", fmt.Errorf("unsupported matrix format for triangular solve")
+	}
+}
+
+// SpGEMMBackend reports the backend for sparse matrix multiplication.
+func (ctx *SparseContext) SpGEMMBackend(formatA, formatB MatrixFormat) (LibraryImplementationMode, error) {
+	if err := ctx.lock(); err != nil {
+		return "", err
+	}
+	defer ctx.mu.Unlock()
+	if (formatA != MatrixFormatCSR && formatA != MatrixFormatCOO) ||
+		(formatB != MatrixFormatCSR && formatB != MatrixFormatCOO) {
+		return "", fmt.Errorf("unsupported matrix format for sparse multiplication")
+	}
+	if ctx.native && formatA == MatrixFormatCSR && formatB == MatrixFormatCSR {
+		return ImplementationModeNativeCUDA, nil
+	}
+	if err := ctx.requireHostOperation("sparse matrix multiplication"); err != nil {
+		return "", err
+	}
+	return ImplementationModeValidatedGo, nil
+}
+
+// SparseToDenseBackend reports the backend used for a sparse matrix format.
+func (ctx *SparseContext) SparseToDenseBackend(format MatrixFormat) (LibraryImplementationMode, error) {
+	if err := ctx.lock(); err != nil {
+		return "", err
+	}
+	defer ctx.mu.Unlock()
+	if format != MatrixFormatCSR && format != MatrixFormatCOO {
+		return "", fmt.Errorf("unsupported matrix format for sparse-to-dense conversion")
+	}
+	if ctx.native {
+		return ImplementationModeNativeCUDA, nil
+	}
+	return ImplementationModeValidatedGo, nil
+}
+
+// DenseToSparseBackend reports the backend used for a dense-to-sparse format.
+func (ctx *SparseContext) DenseToSparseBackend(format MatrixFormat) (LibraryImplementationMode, error) {
+	if err := ctx.lock(); err != nil {
+		return "", err
+	}
+	defer ctx.mu.Unlock()
+	switch format {
+	case MatrixFormatCSR:
+		if ctx.native {
+			return ImplementationModeNativeCUDA, nil
+		}
+		return ImplementationModeValidatedGo, nil
+	case MatrixFormatCOO:
+		if err := ctx.requireHostOperation("dense-to-COO conversion"); err != nil {
+			return "", err
+		}
+		return ImplementationModeValidatedGo, nil
+	default:
+		return "", fmt.Errorf("unsupported matrix format for dense-to-sparse conversion")
+	}
+}
+
+// CreateSparseMatrix allocates a sparse matrix with nnz entries. Callers must
+// initialize its values and indices before executing operations; use
+// CreateCSRMatrix or CreateCOOMatrix to construct validated matrices.
 func (ctx *SparseContext) CreateSparseMatrix(rows, cols, nnz int, format MatrixFormat) (*SparseMatrix, error) {
-	if rows <= 0 || cols <= 0 || nnz <= 0 {
+	if err := ctx.lock(); err != nil {
+		return nil, err
+	}
+	defer ctx.mu.Unlock()
+	if rows <= 0 || cols <= 0 || nnz < 0 ||
+		int64(rows) > math.MaxInt32 || int64(cols) > math.MaxInt32 || int64(nnz) > math.MaxInt32 ||
+		rows == int(^uint(0)>>1) {
 		return nil, fmt.Errorf("invalid matrix dimensions")
 	}
+	if format != MatrixFormatCSR && format != MatrixFormatCOO {
+		return nil, fmt.Errorf("unsupported matrix format")
+	}
+	return runSparseOnDevice(ctx, func() (*SparseMatrix, error) {
+		return allocateSparseMatrix(rows, cols, nnz, format)
+	}, func(matrix *SparseMatrix) error {
+		return matrix.Destroy()
+	})
+}
 
-	values, err := memory.Alloc(int64(nnz * 4)) // float32 values
+// CreateCSRMatrix creates a CSR matrix from zero-based row offsets, column
+// indices and float32 values. Duplicate indices are summed by host operations.
+func (ctx *SparseContext) CreateCSRMatrix(rows, cols int, rowOffsets, columnIndices []int32, values []float32) (*SparseMatrix, error) {
+	if err := ctx.lock(); err != nil {
+		return nil, err
+	}
+	defer ctx.mu.Unlock()
+	if rows <= 0 || cols <= 0 || int64(rows) > math.MaxInt32 || int64(cols) > math.MaxInt32 ||
+		rows == int(^uint(0)>>1) || len(rowOffsets) != rows+1 || len(columnIndices) != len(values) || int64(len(values)) > math.MaxInt32 {
+		return nil, fmt.Errorf("invalid CSR matrix dimensions or buffer lengths")
+	}
+	if rowOffsets[0] != 0 || int64(rowOffsets[rows]) != int64(len(values)) {
+		return nil, fmt.Errorf("CSR row offsets must start at zero and end at nnz")
+	}
+	for row := range rows {
+		if rowOffsets[row] < 0 || rowOffsets[row] > rowOffsets[row+1] || int64(rowOffsets[row+1]) > int64(len(values)) {
+			return nil, fmt.Errorf("invalid CSR row offsets at row %d", row)
+		}
+	}
+	for i, col := range columnIndices {
+		if col < 0 || int64(col) >= int64(cols) {
+			return nil, fmt.Errorf("CSR column %d out of range at entry %d", col, i)
+		}
+	}
+	return runSparseOnDevice(ctx, func() (*SparseMatrix, error) {
+		return createSparseMatrixWithBuffers(rows, cols, values, rowOffsets, columnIndices, MatrixFormatCSR)
+	}, func(matrix *SparseMatrix) error { return matrix.Destroy() })
+}
+
+// CreateCOOMatrix creates a COO matrix from zero-based row and column indices.
+func (ctx *SparseContext) CreateCOOMatrix(rows, cols int, rowIndices, columnIndices []int32, values []float32) (*SparseMatrix, error) {
+	if err := ctx.lock(); err != nil {
+		return nil, err
+	}
+	defer ctx.mu.Unlock()
+	if rows <= 0 || cols <= 0 || int64(rows) > math.MaxInt32 || int64(cols) > math.MaxInt32 ||
+		len(rowIndices) != len(values) || len(columnIndices) != len(values) || int64(len(values)) > math.MaxInt32 {
+		return nil, fmt.Errorf("invalid COO matrix dimensions or buffer lengths")
+	}
+	for i := range values {
+		if rowIndices[i] < 0 || int64(rowIndices[i]) >= int64(rows) || columnIndices[i] < 0 || int64(columnIndices[i]) >= int64(cols) {
+			return nil, fmt.Errorf("COO index out of range at entry %d", i)
+		}
+	}
+	return runSparseOnDevice(ctx, func() (*SparseMatrix, error) {
+		return createSparseMatrixWithBuffers(rows, cols, values, rowIndices, columnIndices, MatrixFormatCOO)
+	}, func(matrix *SparseMatrix) error { return matrix.Destroy() })
+}
+
+func allocateSparseMatrix(rows, cols, nnz int, format MatrixFormat) (*SparseMatrix, error) {
+	capacity := sparseMax(nnz, 1)
+	values, err := memory.Alloc(int64(capacity) * 4) // float32 values
 	if err != nil {
-		return nil, fmt.Errorf("failed to allocate values memory: %v", err)
+		return nil, fmt.Errorf("failed to allocate values memory: %w", err)
 	}
 
 	var rowPtrs, colInds *memory.Memory
 
 	switch format {
 	case MatrixFormatCSR:
-		rowPtrs, err = memory.Alloc(int64((rows + 1) * 4)) // int32 row pointers
+		rowPtrs, err = memory.Alloc((int64(rows) + 1) * 4) // int32 row pointers
 		if err != nil {
-			values.Free()
-			return nil, fmt.Errorf("failed to allocate row pointers: %v", err)
+			return nil, errors.Join(fmt.Errorf("failed to allocate row pointers: %w", err), values.Free())
 		}
 
-		colInds, err = memory.Alloc(int64(nnz * 4)) // int32 column indices
+		colInds, err = memory.Alloc(int64(capacity) * 4) // int32 column indices
 		if err != nil {
-			values.Free()
-			rowPtrs.Free()
-			return nil, fmt.Errorf("failed to allocate column indices: %v", err)
+			return nil, errors.Join(fmt.Errorf("failed to allocate column indices: %w", err), values.Free(), rowPtrs.Free())
 		}
 
 	case MatrixFormatCOO:
 		// For COO format, we need row indices instead of row pointers
-		rowPtrs, err = memory.Alloc(int64(nnz * 4)) // int32 row indices
+		rowPtrs, err = memory.Alloc(int64(capacity) * 4) // int32 row indices
 		if err != nil {
-			values.Free()
-			return nil, fmt.Errorf("failed to allocate row indices: %v", err)
+			return nil, errors.Join(fmt.Errorf("failed to allocate row indices: %w", err), values.Free())
 		}
 
-		colInds, err = memory.Alloc(int64(nnz * 4)) // int32 column indices
+		colInds, err = memory.Alloc(int64(capacity) * 4) // int32 column indices
 		if err != nil {
-			values.Free()
-			rowPtrs.Free()
-			return nil, fmt.Errorf("failed to allocate column indices: %v", err)
+			return nil, errors.Join(fmt.Errorf("failed to allocate column indices: %w", err), values.Free(), rowPtrs.Free())
 		}
 
-	default:
-		return nil, fmt.Errorf("unsupported matrix format")
 	}
 
-	return &SparseMatrix{
+	matrix := &SparseMatrix{
 		rows:    rows,
 		cols:    cols,
 		nnz:     nnz,
@@ -111,14 +394,21 @@ func (ctx *SparseContext) CreateSparseMatrix(rows, cols, nnz int, format MatrixF
 		rowPtrs: rowPtrs,
 		colInds: colInds,
 		format:  format,
-	}, nil
+	}
+	if nnz == 0 && format == MatrixFormatCSR {
+		if err := writeMathTypedMemory(matrix.rowPtrs, make([]int32, rows+1)); err != nil {
+			return nil, errors.Join(err, matrix.Destroy())
+		}
+	}
+	return matrix, nil
 }
 
 func createSparseMatrixWithBuffers(rows, cols int, values []float32, rowData []int32, colData []int32, format MatrixFormat) (*SparseMatrix, error) {
 	if len(values) != len(colData) {
 		return nil, fmt.Errorf("sparse buffer length mismatch")
 	}
-	if format == MatrixFormatCOO && len(values) != len(rowData) {
+	if format == MatrixFormatCOO && len(values) != len(rowData) ||
+		format == MatrixFormatCSR && (rows <= 0 || rows == int(^uint(0)>>1) || len(rowData) != rows+1) {
 		return nil, fmt.Errorf("sparse buffer length mismatch")
 	}
 	allocationNNZ := sparseMax(len(values), 1)
@@ -129,57 +419,68 @@ func createSparseMatrixWithBuffers(rows, cols int, values []float32, rowData []i
 	}
 	sparse.nnz = len(values)
 	if err := writeFloat32Memory(sparse.values, values, allocationNNZ); err != nil {
-		sparse.Destroy()
-		return nil, err
+		return nil, errors.Join(err, sparse.Destroy())
 	}
 	if err := writeInt32Memory(sparse.colInds, colData, allocationNNZ); err != nil {
-		sparse.Destroy()
-		return nil, err
+		return nil, errors.Join(err, sparse.Destroy())
 	}
 	if err := writeInt32Memory(sparse.rowPtrs, rowData, len(rowData)); err != nil {
-		sparse.Destroy()
-		return nil, err
+		return nil, errors.Join(err, sparse.Destroy())
 	}
 	return sparse, nil
 }
 
-// SpMV performs sparse matrix-vector multiplication: y = α*A*x + β*y
+// SpMV computes y = alpha*A*x + beta*y. CSR and COO use cuSPARSE in CUDA mode.
+// Native execution rejects aliased x/y and validates sparse metadata on the
+// host, canonicalizing COO and duplicate CSR entries before the GPU operation.
 func (ctx *SparseContext) SpMV(alpha float32, A *SparseMatrix, x *memory.Memory, beta float32, y *memory.Memory) error {
-	if A == nil || x == nil || y == nil {
+	if ctx == nil || A == nil || x == nil || y == nil {
 		return fmt.Errorf("input matrices/vectors cannot be nil")
 	}
-
-	switch A.format {
-	case MatrixFormatCSR:
-		return ctx.spMVCSR(alpha, A, x, beta, y)
-	case MatrixFormatCOO:
-		return ctx.spMVCOO(alpha, A, x, beta, y)
-	default:
-		return fmt.Errorf("unsupported matrix format for SpMV")
+	if err := ctx.lock(); err != nil {
+		return err
 	}
+	defer ctx.mu.Unlock()
+	retentions, err := retainSparseBuffers(A.values, A.rowPtrs, A.colInds, x, y)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		releaseSparseBuffers(retentions)
+	}()
+	rows, err := readSparseRows(A)
+	if err != nil {
+		return err
+	}
+	if uint64(A.cols) > uint64(x.Size())/4 || uint64(A.rows) > uint64(y.Size())/4 {
+		return fmt.Errorf("sparse vector buffers are too small")
+	}
+
+	if !ctx.native {
+		return sparseMVHost(alpha, A, rows, x, beta, y)
+	}
+	if err := ctx.validateNativeBuffers(A, x, y); err != nil {
+		return err
+	}
+	transferred, err := ctx.runNativeMatrix(A, rows, retentions, func(matrix *SparseMatrix) error {
+		return nativeSpMV(ctx, alpha, matrix, x, beta, y)
+	})
+	if transferred {
+		retentions = nil
+	}
+	return err
 }
 
-// spMVCSR performs SpMV for CSR format
-func (ctx *SparseContext) spMVCSR(alpha float32, A *SparseMatrix, x *memory.Memory, beta float32, y *memory.Memory) error {
-	if ctx.native {
-		return nativeSpMVCSR(ctx, alpha, A, x, beta, y)
-	}
-	// Simulate CSR SpMV kernel execution
-	// Operation count: 2*nnz (multiply and accumulate)
-	return simulateKernelExecution("cusparseSpMV_CSR", A.nnz, 2)
-}
-
-// spMVCOO performs SpMV for COO format
-func (ctx *SparseContext) spMVCOO(alpha float32, A *SparseMatrix, x *memory.Memory, beta float32, y *memory.Memory) error {
-	if ctx.native {
-		return fmt.Errorf("native cuSPARSE COO SpMV is not implemented yet")
-	}
-	// COO format requires more operations due to atomic additions
-	return simulateKernelExecution("cusparseSpMV_COO", A.nnz, 3)
-}
-
-// SpMM performs sparse matrix-matrix multiplication: C = α*A*B + β*C
+// SpMM computes C = alpha*A*B + beta*C on the host. C must have enough
+// capacity for the resulting nonzeros.
 func (ctx *SparseContext) SpMM(alpha float32, A *SparseMatrix, B *SparseMatrix, beta float32, C *SparseMatrix) error {
+	if err := ctx.lock(); err != nil {
+		return err
+	}
+	defer ctx.mu.Unlock()
+	if err := ctx.requireHostOperation("sparse matrix multiplication"); err != nil {
+		return err
+	}
 	if A == nil || B == nil || C == nil {
 		return fmt.Errorf("input matrices cannot be nil")
 	}
@@ -191,52 +492,51 @@ func (ctx *SparseContext) SpMM(alpha float32, A *SparseMatrix, B *SparseMatrix, 
 	}
 
 	if ctx.native {
-		result, err := nativeSpGEMM(ctx, A, B)
-		if err != nil {
-			return err
-		}
-		defer result.Destroy()
-		return copySparseMatrixData(C, result)
+		return internal.RunOnDevice(ctx.deviceID, func() error {
+			return sparseMMHost(alpha, A, B, beta, C)
+		})
 	}
-
-	// SpMM is much more complex than SpMV
-	operations := A.nnz * B.cols
-	return simulateKernelExecution("cusparseSpMM", operations, 5)
+	return sparseMMHost(alpha, A, B, beta, C)
 }
 
-// SpGEMM performs general sparse matrix-matrix multiplication
+// SpGEMM returns A*B in CSR format. CSR inputs use cuSPARSE in CUDA mode;
+// other supported formats use host execution unless native-only mode is set.
 func (ctx *SparseContext) SpGEMM(A, B *SparseMatrix) (*SparseMatrix, error) {
+	if err := ctx.lock(); err != nil {
+		return nil, err
+	}
+	defer ctx.mu.Unlock()
 	if A == nil || B == nil {
 		return nil, fmt.Errorf("input matrices cannot be nil")
 	}
 	if A.cols != B.rows {
 		return nil, fmt.Errorf("incompatible matrix dimensions")
 	}
-
-	if ctx.native {
-		return nativeSpGEMM(ctx, A, B)
+	if ctx.native && A.format == MatrixFormatCSR && B.format == MatrixFormatCSR {
+		return ctx.nativeSparseProduct(A, B)
 	}
-
-	// Create result matrix (size estimation)
-	resultNnz := A.nnz + B.nnz // Conservative estimate
-	C, err := ctx.CreateSparseMatrix(A.rows, B.cols, resultNnz, MatrixFormatCSR)
-	if err != nil {
+	if err := ctx.requireHostOperation("sparse matrix multiplication"); err != nil {
 		return nil, err
 	}
 
-	// Simulate SpGEMM computation
-	operations := A.nnz * B.nnz / B.rows // Approximate
-	err = simulateKernelExecution("cusparseSpGEMM", operations, 8)
-	if err != nil {
-		C.Destroy()
-		return nil, err
-	}
-
-	return C, nil
+	return runSparseOnDevice(ctx, func() (*SparseMatrix, error) {
+		return sparseMultiplyHost(A, B)
+	}, func(matrix *SparseMatrix) error {
+		return matrix.Destroy()
+	})
 }
 
-// SpLU performs sparse LU factorization
+// SpLU performs host-side sparse LU factorization without pivoting. It returns
+// an error if a nonzero pivot cannot be used; the API does not expose a
+// permutation matrix.
 func (ctx *SparseContext) SpLU(A *SparseMatrix) (*SparseMatrix, *SparseMatrix, error) {
+	if err := ctx.lock(); err != nil {
+		return nil, nil, err
+	}
+	defer ctx.mu.Unlock()
+	if err := ctx.requireHostOperation("sparse LU"); err != nil {
+		return nil, nil, err
+	}
 	if A == nil {
 		return nil, nil, fmt.Errorf("input matrix cannot be nil")
 	}
@@ -244,132 +544,146 @@ func (ctx *SparseContext) SpLU(A *SparseMatrix) (*SparseMatrix, *SparseMatrix, e
 		return nil, nil, fmt.Errorf("matrix must be square for LU factorization")
 	}
 
-	if ctx.native {
-		return nativeSparseLU(ctx, A)
+	type luResult struct {
+		lower, upper *SparseMatrix
 	}
-
-	// Create L and U matrices
-	L, err := ctx.CreateSparseMatrix(A.rows, A.cols, A.nnz, MatrixFormatCSR)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	U, err := ctx.CreateSparseMatrix(A.rows, A.cols, A.nnz, MatrixFormatCSR)
-	if err != nil {
-		L.Destroy()
-		return nil, nil, err
-	}
-
-	// Simulate LU factorization - O(n³) complexity
-	operations := A.rows * A.rows * A.rows
-	err = simulateKernelExecution("cusparseSpLU", operations, 10)
-	if err != nil {
-		L.Destroy()
-		U.Destroy()
-		return nil, nil, err
-	}
-
-	return L, U, nil
+	result, err := runSparseOnDevice(ctx, func() (luResult, error) {
+		lower, upper, err := sparseLUHost(A)
+		return luResult{lower, upper}, err
+	}, func(result luResult) error {
+		return errors.Join(result.lower.Destroy(), result.upper.Destroy())
+	})
+	return result.lower, result.upper, err
 }
 
-// SpSV solves sparse triangular system: A*x = b
+// SpSV solves a lower- or upper-triangular system with explicit nonzero
+// diagonal entries. CSR uses cuSPARSE in CUDA mode; COO uses host execution.
 func (ctx *SparseContext) SpSV(A *SparseMatrix, b, x *memory.Memory) error {
-	if A == nil || b == nil || x == nil {
+	if ctx == nil || A == nil || b == nil || x == nil {
 		return fmt.Errorf("inputs cannot be nil")
 	}
-
-	if ctx.native {
-		return nativeSparseSolve(ctx, A, b, x)
+	if err := ctx.lock(); err != nil {
+		return err
 	}
-
-	// Triangular solve is O(nnz) operations
-	return simulateKernelExecution("cusparseSpSV", A.nnz, 3)
-}
-
-// DenseToSparse converts a dense matrix to sparse format
-func (ctx *SparseContext) DenseToSparse(dense *memory.Memory, rows, cols int, format MatrixFormat) (*SparseMatrix, error) {
-	if dense == nil {
-		return nil, fmt.Errorf("dense matrix cannot be nil")
-	}
-
-	if ctx.native {
-		return denseToSparseFromHost(dense, rows, cols, format)
-	}
-
-	// Estimate non-zero count (assume 10% sparsity)
-	nnz := (rows * cols) / 10
-
-	sparse, err := ctx.CreateSparseMatrix(rows, cols, nnz, format)
-	if err != nil {
-		return nil, err
-	}
-
-	// Simulate conversion
-	operations := rows * cols
-	err = simulateKernelExecution("cusparseDenseToSparse", operations, 2)
-	if err != nil {
-		sparse.Destroy()
-		return nil, err
-	}
-
-	return sparse, nil
-}
-
-// SparseToDense converts a sparse matrix to dense format
-func (ctx *SparseContext) SparseToDense(sparse *SparseMatrix) (*memory.Memory, error) {
-	if sparse == nil {
-		return nil, fmt.Errorf("sparse matrix cannot be nil")
-	}
-
-	if ctx.native {
-		return sparseToDenseHost(sparse)
-	}
-
-	denseSize := int64(sparse.rows * sparse.cols * 4) // float32
-	dense, err := memory.Alloc(denseSize)
-	if err != nil {
-		return nil, err
-	}
-
-	// Simulate conversion
-	operations := sparse.nnz
-	err = simulateKernelExecution("cusparseSparseToDense", operations, 2)
-	if err != nil {
-		dense.Free()
-		return nil, err
-	}
-
-	return dense, nil
-}
-
-// Destroy cleans up the sparse matrix
-func (sm *SparseMatrix) Destroy() error {
-	var err error
-	if sm.values != nil {
-		if e := sm.values.Free(); e != nil {
-			err = e
+	defer ctx.mu.Unlock()
+	if A.format == MatrixFormatCOO {
+		if err := ctx.requireHostOperation("COO triangular solve"); err != nil {
+			return err
 		}
 	}
-	if sm.rowPtrs != nil {
-		if e := sm.rowPtrs.Free(); e != nil {
-			err = e
-		}
+	retentions, err := retainSparseBuffers(A.values, A.rowPtrs, A.colInds, b, x)
+	if err != nil {
+		return err
 	}
-	if sm.colInds != nil {
-		if e := sm.colInds.Free(); e != nil {
-			err = e
-		}
+	defer func() { releaseSparseBuffers(retentions) }()
+	if A.rows != A.cols {
+		return fmt.Errorf("triangular matrix must be square")
+	}
+	rows, err := readSparseRows(A)
+	if err != nil {
+		return err
+	}
+	lower, err := sparseTriangleIsLower(rows)
+	if err != nil {
+		return err
+	}
+	if uint64(A.rows) > uint64(b.Size())/4 || uint64(A.rows) > uint64(x.Size())/4 {
+		return fmt.Errorf("triangular vector buffers are too small")
+	}
+	if !ctx.native || A.format == MatrixFormatCOO {
+		return sparseTriangularSolveRows(A, rows, b, x)
+	}
+	if err := ctx.validateNativeBuffers(A, b, x); err != nil {
+		return err
+	}
+	transferred, err := ctx.runNativeMatrix(A, rows, retentions, func(matrix *SparseMatrix) error {
+		return nativeSpSVCSR(ctx, matrix, b, x, lower)
+	})
+	if transferred {
+		retentions = nil
 	}
 	return err
 }
 
+// DenseToSparse converts a row-major dense matrix to CSR or COO. CSR uses
+// cuSPARSE in CUDA mode; COO uses host execution unless native-only mode is set.
+func (ctx *SparseContext) DenseToSparse(dense *memory.Memory, rows, cols int, format MatrixFormat) (*SparseMatrix, error) {
+	if err := ctx.lock(); err != nil {
+		return nil, err
+	}
+	defer ctx.mu.Unlock()
+	if dense == nil {
+		return nil, fmt.Errorf("dense matrix cannot be nil")
+	}
+	if ctx.native && format == MatrixFormatCSR {
+		return ctx.nativeDenseToSparse(dense, rows, cols)
+	}
+	if err := ctx.requireHostOperation("dense-to-sparse conversion"); err != nil {
+		return nil, err
+	}
+
+	return runSparseOnDevice(ctx, func() (*SparseMatrix, error) {
+		return denseToSparseFromHost(dense, rows, cols, format)
+	}, func(matrix *SparseMatrix) error {
+		return matrix.Destroy()
+	})
+}
+
+// SparseToDense converts CSR or COO to row-major dense form. CUDA mode uses
+// cuSPARSE after host-side index validation and canonicalization.
+func (ctx *SparseContext) SparseToDense(sparse *SparseMatrix) (*memory.Memory, error) {
+	if err := ctx.lock(); err != nil {
+		return nil, err
+	}
+	defer ctx.mu.Unlock()
+	if sparse == nil {
+		return nil, fmt.Errorf("sparse matrix cannot be nil")
+	}
+	if !ctx.native {
+		return sparseToDenseHost(sparse)
+	}
+	return ctx.nativeSparseToDense(sparse)
+}
+
+// Destroy cleans up the sparse matrix
+func (sm *SparseMatrix) Destroy() error {
+	if sm == nil {
+		return nil
+	}
+	return errors.Join(sm.values.Free(), sm.rowPtrs.Free(), sm.colInds.Free())
+}
+
 // DestroyContext destroys the cuSPARSE context
 func (ctx *SparseContext) DestroyContext() error {
+	if ctx == nil {
+		return nil
+	}
+	ctx.mu.Lock()
+	defer ctx.mu.Unlock()
+	if ctx.destroyed {
+		return nil
+	}
 	if ctx.native {
-		return destroyNativeSparseContext(ctx)
+		return internal.RunOnDevice(ctx.deviceID, func() error {
+			if len(ctx.pending) > 0 || len(ctx.pendingMatrices) > 0 || len(ctx.pendingWorkspaces) > 0 || len(ctx.pendingCleanups) > 0 {
+				if err := internal.CudaDefaultStreamSynchronizeOnDevice(ctx.deviceID); err != nil {
+					return err
+				}
+				if err := ctx.releasePending(); err != nil {
+					return err
+				}
+			}
+			if err := destroyNativeSparseContext(ctx); err != nil {
+				return err
+			}
+			ctx.handle = nil
+			ctx.destroyed = true
+			return nil
+		})
 	}
 	// Cleanup simulation context
 	ctx.handle = nil
+	ctx.destroyed = true
 	return nil
 }
 
@@ -378,12 +692,40 @@ func (sm *SparseMatrix) GetMatrixInfo() (rows, cols, nnz int, format MatrixForma
 	return sm.rows, sm.cols, sm.nnz, sm.format
 }
 
+// Values returns the matrix-owned float32 value buffer. It remains valid until
+// Destroy and must not be freed separately.
+func (sm *SparseMatrix) Values() *memory.Memory {
+	if sm == nil {
+		return nil
+	}
+	return sm.values
+}
+
+// RowData returns matrix-owned CSR row offsets or COO row indices.
+func (sm *SparseMatrix) RowData() *memory.Memory {
+	if sm == nil {
+		return nil
+	}
+	return sm.rowPtrs
+}
+
+// ColumnIndices returns the matrix-owned zero-based int32 column indices.
+func (sm *SparseMatrix) ColumnIndices() *memory.Memory {
+	if sm == nil {
+		return nil
+	}
+	return sm.colInds
+}
+
 func denseToSparseFromHost(dense *memory.Memory, rows, cols int, format MatrixFormat) (*SparseMatrix, error) {
-	values, err := readFloat32Memory(dense, rows*cols)
+	if rows <= 0 || cols <= 0 || int64(rows) > math.MaxInt32 || int64(cols) > math.MaxInt32 ||
+		uint64(rows)*uint64(cols) > uint64(^uint(0)>>1)/4 {
+		return nil, fmt.Errorf("invalid dense matrix dimensions")
+	}
+	values, err := readMathFloat32Memory(dense, rows*cols)
 	if err != nil {
 		return nil, err
 	}
-	tolerance := float32(1e-12)
 	switch format {
 	case MatrixFormatCSR:
 		rowPtrs := make([]int32, rows+1)
@@ -393,8 +735,11 @@ func denseToSparseFromHost(dense *memory.Memory, rows, cols int, format MatrixFo
 			rowPtrs[row] = int32(len(nonZeroValues))
 			for col := range cols {
 				value := values[row*cols+col]
-				if float32(math.Abs(float64(value))) <= tolerance {
+				if value == 0 {
 					continue
+				}
+				if len(nonZeroValues) >= math.MaxInt32 {
+					return nil, fmt.Errorf("sparse matrix exceeds 32-bit index capacity")
 				}
 				nonZeroValues = append(nonZeroValues, value)
 				colInds = append(colInds, int32(col))
@@ -409,8 +754,11 @@ func denseToSparseFromHost(dense *memory.Memory, rows, cols int, format MatrixFo
 		for row := range rows {
 			for col := range cols {
 				value := values[row*cols+col]
-				if float32(math.Abs(float64(value))) <= tolerance {
+				if value == 0 {
 					continue
+				}
+				if len(nonZeroValues) >= math.MaxInt32 {
+					return nil, fmt.Errorf("sparse matrix exceeds 32-bit index capacity")
 				}
 				nonZeroValues = append(nonZeroValues, value)
 				rowIdx = append(rowIdx, int32(row))
@@ -424,49 +772,25 @@ func denseToSparseFromHost(dense *memory.Memory, rows, cols int, format MatrixFo
 }
 
 func sparseToDenseHost(sparse *SparseMatrix) (*memory.Memory, error) {
-	dense, err := memory.Alloc(int64(sparse.rows * sparse.cols * 4))
+	rows, err := readSparseRows(sparse)
+	if err != nil {
+		return nil, err
+	}
+	if uint64(sparse.rows)*uint64(sparse.cols) > uint64(^uint(0)>>1)/4 {
+		return nil, fmt.Errorf("dense matrix dimensions exceed supported size")
+	}
+	dense, err := memory.Alloc(int64(sparse.rows) * int64(sparse.cols) * 4)
 	if err != nil {
 		return nil, err
 	}
 	denseValues := make([]float32, sparse.rows*sparse.cols)
-	valueView, err := readFloat32Memory(sparse.values, sparseMax(sparse.nnz, 1))
-	if err != nil {
-		_ = dense.Free()
-		return nil, err
-	}
-	colView, err := readInt32Memory(sparse.colInds, sparseMax(sparse.nnz, 1))
-	if err != nil {
-		_ = dense.Free()
-		return nil, err
-	}
-	switch sparse.format {
-	case MatrixFormatCSR:
-		rowView, err := readInt32Memory(sparse.rowPtrs, sparse.rows+1)
-		if err != nil {
-			_ = dense.Free()
-			return nil, err
+	for row, entries := range rows {
+		for col, value := range entries {
+			denseValues[row*sparse.cols+col] = value
 		}
-		for row := 0; row < sparse.rows; row++ {
-			for offset := int(rowView[row]); offset < int(rowView[row+1]); offset++ {
-				denseValues[row*sparse.cols+int(colView[offset])] = valueView[offset]
-			}
-		}
-	case MatrixFormatCOO:
-		rowView, err := readInt32Memory(sparse.rowPtrs, sparseMax(sparse.nnz, 1))
-		if err != nil {
-			_ = dense.Free()
-			return nil, err
-		}
-		for offset := 0; offset < sparse.nnz; offset++ {
-			denseValues[int(rowView[offset])*sparse.cols+int(colView[offset])] = valueView[offset]
-		}
-	default:
-		_ = dense.Free()
-		return nil, fmt.Errorf("unsupported matrix format")
 	}
 	if err := writeFloat32Memory(dense, denseValues, len(denseValues)); err != nil {
-		_ = dense.Free()
-		return nil, err
+		return nil, errors.Join(err, dense.Free())
 	}
 	return dense, nil
 }
@@ -478,7 +802,6 @@ func copySparseMatrixData(dst, src *SparseMatrix) error {
 	if dst.values.Size() < src.values.Size() || dst.colInds.Size() < src.colInds.Size() || dst.rowPtrs.Size() < src.rowPtrs.Size() {
 		return fmt.Errorf("destination sparse buffers are too small")
 	}
-	dst.nnz = src.nnz
 	srcValues, err := readFloat32Memory(src.values, sparseMax(src.nnz, 1))
 	if err != nil {
 		return err
@@ -501,51 +824,37 @@ func copySparseMatrixData(dst, src *SparseMatrix) error {
 	if err != nil {
 		return err
 	}
-	return writeInt32Memory(dst.rowPtrs, srcRows, rowLength)
+	if err := writeInt32Memory(dst.rowPtrs, srcRows, rowLength); err != nil {
+		return err
+	}
+	dst.nnz = src.nnz
+	return nil
 }
 
 func readFloat32Memory(mem *memory.Memory, length int) ([]float32, error) {
-	host := make([]float32, length)
-	if length == 0 {
-		return host, nil
-	}
-	hostBytes := unsafe.Slice((*byte)(unsafe.Pointer(&host[0])), length*4)
-	if err := memory.CopyDeviceToHost(hostBytes, mem); err != nil {
-		return nil, err
-	}
-	return host, nil
+	return readMathTypedMemory[float32](mem, length)
 }
 
 func writeFloat32Memory(mem *memory.Memory, values []float32, length int) error {
+	if length < 0 || len(values) > length {
+		return fmt.Errorf("invalid float buffer length")
+	}
 	host := make([]float32, length)
 	copy(host, values)
-	if length == 0 {
-		return nil
-	}
-	hostBytes := unsafe.Slice((*byte)(unsafe.Pointer(&host[0])), length*4)
-	return memory.CopyHostToDevice(mem, hostBytes)
+	return writeMathTypedMemory(mem, host)
 }
 
 func readInt32Memory(mem *memory.Memory, length int) ([]int32, error) {
-	host := make([]int32, length)
-	if length == 0 {
-		return host, nil
-	}
-	hostBytes := unsafe.Slice((*byte)(unsafe.Pointer(&host[0])), length*4)
-	if err := memory.CopyDeviceToHost(hostBytes, mem); err != nil {
-		return nil, err
-	}
-	return host, nil
+	return readMathTypedMemory[int32](mem, length)
 }
 
 func writeInt32Memory(mem *memory.Memory, values []int32, length int) error {
+	if length < 0 || len(values) > length {
+		return fmt.Errorf("invalid integer buffer length")
+	}
 	host := make([]int32, length)
 	copy(host, values)
-	if length == 0 {
-		return nil
-	}
-	hostBytes := unsafe.Slice((*byte)(unsafe.Pointer(&host[0])), length*4)
-	return memory.CopyHostToDevice(mem, hostBytes)
+	return writeMathTypedMemory(mem, host)
 }
 
 func sparseMax(a, b int) int {

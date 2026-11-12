@@ -54,12 +54,15 @@ static cufftResult setPlanStream(cufftHandle plan, cudaStream_t stream) {
 import "C"
 
 import (
+	"errors"
 	"fmt"
+	"runtime"
 	"unsafe"
 
 	cuda "github.com/stitch1968/gocuda"
 	"github.com/stitch1968/gocuda/internal"
 	"github.com/stitch1968/gocuda/memory"
+	"github.com/stitch1968/gocuda/streams"
 )
 
 func createNativeFFTContext() (*FFTContext, error) {
@@ -71,6 +74,12 @@ func createNativeFFTContext() (*FFTContext, error) {
 }
 
 func createNativeFFTPlan1D(ctx *FFTContext, nx int, fftType FFTType, batch int) (*FFTPlan, error) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	deviceID, err := cuda.CurrentCudaDeviceID()
+	if err != nil {
+		return nil, err
+	}
 	cufftType, err := nativeCuFFTType(fftType)
 	if err != nil {
 		return nil, err
@@ -79,10 +88,16 @@ func createNativeFFTPlan1D(ctx *FFTContext, nx int, fftType FFTType, batch int) 
 	if result := C.createPlan1d(&handle, C.int(nx), C.int(cufftType), C.int(batch)); result != C.CUFFT_SUCCESS {
 		return nil, cufftError("cufftPlan1d", result)
 	}
-	return &FFTPlan{handle: uintptr(handle), fftType: fftType, nx: nx, batch: batch, native: true}, nil
+	return &FFTPlan{handle: uintptr(handle), fftType: fftType, nx: nx, batch: batch, native: true, deviceID: deviceID}, nil
 }
 
 func createNativeFFTPlan2D(ctx *FFTContext, nx, ny int, fftType FFTType) (*FFTPlan, error) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	deviceID, err := cuda.CurrentCudaDeviceID()
+	if err != nil {
+		return nil, err
+	}
 	cufftType, err := nativeCuFFTType(fftType)
 	if err != nil {
 		return nil, err
@@ -91,10 +106,16 @@ func createNativeFFTPlan2D(ctx *FFTContext, nx, ny int, fftType FFTType) (*FFTPl
 	if result := C.createPlan2d(&handle, C.int(nx), C.int(ny), C.int(cufftType)); result != C.CUFFT_SUCCESS {
 		return nil, cufftError("cufftPlan2d", result)
 	}
-	return &FFTPlan{handle: uintptr(handle), fftType: fftType, nx: nx, ny: ny, batch: 1, native: true}, nil
+	return &FFTPlan{handle: uintptr(handle), fftType: fftType, nx: nx, ny: ny, batch: 1, native: true, deviceID: deviceID}, nil
 }
 
 func createNativeFFTPlan3D(ctx *FFTContext, nx, ny, nz int, fftType FFTType) (*FFTPlan, error) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	deviceID, err := cuda.CurrentCudaDeviceID()
+	if err != nil {
+		return nil, err
+	}
 	cufftType, err := nativeCuFFTType(fftType)
 	if err != nil {
 		return nil, err
@@ -103,7 +124,7 @@ func createNativeFFTPlan3D(ctx *FFTContext, nx, ny, nz int, fftType FFTType) (*F
 	if result := C.createPlan3d(&handle, C.int(nx), C.int(ny), C.int(nz), C.int(cufftType)); result != C.CUFFT_SUCCESS {
 		return nil, cufftError("cufftPlan3d", result)
 	}
-	return &FFTPlan{handle: uintptr(handle), fftType: fftType, nx: nx, ny: ny, nz: nz, batch: 1, native: true}, nil
+	return &FFTPlan{handle: uintptr(handle), fftType: fftType, nx: nx, ny: ny, nz: nz, batch: 1, native: true, deviceID: deviceID}, nil
 }
 
 func execNativeFFT(plan *FFTPlan, input, output *memory.Memory, direction FFTDirection) error {
@@ -111,6 +132,23 @@ func execNativeFFT(plan *FFTPlan, input, output *memory.Memory, direction FFTDir
 		return fmt.Errorf("input and output memory cannot be nil")
 	}
 
+	execute := func() error { return executeNativeFFTOnDevice(plan, input, output, direction) }
+	if plan.nativeStream != nil {
+		return plan.nativeStream.EnqueueWithBuffers([]*memory.Memory{input, output}, func(unsafe.Pointer) error { return execute() })
+	}
+	for _, buffer := range []*memory.Memory{input, output} {
+		retention, err := buffer.Retain()
+		if err != nil {
+			syncErr := plan.synchronizeDefault()
+			return errors.Join(err, syncErr)
+		}
+		plan.defaultRetentions = append(plan.defaultRetentions, retention)
+	}
+	err := internal.RunOnDevice(plan.deviceID, execute)
+	return errors.Join(err, plan.synchronizeDefault())
+}
+
+func executeNativeFFTOnDevice(plan *FFTPlan, input, output *memory.Memory, direction FFTDirection) error {
 	handle := C.cufftHandle(plan.handle)
 	var result C.cufftResult
 
@@ -139,6 +177,7 @@ func execNativeFFT(plan *FFTPlan, input, output *memory.Memory, direction FFTDir
 
 func setNativeFFTPlanStream(plan *FFTPlan, stream interface{}) error {
 	var nativeStream unsafe.Pointer
+	var nativeOwner *streams.NativeStream
 
 	switch typed := stream.(type) {
 	case nil:
@@ -151,21 +190,45 @@ func setNativeFFTPlanStream(plan *FFTPlan, stream interface{}) error {
 			}
 			nativeStream = handle
 		}
+	case *streams.NativeStream:
+		if typed == nil {
+			return fmt.Errorf("nil native CUDA stream")
+		}
+		if typed.DeviceID() != plan.deviceID {
+			return fmt.Errorf("stream device %d does not match FFT plan device %d", typed.DeviceID(), plan.deviceID)
+		}
+		nativeOwner = typed
 	default:
 		return fmt.Errorf("unsupported stream type %T", stream)
 	}
 
-	if result := C.setPlanStream(C.cufftHandle(plan.handle), (C.cudaStream_t)(nativeStream)); result != C.CUFFT_SUCCESS {
-		return cufftError("cufftSetStream", result)
+	setStream := func(handle unsafe.Pointer) error {
+		if result := C.setPlanStream(C.cufftHandle(plan.handle), (C.cudaStream_t)(handle)); result != C.CUFFT_SUCCESS {
+			return cufftError("cufftSetStream", result)
+		}
+		return nil
 	}
+	var err error
+	if nativeOwner != nil {
+		err = nativeOwner.WithNativeHandle(setStream)
+	} else {
+		err = internal.RunOnDevice(plan.deviceID, func() error { return setStream(nativeStream) })
+	}
+	if err != nil {
+		return err
+	}
+	plan.nativeStream = nativeOwner
 	return nil
 }
 
 func destroyNativeFFTPlan(plan *FFTPlan) error {
-	if result := C.cufftDestroy(C.cufftHandle(plan.handle)); result != C.CUFFT_SUCCESS {
-		return cufftError("cufftDestroy", result)
-	}
-	return nil
+	return internal.RunOnDevice(plan.deviceID, func() error {
+		if result := C.cufftDestroy(C.cufftHandle(plan.handle)); result != C.CUFFT_SUCCESS {
+			return cufftError("cufftDestroy", result)
+		}
+		plan.destroyed = true
+		return nil
+	})
 }
 
 func destroyNativeFFTContext(ctx *FFTContext) error {

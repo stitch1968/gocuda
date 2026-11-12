@@ -56,17 +56,38 @@ function Resolve-GlobRoots {
 }
 
 $cudaPath = if ($env:CUDA_PATH) { $env:CUDA_PATH } else { 'C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.1' }
+$cudaHeader = Join-Path (Join-Path $cudaPath 'include') 'cuda.h'
+$cudaMajorSelector = '*'
+if (Test-Path $cudaHeader) {
+	$versionLine = Select-String -Path $cudaHeader -Pattern '^\s*#define\s+CUDA_VERSION\s+(\d+)' | Select-Object -First 1
+	if ($null -ne $versionLine) {
+		$cudaVersion = [int]$versionLine.Matches[0].Groups[1].Value
+		$cudaMajorSelector = '{0}*' -f [int][math]::Floor($cudaVersion / 1000)
+	}
+}
+$defaultIncludeRoots = @(
+	(Join-Path $cudaPath 'include'),
+	'C:\amgx\include',
+	'D:\NVIDIA\include'
+) + @(Resolve-GlobRoots -Patterns @(
+	"C:\Program Files\NVIDIA\CUDNN\*\include\$cudaMajorSelector",
+	'C:\Program Files\NVIDIA nvJPEG2K\*\include',
+	'C:\Program Files\NVIDIA cuDSS\*\include',
+	'C:\Program Files\NVIDIA cuTensor\*\include',
+	'C:\Program Files\NVIDIA cuTENSOR\*\include'
+) -LatestOnly)
+$includeRoots = @(Resolve-SearchRoots -Candidates $defaultIncludeRoots -ExtraEnvVar 'GOCUDA_EXTRA_INCLUDE_DIRS')
 $defaultBinRoots = @(
 	(Join-Path $cudaPath 'bin'),
 	(Join-Path $cudaPath 'bin\x64'),
 	'C:\amgx\bin',
 	'D:\NVIDIA\bin'
 ) + @(Resolve-GlobRoots -Patterns @(
-	'C:\Program Files\NVIDIA\CUDNN\*\bin\*\x64',
-	'C:\Program Files\NVIDIA nvJPEG2K\*\bin\*',
-	'C:\Program Files\NVIDIA cuDSS\*\bin\*',
-	'C:\Program Files\NVIDIA cuTensor\*\bin\*',
-	'C:\Program Files\NVIDIA cuTENSOR\*\bin\*'
+	"C:\Program Files\NVIDIA\CUDNN\*\bin\$cudaMajorSelector\x64",
+	"C:\Program Files\NVIDIA nvJPEG2K\*\bin\$cudaMajorSelector",
+	"C:\Program Files\NVIDIA cuDSS\*\bin\$cudaMajorSelector",
+	"C:\Program Files\NVIDIA cuTensor\*\bin\$cudaMajorSelector",
+	"C:\Program Files\NVIDIA cuTENSOR\*\bin\$cudaMajorSelector"
 ) -LatestOnly)
 $binRoots = Resolve-SearchRoots -Candidates $defaultBinRoots -ExtraEnvVar 'GOCUDA_EXTRA_BIN_DIRS'
 
@@ -78,13 +99,21 @@ if (-not $SkipVerify) {
 }
 
 $originalPath = $env:PATH
+$originalCgoEnabled = $env:CGO_ENABLED
+$originalCgoCflags = $env:CGO_CFLAGS
+$baseCgoCflags = if ([string]::IsNullOrWhiteSpace($originalCgoCflags)) { (& go env CGO_CFLAGS) } else { $originalCgoCflags }
 if ($binRoots.Count -gt 0) {
 	$env:PATH = (($binRoots -join ';') + ';' + $originalPath)
+}
+if ($includeRoots.Count -gt 0) {
+	$includeFlags = @($includeRoots | ForEach-Object { '"-I' + $_ + '"' })
+	$env:CGO_CFLAGS = (($includeFlags -join ' ') + ' ' + $baseCgoCflags).Trim()
 }
 $env:CGO_ENABLED = '1'
 
 Write-Host 'Windows CUDA runtime wrapper' -ForegroundColor Cyan
 Write-Host ("CUDA root: {0}" -f $cudaPath)
+Write-Host ("Prepended include roots: {0}" -f ($includeRoots -join '; '))
 Write-Host ("Prepended runtime DLL roots: {0}" -f ($binRoots -join '; '))
 Write-Host ("Command: {0}" -f ($Command -join ' '))
 
@@ -109,6 +138,8 @@ try {
 finally {
 	Pop-Location
 	$env:PATH = $originalPath
+	$env:CGO_ENABLED = $originalCgoEnabled
+	$env:CGO_CFLAGS = $originalCgoCflags
 }
 
 exit $exitCode

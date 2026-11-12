@@ -33,6 +33,7 @@ type Event struct {
 	id        int
 	timestamp time.Time
 	completed bool
+	recording uint64
 	mu        sync.Mutex
 }
 
@@ -43,19 +44,20 @@ func (e *Event) Record(stream *internal.Stream) error {
 	}
 
 	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	e.timestamp = time.Now()
+	e.recording++
+	recording := e.recording
 	e.completed = false
+	e.mu.Unlock()
 
 	// Schedule event completion after stream operations
-	stream.Execute(func() {
+	return stream.Execute(func() {
 		e.mu.Lock()
 		defer e.mu.Unlock()
-		e.completed = true
+		if e.recording == recording {
+			e.timestamp = time.Now()
+			e.completed = true
+		}
 	})
-
-	return nil
 }
 
 // Query checks if the event has completed
@@ -75,15 +77,24 @@ func (e *Event) Synchronize() error {
 
 // ElapsedTime returns the elapsed time between two events
 func (e *Event) ElapsedTime(end *Event) (time.Duration, error) {
-	if !e.completed || !end.completed {
+	if end == nil {
+		return 0, fmt.Errorf("end event cannot be nil")
+	}
+	e.mu.Lock()
+	startCompleted, startTime := e.completed, e.timestamp
+	e.mu.Unlock()
+	end.mu.Lock()
+	endCompleted, endTime := end.completed, end.timestamp
+	end.mu.Unlock()
+	if !startCompleted || !endCompleted {
 		return 0, fmt.Errorf("events must be completed to measure elapsed time")
 	}
 
-	if end.timestamp.Before(e.timestamp) {
+	if endTime.Before(startTime) {
 		return 0, fmt.Errorf("end event timestamp is before start event")
 	}
 
-	return end.timestamp.Sub(e.timestamp), nil
+	return endTime.Sub(startTime), nil
 }
 
 // Stream represents a CUDA stream
@@ -250,16 +261,17 @@ func (s *Stream) GetPriority() Priority {
 
 // WaitEvent makes the stream wait for an event
 func (s *Stream) WaitEvent(event *Event) error {
-	s.Execute(func() {
-		event.Synchronize()
+	if event == nil {
+		return fmt.Errorf("event cannot be nil")
+	}
+	return s.Submit(func() error {
+		return event.Synchronize()
 	})
-	return nil
 }
 
 // AddCallback adds a callback to be executed when the stream completes
 func (s *Stream) AddCallback(callback func()) error {
-	s.Execute(callback)
-	return nil
+	return s.Execute(callback)
 }
 
 // Convenience functions
@@ -337,13 +349,19 @@ func MeasureKernelTime(stream *Stream, kernelFunc func()) (time.Duration, error)
 	end := CreateEvent()
 
 	// Record start event
-	start.Record(stream.Stream)
+	if err := start.Record(stream.Stream); err != nil {
+		return 0, err
+	}
 
 	// Execute kernel
-	stream.Execute(kernelFunc)
+	if err := stream.Execute(kernelFunc); err != nil {
+		return 0, err
+	}
 
 	// Record end event
-	end.Record(stream.Stream)
+	if err := end.Record(stream.Stream); err != nil {
+		return 0, err
+	}
 
 	// Wait for completion
 	if err := end.Synchronize(); err != nil {
@@ -420,6 +438,5 @@ func ExecuteOnStream(stream *Stream, fn func()) error {
 	if stream == nil {
 		stream = GetDefaultStream()
 	}
-	stream.Execute(fn)
-	return nil
+	return stream.Execute(fn)
 }

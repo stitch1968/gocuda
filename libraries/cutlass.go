@@ -137,6 +137,9 @@ func CreateCutlassGemm(desc CutlassGemmDesc) (*CutlassGemmHandle, error) {
 		if err == nil {
 			return handle, nil
 		}
+		if !errors.Is(err, errCUTLASSUnsupported) {
+			return nil, err
+		}
 	}
 	return createDeterministicCutlassGemm(desc)
 }

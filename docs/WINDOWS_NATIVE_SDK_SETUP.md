@@ -84,10 +84,12 @@ powershell -ExecutionPolicy Bypass -File .\setup_windows_cuda_import_libs_auto.p
 
 3. Re-run the verifier and confirm the missing items list has shrunk.
 
-4. Retry the CUDA-tagged library build:
+4. Retry the CUDA-tagged library build using the wrapper, which adds
+   `CUDA_PATH` and discovered SDK include directories to `CGO_CFLAGS` and
+   selects matching CUDA-major DLL directories:
 
 ```powershell
-go test -tags cuda ./libraries
+.\run_hardware_mode.ps1 -Command go test -tags cuda ./libraries
 ```
 
 5. If that succeeds, retry the broader CUDA-tagged test/build targets.
@@ -122,4 +124,3 @@ Before Windows CUDA-tagged validation is expected to pass for the current native
 AmgX is still optional unless Windows AmgX validation is specifically being exercised on this machine.
 
 If Windows AmgX validation is needed, use the upstream NVIDIA AMGX source repository at `https://github.com/NVIDIA/AMGX`. The upstream project builds `amgxsh.dll` on Windows and installs `include/amgx_c.h`; this repo expects those artifacts to be available to the Windows CUDA-tagged build and import-lib helper.
-

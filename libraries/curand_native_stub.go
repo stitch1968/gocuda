@@ -4,9 +4,14 @@ package libraries
 
 import (
 	"fmt"
+	"unsafe"
 
 	"github.com/stitch1968/gocuda/memory"
 )
+
+func setNativeRandomStream(rg *RandomGenerator, stream unsafe.Pointer) error {
+	return fmt.Errorf("cuRAND native backend requires a CUDA-tagged build")
+}
 
 func createNativeRandomGenerator(rngType RngType) (*RandomGenerator, error) {
 	return nil, fmt.Errorf("cuRAND native backend requires a CUDA-tagged build")

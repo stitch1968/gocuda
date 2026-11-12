@@ -28,20 +28,22 @@ type LibraryReadiness struct {
 }
 
 var libraryReadinessMatrix = []LibraryReadiness{
-	{Name: "AmgX", Mode: ImplementationModeValidatedGo, ProductionReady: true},
-	{Name: "CUDA Math API", Mode: ImplementationModeValidatedGo, ProductionReady: true},
-	{Name: "cuDNN", Mode: ImplementationModeValidatedGo, ProductionReady: true},
-	{Name: "cuDSS", Mode: ImplementationModeValidatedGo, ProductionReady: true},
-	{Name: "cuFFT", Mode: ImplementationModeNativeCUDA, ProductionReady: true},
-	{Name: "cuRAND", Mode: ImplementationModeNativeCUDA, ProductionReady: true},
-	{Name: "cuSOLVER", Mode: ImplementationModeNativeCUDA, ProductionReady: true},
-	{Name: "cuSPARSE", Mode: ImplementationModeNativeCUDA, ProductionReady: true},
-	{Name: "cuTENSOR", Mode: ImplementationModeValidatedGo, ProductionReady: true},
-	{Name: "CUTLASS", Mode: ImplementationModeValidatedGo, ProductionReady: true},
-	{Name: "nvJPEG", Mode: ImplementationModeValidatedGo, ProductionReady: true},
-	{Name: "nvJPEG2000", Mode: ImplementationModeValidatedGo, ProductionReady: true},
-	{Name: "Thrust", Mode: ImplementationModeValidatedGo, ProductionReady: true},
+	{Name: "AmgX", Mode: ImplementationModeValidatedGo, BlockingReason: readinessNotEstablished},
+	{Name: "CUDA Math API", Mode: ImplementationModeValidatedGo, BlockingReason: readinessNotEstablished},
+	{Name: "cuDNN", Mode: ImplementationModeValidatedGo, BlockingReason: readinessNotEstablished},
+	{Name: "cuDSS", Mode: ImplementationModeValidatedGo, BlockingReason: readinessNotEstablished},
+	{Name: "cuFFT", Mode: ImplementationModeNativeCUDA, BlockingReason: readinessNotEstablished},
+	{Name: "cuRAND", Mode: ImplementationModeNativeCUDA, BlockingReason: readinessNotEstablished},
+	{Name: "cuSOLVER", Mode: ImplementationModeNativeCUDA, BlockingReason: readinessNotEstablished},
+	{Name: "cuSPARSE", Mode: ImplementationModeNativeCUDA, BlockingReason: readinessNotEstablished},
+	{Name: "cuTENSOR", Mode: ImplementationModeValidatedGo, BlockingReason: readinessNotEstablished},
+	{Name: "CUTLASS", Mode: ImplementationModeValidatedGo, BlockingReason: readinessNotEstablished},
+	{Name: "nvJPEG", Mode: ImplementationModeValidatedGo, BlockingReason: readinessNotEstablished},
+	{Name: "nvJPEG2000", Mode: ImplementationModeValidatedGo, BlockingReason: readinessNotEstablished},
+	{Name: "Thrust", Mode: ImplementationModeValidatedGo, BlockingReason: readinessNotEstablished},
 }
+
+const readinessNotEstablished = "operation-level backend coverage and production validation are not established"
 
 var helperBackedLibraries = helperBackedLibraryNames(libraryReadinessMatrix)
 
@@ -56,7 +58,8 @@ func helperBackedLibraryNames(matrix []LibraryReadiness) []string {
 }
 
 // LibraryReadinessMatrix returns the current readiness state for high-level
-// CUDA ecosystem wrappers exposed by this repository.
+// CUDA ecosystem wrappers exposed by this repository. Mode describes the
+// primary implementation strategy, not a guarantee for every operation.
 func LibraryReadinessMatrix() []LibraryReadiness {
 	result := make([]LibraryReadiness, len(libraryReadinessMatrix))
 	copy(result, libraryReadinessMatrix)

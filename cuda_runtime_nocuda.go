@@ -75,10 +75,7 @@ func InitializeCudaRuntime() *CudaRuntime {
 
 // GetCudaRuntime returns the global CUDA runtime instance
 func GetCudaRuntime() *CudaRuntime {
-	if globalRuntime == nil {
-		return InitializeCudaRuntime()
-	}
-	return globalRuntime
+	return InitializeCudaRuntime()
 }
 
 // IsCudaAvailable returns false in simulation mode
@@ -106,9 +103,12 @@ func GetCudaDevice(deviceID int) (*RealDevice, error) {
 	return nil, fmt.Errorf("CUDA not available - compiled without CUDA support")
 }
 
-// SetCudaDevice is a no-op in simulation mode
+// SetCudaDevice selects the single simulated device.
 func SetCudaDevice(deviceID int) error {
-	return nil // No-op for simulation
+	if deviceID != 0 {
+		return fmt.Errorf("device ID %d out of range", deviceID)
+	}
+	return nil
 }
 
 // CurrentCudaDeviceID returns the simulated current device ID.

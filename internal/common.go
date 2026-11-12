@@ -3,6 +3,7 @@
 package internal
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -15,14 +16,16 @@ type Stream struct {
 	deviceID   int
 	priority   int
 	flags      uint32
-	tasks      chan func()
+	tasks      chan func() error
 	workerDone chan struct{}
 	isBlocking bool
 	name       string
 	mu         sync.Mutex
+	submitMu   sync.RWMutex
 	cond       *sync.Cond
 	pending    int
 	closed     bool
+	taskErr    error
 }
 
 // NativeStreamHandle exposes the underlying CUDA stream pointer for internal
@@ -56,7 +59,7 @@ func newStreamOnDevice(name string, deviceID int) *Stream {
 		deviceID:   deviceID,
 		priority:   0,
 		flags:      0,
-		tasks:      make(chan func(), 100),
+		tasks:      make(chan func() error, 100),
 		workerDone: make(chan struct{}),
 		isBlocking: false,
 		name:       name,
@@ -69,36 +72,55 @@ func newStreamOnDevice(name string, deviceID int) *Stream {
 // processor handles stream task processing
 func (s *Stream) processor() {
 	defer close(s.workerDone)
-	_ = RunOnDevice(s.deviceID, func() error {
+	err := RunOnDevice(s.deviceID, func() error {
 		for task := range s.tasks {
-			func() {
-				defer s.completeTask()
-				task()
-			}()
+			s.completeTask(task())
 		}
 		return nil
 	})
-	for task := range s.tasks {
-		s.completeTask()
-		task()
+	if err != nil {
+		s.mu.Lock()
+		s.taskErr = errors.Join(s.taskErr, err)
+		s.mu.Unlock()
+	}
+	for range s.tasks {
+		s.completeTask(err)
 	}
 }
 
-// Execute executes a task on the stream
-func (s *Stream) Execute(task func()) {
+// Execute queues a host callback on the stream.
+func (s *Stream) Execute(task func()) error {
+	if task == nil {
+		return fmt.Errorf("nil stream callback")
+	}
+	return s.Submit(func() error {
+		task()
+		return nil
+	})
+}
+
+// Submit queues a host callback whose error is returned by Synchronize.
+func (s *Stream) Submit(task func() error) error {
+	if task == nil {
+		return fmt.Errorf("nil stream callback")
+	}
+	s.submitMu.RLock()
+	defer s.submitMu.RUnlock()
 	s.mu.Lock()
 	if s.closed {
 		s.mu.Unlock()
-		return
+		return fmt.Errorf("stream is closed")
 	}
 	s.pending++
 	s.mu.Unlock()
 
 	s.tasks <- task
+	return nil
 }
 
-func (s *Stream) completeTask() {
+func (s *Stream) completeTask(err error) {
 	s.mu.Lock()
+	s.taskErr = errors.Join(s.taskErr, err)
 	s.pending--
 	if s.pending == 0 {
 		s.cond.Broadcast()
@@ -112,26 +134,28 @@ func (s *Stream) Synchronize() error {
 	for s.pending > 0 {
 		s.cond.Wait()
 	}
+	err := s.taskErr
+	s.taskErr = nil
 	s.mu.Unlock()
-	return nil
+	return err
 }
 
 // Close closes the stream
 func (s *Stream) Close() error {
-	if err := s.Synchronize(); err != nil {
-		return err
-	}
-
+	s.submitMu.Lock()
 	s.mu.Lock()
 	if s.closed {
 		s.mu.Unlock()
-		return nil
+		s.submitMu.Unlock()
+		<-s.workerDone
+		return s.Synchronize()
 	}
 	s.closed = true
 	close(s.tasks)
 	s.mu.Unlock()
+	s.submitMu.Unlock()
 	<-s.workerDone
-	return nil
+	return s.Synchronize()
 }
 
 // IsClosed reports whether the stream has been closed.

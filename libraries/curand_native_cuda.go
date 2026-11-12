@@ -17,13 +17,23 @@ static curandStatus_t createGeneratorWrapper(curandGenerator_t* generator, int r
 import "C"
 
 import (
+	"errors"
 	"fmt"
+	"runtime"
 	"unsafe"
 
+	cuda "github.com/stitch1968/gocuda"
+	"github.com/stitch1968/gocuda/internal"
 	"github.com/stitch1968/gocuda/memory"
 )
 
 func createNativeRandomGenerator(rngType RngType) (*RandomGenerator, error) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	deviceID, err := cuda.CurrentCudaDeviceID()
+	if err != nil {
+		return nil, err
+	}
 	nativeType, err := nativeCurandType(rngType)
 	if err != nil {
 		return nil, err
@@ -35,10 +45,11 @@ func createNativeRandomGenerator(rngType RngType) (*RandomGenerator, error) {
 	}
 
 	rg := &RandomGenerator{
-		rngType: rngType,
-		seed:    0,
-		handle:  unsafe.Pointer(handle),
-		native:  true,
+		rngType:  rngType,
+		seed:     0,
+		handle:   unsafe.Pointer(handle),
+		native:   true,
+		deviceID: deviceID,
 	}
 
 	if isPseudoRandomType(rngType) {
@@ -53,7 +64,29 @@ func createNativeRandomGenerator(rngType RngType) (*RandomGenerator, error) {
 }
 
 func setNativeRandomSeed(rg *RandomGenerator, seed uint64) error {
-	if !isPseudoRandomType(rg.rngType) {
+	if rg.rngType == RngTypeMtgp32 {
+		if err := internal.CudaDeviceSynchronizeOnDevice(rg.deviceID); err != nil {
+			return err
+		}
+		replacement, err := createNativeRandomGenerator(rg.rngType)
+		if err != nil {
+			return err
+		}
+		status := C.curandSetPseudoRandomGeneratorSeed(C.curandGenerator_t(replacement.handle), C.ulonglong(seed))
+		if status != C.CURAND_STATUS_SUCCESS {
+			return errors.Join(curandError("curandSetPseudoRandomGeneratorSeed", status), destroyNativeRandomGenerator(replacement))
+		}
+		if rg.nativeStream != nil {
+			if err := rg.nativeStream.WithNativeHandle(func(handle unsafe.Pointer) error {
+				return setNativeRandomStream(replacement, handle)
+			}); err != nil {
+				return errors.Join(err, destroyNativeRandomGenerator(replacement))
+			}
+		}
+		if err := destroyNativeRandomGenerator(rg); err != nil {
+			return errors.Join(err, destroyNativeRandomGenerator(replacement))
+		}
+		rg.handle = replacement.handle
 		rg.seed = seed
 		return nil
 	}
@@ -61,7 +94,18 @@ func setNativeRandomSeed(rg *RandomGenerator, seed uint64) error {
 	if status != C.CURAND_STATUS_SUCCESS {
 		return curandError("curandSetPseudoRandomGeneratorSeed", status)
 	}
+	if status := C.curandSetGeneratorOffset(C.curandGenerator_t(rg.handle), 0); status != C.CURAND_STATUS_SUCCESS {
+		return curandError("curandSetGeneratorOffset", status)
+	}
 	rg.seed = seed
+	return nil
+}
+
+func setNativeRandomStream(rg *RandomGenerator, stream unsafe.Pointer) error {
+	status := C.curandSetStream(C.curandGenerator_t(rg.handle), (C.cudaStream_t)(stream))
+	if status != C.CURAND_STATUS_SUCCESS {
+		return curandError("curandSetStream", status)
+	}
 	return nil
 }
 
@@ -125,15 +169,6 @@ func nativeCurandType(rngType RngType) (C.int, error) {
 		return C.CURAND_RNG_QUASI_SCRAMBLED_SOBOL64, nil
 	default:
 		return 0, fmt.Errorf("unsupported cuRAND generator type %v", rngType)
-	}
-}
-
-func isPseudoRandomType(rngType RngType) bool {
-	switch rngType {
-	case RngTypePseudoDefault, RngTypeXorwow, RngTypeMrg32k3a, RngTypeMtgp32:
-		return true
-	default:
-		return false
 	}
 }
 

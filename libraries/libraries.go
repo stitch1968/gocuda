@@ -3,6 +3,8 @@
 package libraries
 
 import (
+	"fmt"
+
 	"github.com/stitch1968/gocuda/memory"
 )
 
@@ -55,13 +57,16 @@ var (
 
 // RandomNumbers provides a simplified interface for random number generation
 func RandomNumbers(size int, rngType RngType) ([]float32, error) {
+	if size <= 0 || int64(size) > int64(^uint64(0)>>1)/4 {
+		return nil, fmt.Errorf("invalid random sample count: %d", size)
+	}
 	rng, err := CreateRandomGenerator(rngType)
 	if err != nil {
 		return nil, err
 	}
 	defer rng.Destroy()
 
-	output, err := memory.Alloc(int64(size * 4)) // float32
+	output, err := memory.AllocOnDevice(int64(size)*4, rng.deviceID) // float32
 	if err != nil {
 		return nil, err
 	}
@@ -72,13 +77,7 @@ func RandomNumbers(size int, rngType RngType) ([]float32, error) {
 		return nil, err
 	}
 
-	// Generate realistic random data for simulation
-	result := make([]float32, size)
-	for i := range result {
-		result[i] = rng.rng.Float32() // Use the actual random number generator
-	}
-
-	return result, nil
+	return readMathFloat32Memory(output, size)
 }
 
 // SparseMatrixMultiply provides simplified sparse matrix multiplication

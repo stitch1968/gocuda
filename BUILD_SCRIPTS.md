@@ -105,7 +105,10 @@ powershell -ExecutionPolicy Bypass -File .\run_hardware_mode.ps1 -SkipVerify -Co
 
 **Features:**
 - ✅ Reuses the Windows SDK discovery rules from the verifier
-- ✅ Prepends the newest discovered CUDA/vendor `bin` directories to `PATH`
+- ✅ Uses `CUDA_PATH` and prepends matching CUDA/vendor include directories to `CGO_CFLAGS`
+- ✅ Prepends discovered CUDA/vendor `bin` directories matching the toolkit major to `PATH`
+- ✅ Preserves existing `CGO_CFLAGS` and restores the caller's environment afterward
+- ✅ Supports additional SDK headers through `GOCUDA_EXTRA_INCLUDE_DIRS`
 - ✅ Avoids ad hoc shell-specific `PATH` editing before CUDA-tagged runs
 - ✅ Defaults to `go test -tags cuda ./libraries` so native validation is one command
 

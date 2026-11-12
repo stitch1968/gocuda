@@ -89,7 +89,9 @@ func smokeCuRAND() error {
 		return fmt.Errorf("cuRAND smoke create generator: %w", err)
 	}
 	defer rng.Destroy()
-	rng.SetSeed(42)
+	if err := rng.SetSeed(42); err != nil {
+		return fmt.Errorf("cuRAND smoke seed generator: %w", err)
+	}
 
 	output, err := memory.Alloc(16 * 4)
 	if err != nil {

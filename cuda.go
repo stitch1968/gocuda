@@ -182,7 +182,7 @@ func NewContext(deviceID int) (*Context, error) {
 		return nil, err
 	}
 
-	if deviceID >= len(devices) {
+	if deviceID < 0 || deviceID >= len(devices) {
 		return nil, fmt.Errorf("device ID %d out of range", deviceID)
 	}
 

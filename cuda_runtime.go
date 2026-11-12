@@ -130,6 +130,7 @@ import (
 	"fmt"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"unsafe"
 )
 
@@ -177,8 +178,7 @@ type RealDeviceProperties struct {
 var (
 	globalRuntime        *CudaRuntime
 	runtimeInitOnce      sync.Once
-	cudaAvailable        bool
-	fallbackToSimulation bool
+	fallbackToSimulation atomic.Bool
 )
 
 // InitializeCudaRuntime initializes the CUDA runtime and detects available devices
@@ -189,8 +189,6 @@ func InitializeCudaRuntime() *CudaRuntime {
 		// Try to initialize CUDA
 		if detectCuda() {
 			globalRuntime.Available = true
-			cudaAvailable = true
-			fallbackToSimulation = false
 
 			// Get runtime and driver versions
 			globalRuntime.RuntimeVersion = int(C.getCudaRuntimeVersion())
@@ -252,14 +250,10 @@ func InitializeCudaRuntime() *CudaRuntime {
 				}
 			} else {
 				fmt.Println("CUDA runtime available but no devices found, falling back to simulation")
-				fallbackToSimulation = true
-				cudaAvailable = false
 			}
 		} else {
 			fmt.Println("CUDA not available, using CPU simulation")
 			globalRuntime.Available = false
-			cudaAvailable = false
-			fallbackToSimulation = true
 		}
 	})
 
@@ -281,10 +275,7 @@ func detectCuda() bool {
 
 // GetCudaRuntime returns the global CUDA runtime instance
 func GetCudaRuntime() *CudaRuntime {
-	if globalRuntime == nil {
-		return InitializeCudaRuntime()
-	}
-	return globalRuntime
+	return InitializeCudaRuntime()
 }
 
 // IsCudaAvailable returns true if CUDA is available and devices are found
@@ -295,12 +286,15 @@ func IsCudaAvailable() bool {
 
 // ShouldUseCuda returns true if CUDA should be used instead of simulation
 func ShouldUseCuda() bool {
-	return cudaAvailable && !fallbackToSimulation
+	runtime := GetCudaRuntime()
+	return runtime.Available && runtime.DeviceCount > 0 && !fallbackToSimulation.Load()
 }
 
-// ForceFallbackToSimulation forces the library to use CPU simulation even if CUDA is available
+// ForceFallbackToSimulation changes high-level runtime dispatch. Configure it
+// before initialization; it does not disable lower-level CUDA allocation or
+// native APIs. Use a non-CUDA build for an entirely CPU-only process.
 func ForceFallbackToSimulation(force bool) {
-	fallbackToSimulation = force
+	fallbackToSimulation.Store(force)
 }
 
 // GetCudaDeviceCount returns the number of CUDA devices
@@ -319,21 +313,25 @@ func GetCudaDevice(deviceID int) (*RealDevice, error) {
 		return nil, fmt.Errorf("CUDA not available")
 	}
 
-	if deviceID >= len(runtime.Devices) {
+	if deviceID < 0 || deviceID >= len(runtime.Devices) {
 		return nil, fmt.Errorf("device ID %d out of range", deviceID)
 	}
 
 	return runtime.Devices[deviceID], nil
 }
 
-// SetCudaDevice sets the current CUDA device
+// SetCudaDevice sets the CUDA device of the calling OS thread. Callers must
+// lock their OS thread across related CUDA calls; prefer Context.Run.
 func SetCudaDevice(deviceID int) error {
 	if !ShouldUseCuda() {
-		return nil // No-op for simulation
+		if deviceID != 0 {
+			return fmt.Errorf("device ID %d out of range", deviceID)
+		}
+		return nil
 	}
 
 	runtime := GetCudaRuntime()
-	if deviceID >= runtime.DeviceCount {
+	if deviceID < 0 || deviceID >= runtime.DeviceCount {
 		return fmt.Errorf("device ID %d out of range", deviceID)
 	}
 

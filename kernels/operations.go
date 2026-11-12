@@ -1,6 +1,5 @@
 // Package kernels provides built-in CUDA kernels and operations for GoCUDA.
-// This package contains optimized implementations of common GPU operations
-// like vector arithmetic, matrix operations, and custom kernel interfaces.
+// Its built-in operations currently execute on the host over accessible memory.
 package kernels
 
 import (
@@ -242,10 +241,12 @@ func ExecuteVectorAddAsync(stream *internal.Stream, a, b, c *memory.Memory, n in
 	gridDim := Dim3{X: (n + 255) / 256, Y: 1, Z: 1}
 	blockDim := Dim3{X: 256, Y: 1, Z: 1}
 
-	stream.Execute(func() {
-		kernel.Execute(gridDim, blockDim, 0, stream, a, b, c, n)
+	if stream == nil {
+		stream = internal.GetDefaultStream()
+	}
+	return stream.Submit(func() error {
+		return kernel.Execute(gridDim, blockDim, 0, stream, a, b, c, n)
 	})
-	return nil
 }
 
 // ExecuteMatrixMultiply performs matrix multiplication: c = a * b
@@ -264,10 +265,12 @@ func ExecuteMatrixMultiplyAsync(stream *internal.Stream, a, b, c *memory.Memory,
 	gridDim := Dim3{X: (n + 15) / 16, Y: (m + 15) / 16, Z: 1}
 	blockDim := Dim3{X: 16, Y: 16, Z: 1}
 
-	stream.Execute(func() {
-		kernel.Execute(gridDim, blockDim, 0, stream, a, b, c, m, n, k)
+	if stream == nil {
+		stream = internal.GetDefaultStream()
+	}
+	return stream.Submit(func() error {
+		return kernel.Execute(gridDim, blockDim, 0, stream, a, b, c, m, n, k)
 	})
-	return nil
 }
 
 // CreateVector creates a vector memory allocation with optional initial values

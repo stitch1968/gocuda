@@ -25,6 +25,7 @@ static cublasStatus_t cutlassStrmmWrapper(cublasHandle_t handle, cublasSideMode_
 import "C"
 
 import (
+	"errors"
 	"fmt"
 	"unsafe"
 
@@ -394,6 +395,53 @@ func cutlassCublasError(name string, status C.cublasStatus_t) error {
 	return fmt.Errorf("%s failed with status %d", name, int(status))
 }
 
+func createNativeBLAS(stream unsafe.Pointer) (unsafe.Pointer, error) {
+	var handle C.cublasHandle_t
+	if status := C.createCublasHandleWrapper(&handle); status != C.CUBLAS_STATUS_SUCCESS {
+		return nil, cutlassCublasError("cublasCreate", status)
+	}
+	if status := C.cublasSetStream(handle, (C.cudaStream_t)(stream)); status != C.CUBLAS_STATUS_SUCCESS {
+		bindErr := cutlassCublasError("cublasSetStream", status)
+		destroyErr := cutlassCublasErrorIfFailed("cublasDestroy", C.destroyCublasHandleWrapper(handle))
+		return nil, errors.Join(bindErr, destroyErr)
+	}
+	return unsafe.Pointer(handle), nil
+}
+
+func cutlassCublasErrorIfFailed(name string, status C.cublasStatus_t) error {
+	if status == C.CUBLAS_STATUS_SUCCESS {
+		return nil
+	}
+	return cutlassCublasError(name, status)
+}
+
+func nativeBLASSGEMMEx(handle unsafe.Pointer, a, b, c *memory.Memory, m, n, k, lda, ldb, ldc int, opA, opB BLASOperation, alpha, beta float32) error {
+	return cutlassRunRowMajorSgemmEx((C.cublasHandle_t)(handle), m, n, k, lda, ldb, ldc, opA, opB, a, b, c, alpha, beta, "cublasSgemm")
+}
+
+func nativeBLASDGEMMEx(handle unsafe.Pointer, a, b, c *memory.Memory, m, n, k, lda, ldb, ldc int, opA, opB BLASOperation, alpha, beta float64) error {
+	alphaC := C.double(alpha)
+	betaC := C.double(beta)
+	status := C.cublasDgemm((C.cublasHandle_t)(handle),
+		nativeBLASOperation(opB), nativeBLASOperation(opA),
+		C.int(n), C.int(m), C.int(k),
+		&alphaC, (*C.double)(b.Ptr()), C.int(ldb),
+		(*C.double)(a.Ptr()), C.int(lda),
+		&betaC, (*C.double)(c.Ptr()), C.int(ldc))
+	return cutlassCublasErrorIfFailed("cublasDgemm", status)
+}
+
+func nativeBLASOperation(op BLASOperation) C.cublasOperation_t {
+	if op == BLASOpT {
+		return C.CUBLAS_OP_T
+	}
+	return C.CUBLAS_OP_N
+}
+
+func destroyNativeBLAS(handle unsafe.Pointer) error {
+	return cutlassCublasErrorIfFailed("cublasDestroy", C.destroyCublasHandleWrapper((C.cublasHandle_t)(handle)))
+}
+
 func withCutlassCublasHandle(fn func(C.cublasHandle_t) error) (err error) {
 	var nativeHandle C.cublasHandle_t
 	if status := C.createCublasHandleWrapper(&nativeHandle); status != C.CUBLAS_STATUS_SUCCESS {
@@ -408,23 +456,27 @@ func withCutlassCublasHandle(fn func(C.cublasHandle_t) error) (err error) {
 }
 
 func cutlassRunRowMajorSgemm(nativeHandle C.cublasHandle_t, m, n, k int, left, right, output *memory.Memory, alpha, beta float32, opName string) error {
+	return cutlassRunRowMajorSgemmEx(nativeHandle, m, n, k, k, n, n, BLASOpN, BLASOpN, left, right, output, alpha, beta, opName)
+}
+
+func cutlassRunRowMajorSgemmEx(nativeHandle C.cublasHandle_t, m, n, k, lda, ldb, ldc int, opA, opB BLASOperation, left, right, output *memory.Memory, alpha, beta float32, opName string) error {
 	alphaC := C.float(alpha)
 	betaC := C.float(beta)
 	status := C.cublasSgemm(
 		nativeHandle,
-		C.CUBLAS_OP_N,
-		C.CUBLAS_OP_N,
+		nativeBLASOperation(opB),
+		nativeBLASOperation(opA),
 		C.int(n),
 		C.int(m),
 		C.int(k),
 		&alphaC,
 		(*C.float)(right.Ptr()),
-		C.int(n),
+		C.int(ldb),
 		(*C.float)(left.Ptr()),
-		C.int(k),
+		C.int(lda),
 		&betaC,
 		(*C.float)(output.Ptr()),
-		C.int(n),
+		C.int(ldc),
 	)
 	if status != C.CUBLAS_STATUS_SUCCESS {
 		return cutlassCublasError(opName, status)
