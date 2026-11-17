@@ -68,13 +68,17 @@ func fftTestPlan(t *testing.T, ctx *FFTContext, dims []int, batch int, kind FFTT
 		}
 		return plan
 	}
-	switch len(dims) {
-	case 1:
-		plan, err = ctx.CreatePlan1D(dims[0], kind, batch)
-	case 2:
-		plan, err = ctx.CreatePlan2D(dims[0], dims[1], kind)
-	case 3:
-		plan, err = ctx.CreatePlan3D(dims[0], dims[1], dims[2], kind)
+	if len(dims) > 1 && batch > 1 {
+		plan, err = ctx.CreatePlanMany(dims, kind, batch)
+	} else {
+		switch len(dims) {
+		case 1:
+			plan, err = ctx.CreatePlan1D(dims[0], kind, batch)
+		case 2:
+			plan, err = ctx.CreatePlan2D(dims[0], dims[1], kind)
+		case 3:
+			plan, err = ctx.CreatePlan3D(dims[0], dims[1], dims[2], kind)
+		}
 	}
 	if err != nil {
 		t.Fatal(err)
@@ -89,7 +93,7 @@ func fftTestPlan(t *testing.T, ctx *FFTContext, dims []int, batch int, kind FFTT
 
 func assertFFTClose(t *testing.T, got complex64, want complex128) {
 	t.Helper()
-	if cmplx.Abs(complex128(got)-want) > 0.002 {
+	if diff := cmplx.Abs(complex128(got) - want); math.IsNaN(diff) || diff > 0.002 {
 		t.Fatalf("got %v, want %v", got, want)
 	}
 }
@@ -103,6 +107,8 @@ func TestFFTComplexMatchesReference(t *testing.T) {
 		{"non-power-of-two-batched", []int{3}, 2},
 		{"rectangular", []int{2, 3}, 1},
 		{"three-dimensional", []int{2, 3, 2}, 1},
+		{"batched-rectangular", []int{2, 3}, 2},
+		{"batched-three-dimensional", []int{2, 2, 4}, 2},
 		{"power-of-two", []int{4}, 1},
 	} {
 		for _, simulated := range []bool{false, true} {
@@ -156,6 +162,8 @@ func TestFFTRealPackedRoundTrip(t *testing.T) {
 		{"batched-odd", []int{5}, 2},
 		{"rectangular", []int{2, 3}, 1},
 		{"three-dimensional", []int{2, 3, 4}, 1},
+		{"batched-rectangular", []int{2, 3}, 2},
+		{"batched-three-dimensional", []int{2, 2, 4}, 2},
 	} {
 		for _, simulated := range []bool{false, true} {
 			t.Run(tc.name+"/simulated="+boolString(simulated), func(t *testing.T) {
@@ -211,6 +219,246 @@ func TestFFTRealPackedRoundTrip(t *testing.T) {
 					assertFFTClose(t, complex(value, 0), refInput[i]*complex(float64(size/tc.batch), 0))
 				}
 			})
+		}
+	}
+}
+
+func TestFFTDoubleComplexMatchesReference(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		dims  []int
+		batch int
+	}{
+		{"power-of-two", []int{4}, 1},
+		{"odd-batched", []int{5}, 2},
+		{"rectangular", []int{2, 3}, 1},
+		{"three-dimensional", []int{2, 3, 4}, 1},
+		{"batched-rectangular", []int{2, 3}, 2},
+		{"batched-three-dimensional", []int{2, 2, 4}, 2},
+	} {
+		for _, simulated := range []bool{false, true} {
+			for _, direction := range []FFTDirection{FFTForward, FFTInverse} {
+				t.Run(tc.name+"/simulated="+boolString(simulated)+"/direction="+directionString(direction), func(t *testing.T) {
+					ctx, err := CreateFFTContext()
+					if err != nil {
+						t.Fatal(err)
+					}
+					t.Cleanup(func() {
+						if err := ctx.DestroyContext(); err != nil {
+							t.Error(err)
+						}
+					})
+					plan := fftTestPlan(t, ctx, tc.dims, tc.batch, FFTTypeZ2Z, simulated)
+					size := plan.elementCount()
+					input, output := fftTestMemory(t, int64(size)*16), fftTestMemory(t, int64(size)*16)
+					values, ref := make([]Complex128, size), make([]complex128, size)
+					for i := range values {
+						values[i] = Complex128{
+							Real: float64(i%5-2) + float64(i%3+1)*math.Ldexp(1, -32),
+							Imag: float64(i%3-1) - math.Ldexp(1, -34),
+						}
+						ref[i] = complex(values[i].Real, values[i].Imag)
+					}
+					want := referenceDFT(ref, tc.dims, tc.batch, direction)
+					for _, inPlace := range []bool{false, true} {
+						if err := writeMathTypedMemory(input, values); err != nil {
+							t.Fatal(err)
+						}
+						target := output
+						if inPlace {
+							target = input
+						}
+						if err := ctx.ExecZ2Z(plan, input, target, direction); err != nil {
+							t.Fatal(err)
+						}
+						fftTestSync(t)
+						got, err := readMathTypedMemory[Complex128](target, size)
+						if err != nil {
+							t.Fatal(err)
+						}
+						for i, value := range got {
+							actual := complex(value.Real, value.Imag)
+							if diff := cmplx.Abs(actual - want[i]); math.IsNaN(diff) || diff > 1e-11 {
+								t.Fatalf("in-place=%v: got[%d] %v, want %v", inPlace, i, actual, want[i])
+							}
+						}
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestFFTDoubleRealPackedRoundTrip(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		dims  []int
+		batch int
+	}{
+		{"batched-odd", []int{5}, 2},
+		{"rectangular", []int{2, 3}, 1},
+		{"three-dimensional", []int{2, 3, 4}, 1},
+		{"batched-rectangular", []int{2, 3}, 2},
+		{"batched-three-dimensional", []int{2, 2, 4}, 2},
+	} {
+		for _, simulated := range []bool{false, true} {
+			t.Run(tc.name+"/simulated="+boolString(simulated), func(t *testing.T) {
+				ctx, err := CreateFFTContext()
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() {
+					if err := ctx.DestroyContext(); err != nil {
+						t.Error(err)
+					}
+				})
+				forward := fftTestPlan(t, ctx, tc.dims, tc.batch, FFTTypeD2Z, simulated)
+				inverse := fftTestPlan(t, ctx, tc.dims, tc.batch, FFTTypeZ2D, simulated)
+				size, packed := forward.elementCount(), forward.packedCount()
+				input := fftTestMemory(t, int64(size)*8)
+				spectrum := fftTestMemory(t, int64(packed)*16)
+				output := fftTestMemory(t, int64(size)*8)
+				values, ref := make([]float64, size), make([]complex128, size)
+				for i := range values {
+					values[i] = float64(i%7-3) + float64(i%3+1)*math.Ldexp(1, -32)
+					ref[i] = complex(values[i], 0)
+				}
+				if err := writeMathTypedMemory(input, values); err != nil {
+					t.Fatal(err)
+				}
+				if err := ctx.ExecD2Z(forward, input, spectrum); err != nil {
+					t.Fatal(err)
+				}
+				fftTestSync(t)
+				got, err := readMathTypedMemory[Complex128](spectrum, packed)
+				if err != nil {
+					t.Fatal(err)
+				}
+				want := referenceDFT(ref, tc.dims, tc.batch, FFTForward)
+				last := tc.dims[len(tc.dims)-1]
+				for row := range size / last {
+					for x := range last/2 + 1 {
+						value := got[row*(last/2+1)+x]
+						actual := complex(value.Real, value.Imag)
+						if diff := cmplx.Abs(actual - want[row*last+x]); math.IsNaN(diff) || diff > 1e-11 {
+							t.Fatalf("spectrum row %d index %d = %v, want %v", row, x, actual, want[row*last+x])
+						}
+					}
+				}
+				if err := ctx.ExecZ2D(inverse, spectrum, output); err != nil {
+					t.Fatal(err)
+				}
+				fftTestSync(t)
+				result, err := readMathTypedMemory[float64](output, size)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for i, value := range result {
+					expected := values[i] * float64(size/tc.batch)
+					if diff := math.Abs(value - expected); math.IsNaN(diff) || diff > 1e-11 {
+						t.Fatalf("round trip[%d] = %v, want %v", i, value, expected)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestFFTDoubleRejectsInvalidExecution(t *testing.T) {
+	ctx, err := CreateFFTContext()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := ctx.DestroyContext(); err != nil {
+			t.Error(err)
+		}
+	})
+	complexPlan := fftTestPlan(t, ctx, []int{4}, 1, FFTTypeZ2Z, false)
+	forward := fftTestPlan(t, ctx, []int{4}, 1, FFTTypeD2Z, false)
+	inverse := fftTestPlan(t, ctx, []int{4}, 1, FFTTypeZ2D, false)
+	adequate, small := fftTestMemory(t, 64), fftTestMemory(t, 8)
+	for _, tc := range []struct {
+		name string
+		run  func() error
+	}{
+		{"nil plan", func() error { return ctx.ExecZ2Z(nil, adequate, adequate, FFTForward) }},
+		{"wrong plan", func() error { return ctx.ExecZ2Z(forward, adequate, adequate, FFTForward) }},
+		{"invalid direction", func() error { return ctx.ExecZ2Z(complexPlan, adequate, adequate, 0) }},
+		{"short complex input", func() error { return ctx.ExecZ2Z(complexPlan, small, adequate, FFTForward) }},
+		{"short real input", func() error { return ctx.ExecD2Z(forward, small, adequate) }},
+		{"short real output", func() error { return ctx.ExecZ2D(inverse, adequate, small) }},
+		{"in-place real forward", func() error { return ctx.ExecD2Z(forward, adequate, adequate) }},
+		{"in-place real inverse", func() error { return ctx.ExecZ2D(inverse, adequate, adequate) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := tc.run(); err == nil {
+				t.Fatal("expected invalid execution to fail")
+			}
+		})
+	}
+	if _, err := ctx.CreatePlan1D(2, FFTType(-1), 1); err == nil {
+		t.Fatal("expected invalid 1D plan type to fail")
+	}
+	if _, err := ctx.CreatePlan2D(2, 2, FFTType(-1)); err == nil {
+		t.Fatal("expected invalid 2D plan type to fail")
+	}
+	if _, err := ctx.CreatePlan3D(2, 2, 2, FFTType(-1)); err == nil {
+		t.Fatal("expected invalid 3D plan type to fail")
+	}
+}
+
+func TestFFTPlanManyValidationAnd1D(t *testing.T) {
+	ctx, err := CreateFFTContext()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := ctx.DestroyContext(); err != nil {
+			t.Error(err)
+		}
+	})
+	for _, tc := range []struct {
+		dims  []int
+		kind  FFTType
+		batch int
+	}{
+		{nil, FFTTypeC2C, 1},
+		{[]int{1, 1, 1, 1}, FFTTypeC2C, 1},
+		{[]int{2, 0}, FFTTypeC2C, 1},
+		{[]int{2, -1}, FFTTypeC2C, 1},
+		{[]int{2}, FFTTypeC2C, 0},
+		{[]int{2}, FFTType(-1), 1},
+	} {
+		if _, err := ctx.CreatePlanMany(tc.dims, tc.kind, tc.batch); err == nil {
+			t.Fatalf("invalid plan accepted: %+v", tc)
+		}
+	}
+	dims := []int{3}
+	plan, err := ctx.CreatePlanMany(dims, FFTTypeZ2Z, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dims[0] = 100
+	if plan.elementCount() != 6 {
+		t.Fatal("plan dimensions changed with caller slice")
+	}
+	input, output := fftTestMemory(t, 6*16), fftTestMemory(t, 6*16)
+	if err := writeMathTypedMemory(input, []Complex128{{Real: 1}, {}, {}, {Real: 2}, {}, {}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := ctx.ExecZ2Z(plan, input, output, FFTForward); err != nil {
+		t.Fatal(err)
+	}
+	fftTestSync(t)
+	got, err := readMathTypedMemory[Complex128](output, 6)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, value := range got {
+		want := float64(i/3 + 1)
+		if value.Real != want || value.Imag != 0 {
+			t.Fatalf("batch output[%d] = %+v, want %v", i, value, want)
 		}
 	}
 }

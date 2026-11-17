@@ -9,8 +9,11 @@ import (
 	"image"
 	"image/color"
 	"image/jpeg"
+	"runtime"
+	"sync"
 
 	cuda "github.com/stitch1968/gocuda"
+	"github.com/stitch1968/gocuda/internal"
 	"github.com/stitch1968/gocuda/memory"
 )
 
@@ -42,9 +45,13 @@ const (
 
 // JpegDecoderState decoder state
 type JpegDecoderState struct {
+	mu           sync.Mutex
 	handle       *memory.Memory
 	backend      JpegBackend
 	stream       *memory.Memory
+	deviceID     int
+	destroyed    bool
+	pending      []*memory.Memory
 	nativeHandle uintptr
 	nativeState  uintptr
 	native       bool
@@ -89,8 +96,32 @@ func CreateJpegDecoder(backend JpegBackend) (*JpegDecoderState, error) {
 	if err := ensureCudaReady(); err != nil {
 		return nil, err
 	}
+	switch backend {
+	case JpegBackendDefault, JpegBackendHybrid, JpegBackendGPUHybrid, JpegBackendHardware:
+	default:
+		return nil, fmt.Errorf("invalid JPEG decoder backend %d", backend)
+	}
 	if cuda.ShouldUseCuda() && nvjpegNativeAvailable() {
-		return createNativeJpegDecoder(backend)
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+		deviceID, err := internal.CurrentDevice()
+		if err != nil {
+			return nil, err
+		}
+		var decoder *JpegDecoderState
+		err = internal.RunOnDevice(deviceID, func() error {
+			var createErr error
+			decoder, createErr = createNativeJpegDecoder(backend)
+			return createErr
+		})
+		if err != nil {
+			if decoder != nil {
+				err = errors.Join(err, internal.RunOnDevice(deviceID, func() error { return destroyNativeJpegDecoder(decoder) }))
+			}
+			return nil, err
+		}
+		decoder.deviceID = deviceID
+		return decoder, nil
 	}
 	return createDeterministicJpegDecoder(backend)
 }
@@ -148,12 +179,35 @@ func createDeterministicJpegEncoder(backend JpegBackend, quality int) (*JpegEnco
 
 // DecodeJpeg decodes a JPEG image from byte data
 func (decoder *JpegDecoderState) DecodeJpeg(jpegData []byte, params JpegDecodeParams) (*memory.Memory, int, int, error) {
-	if decoder != nil && decoder.native {
-		output, width, height, err := decodeNativeJpeg(decoder, jpegData, params)
+	if decoder == nil {
+		return nil, 0, 0, fmt.Errorf("nil JPEG decoder")
+	}
+	decoder.mu.Lock()
+	defer decoder.mu.Unlock()
+	if decoder.destroyed {
+		return nil, 0, 0, fmt.Errorf("JPEG decoder has been destroyed")
+	}
+	if decoder.native {
+		if err := decoder.synchronizeLocked(); err != nil {
+			return nil, 0, 0, err
+		}
+		var output *memory.Memory
+		var width, height int
+		err := internal.RunOnDevice(decoder.deviceID, func() error {
+			var decodeErr error
+			output, width, height, decodeErr = decodeNativeJpeg(decoder, jpegData, params)
+			return decodeErr
+		})
 		if err == nil {
 			return output, width, height, nil
 		}
-		if !errors.Is(err, errNVJPEGUnsupported) {
+		if output != nil {
+			if freeErr := output.Free(); freeErr != nil {
+				decoder.pending = append(decoder.pending, output)
+				err = errors.Join(err, freeErr)
+			}
+		}
+		if err != errNVJPEGUnsupported {
 			return nil, 0, 0, err
 		}
 	}
@@ -335,19 +389,79 @@ func GetJpegImageInfo(jpegData []byte) (width, height, channels int, err error) 
 	return config.Width, config.Height, channels, nil
 }
 
+// Synchronize retries cleanup retained after a failed native decode
+// synchronization. Successful DecodeJpeg calls already complete before return.
+func (decoder *JpegDecoderState) Synchronize() error {
+	if decoder == nil {
+		return fmt.Errorf("nil JPEG decoder")
+	}
+	decoder.mu.Lock()
+	defer decoder.mu.Unlock()
+	if decoder.destroyed {
+		return fmt.Errorf("JPEG decoder has been destroyed")
+	}
+	return decoder.synchronizeLocked()
+}
+
+func (decoder *JpegDecoderState) synchronizeLocked() error {
+	if !decoder.native || len(decoder.pending) == 0 {
+		return nil
+	}
+	if err := internal.CudaDefaultStreamSynchronizeOnDevice(decoder.deviceID); err != nil {
+		return err
+	}
+	var errs []error
+	remaining := decoder.pending[:0]
+	for _, buffer := range decoder.pending {
+		if err := buffer.Free(); err != nil {
+			remaining = append(remaining, buffer)
+			errs = append(errs, err)
+		}
+	}
+	decoder.pending = remaining
+	return errors.Join(errs...)
+}
+
 // Destroy cleans up decoder resources
 func (decoder *JpegDecoderState) Destroy() error {
-	if decoder != nil && decoder.native {
-		return destroyNativeJpegDecoder(decoder)
+	if decoder == nil {
+		return fmt.Errorf("nil JPEG decoder")
+	}
+	decoder.mu.Lock()
+	defer decoder.mu.Unlock()
+	if decoder.destroyed {
+		return nil
+	}
+	if decoder.native {
+		if err := decoder.synchronizeLocked(); err != nil {
+			return err
+		}
+		destroyed := false
+		err := internal.RunOnDevice(decoder.deviceID, func() error {
+			if err := destroyNativeJpegDecoder(decoder); err != nil {
+				return err
+			}
+			destroyed = true
+			return nil
+		})
+		if destroyed {
+			decoder.destroyed = true
+		}
+		return err
 	}
 	if decoder.handle != nil {
-		_ = decoder.handle.Free()
+		if err := decoder.handle.Free(); err != nil {
+			return err
+		}
 		decoder.handle = nil
 	}
 	if decoder.stream != nil {
-		_ = decoder.stream.Free()
+		if err := decoder.stream.Free(); err != nil {
+			return err
+		}
 		decoder.stream = nil
 	}
+	decoder.destroyed = true
 	return nil
 }
 

@@ -3,6 +3,7 @@
 package libraries
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/stitch1968/gocuda/memory"
@@ -148,92 +149,117 @@ func FFT1D(input, output *memory.Memory, size int, forward bool) error {
 
 // ConvolutionForward provides simplified convolution operation
 func ConvolutionForward(input, filter, output *memory.Memory, inputDims, filterDims, outputDims []int,
-	padH, padW, strideH, strideW int) error {
+	padH, padW, strideH, strideW int) (result error) {
 
 	handle, err := CreateDNNHandle()
 	if err != nil {
 		return err
 	}
-	defer handle.DestroyHandle()
+	var destroyDescriptors []func() error
+	defer func() {
+		result = errors.Join(result, destroyDNNConvenienceResources(handle, destroyDescriptors))
+	}()
 
 	// Create descriptors
 	inputDesc, err := CreateTensorDescriptor()
 	if err != nil {
 		return err
 	}
-	defer inputDesc.DestroyTensorDescriptor()
+	destroyDescriptors = append(destroyDescriptors, inputDesc.DestroyTensorDescriptor)
 
 	filterDesc, err := CreateFilterDescriptor()
 	if err != nil {
 		return err
 	}
-	defer filterDesc.DestroyFilterDescriptor()
+	destroyDescriptors = append(destroyDescriptors, filterDesc.DestroyFilterDescriptor)
 
 	outputDesc, err := CreateTensorDescriptor()
 	if err != nil {
 		return err
 	}
-	defer outputDesc.DestroyTensorDescriptor()
+	destroyDescriptors = append(destroyDescriptors, outputDesc.DestroyTensorDescriptor)
 
 	convDesc, err := CreateConvolutionDescriptor()
 	if err != nil {
 		return err
 	}
-	defer convDesc.DestroyConvolutionDescriptor()
+	destroyDescriptors = append(destroyDescriptors, convDesc.DestroyConvolutionDescriptor)
 
 	// Set descriptor parameters
-	if len(inputDims) == 4 {
-		inputDesc.SetTensor4dDescriptor(DNNTensorNCHW, DNNDataFloat, inputDims[0], inputDims[1], inputDims[2], inputDims[3])
+	if len(inputDims) != 4 || len(filterDims) != 4 || len(outputDims) != 4 {
+		return fmt.Errorf("convolution input, filter, and output dimensions must have length 4")
 	}
-	if len(filterDims) == 4 {
-		filterDesc.SetFilter4dDescriptor(DNNDataFloat, DNNTensorNCHW, filterDims[0], filterDims[1], filterDims[2], filterDims[3])
+	if err := inputDesc.SetTensor4dDescriptor(DNNTensorNCHW, DNNDataFloat, inputDims[0], inputDims[1], inputDims[2], inputDims[3]); err != nil {
+		return err
 	}
-	if len(outputDims) == 4 {
-		outputDesc.SetTensor4dDescriptor(DNNTensorNCHW, DNNDataFloat, outputDims[0], outputDims[1], outputDims[2], outputDims[3])
+	if err := filterDesc.SetFilter4dDescriptor(DNNDataFloat, DNNTensorNCHW, filterDims[0], filterDims[1], filterDims[2], filterDims[3]); err != nil {
+		return err
 	}
-
-	convDesc.SetConvolution2dDescriptor(padH, padW, strideH, strideW, 1, 1, DNNConvolution, DNNDataFloat)
+	if err := outputDesc.SetTensor4dDescriptor(DNNTensorNCHW, DNNDataFloat, outputDims[0], outputDims[1], outputDims[2], outputDims[3]); err != nil {
+		return err
+	}
+	if err := convDesc.SetConvolution2dDescriptor(padH, padW, strideH, strideW, 1, 1, DNNConvolution, DNNDataFloat); err != nil {
+		return err
+	}
 
 	// Perform convolution
 	return handle.ConvolutionForward(1.0, inputDesc, input, filterDesc, filter, convDesc, 0.0, outputDesc, output)
 }
 
 // ApplyActivation provides simplified activation function application
-func ApplyActivation(input, output *memory.Memory, dims []int, activationType DNNActivationMode) error {
+func ApplyActivation(input, output *memory.Memory, dims []int, activationType DNNActivationMode) (result error) {
 	handle, err := CreateDNNHandle()
 	if err != nil {
 		return err
 	}
-	defer handle.DestroyHandle()
+	var destroyDescriptors []func() error
+	defer func() {
+		result = errors.Join(result, destroyDNNConvenienceResources(handle, destroyDescriptors))
+	}()
 
 	// Create descriptors
 	inputDesc, err := CreateTensorDescriptor()
 	if err != nil {
 		return err
 	}
-	defer inputDesc.DestroyTensorDescriptor()
+	destroyDescriptors = append(destroyDescriptors, inputDesc.DestroyTensorDescriptor)
 
 	outputDesc, err := CreateTensorDescriptor()
 	if err != nil {
 		return err
 	}
-	defer outputDesc.DestroyTensorDescriptor()
+	destroyDescriptors = append(destroyDescriptors, outputDesc.DestroyTensorDescriptor)
 
 	activDesc, err := CreateActivationDescriptor()
 	if err != nil {
 		return err
 	}
-	defer activDesc.DestroyActivationDescriptor()
+	destroyDescriptors = append(destroyDescriptors, activDesc.DestroyActivationDescriptor)
 
 	// Set descriptors
-	if len(dims) == 4 {
-		inputDesc.SetTensor4dDescriptor(DNNTensorNCHW, DNNDataFloat, dims[0], dims[1], dims[2], dims[3])
-		outputDesc.SetTensor4dDescriptor(DNNTensorNCHW, DNNDataFloat, dims[0], dims[1], dims[2], dims[3])
+	if len(dims) != 4 {
+		return fmt.Errorf("activation dimensions must have length 4")
 	}
-	activDesc.SetActivationDescriptor(activationType, DNNNotPropagateNaN, 0.0)
+	if err := inputDesc.SetTensor4dDescriptor(DNNTensorNCHW, DNNDataFloat, dims[0], dims[1], dims[2], dims[3]); err != nil {
+		return err
+	}
+	if err := outputDesc.SetTensor4dDescriptor(DNNTensorNCHW, DNNDataFloat, dims[0], dims[1], dims[2], dims[3]); err != nil {
+		return err
+	}
+	if err := activDesc.SetActivationDescriptor(activationType, DNNNotPropagateNaN, 0.0); err != nil {
+		return err
+	}
 
 	// Apply activation
 	return handle.ActivationForward(activDesc, 1.0, inputDesc, input, 0.0, outputDesc, output)
+}
+
+func destroyDNNConvenienceResources(handle *DNNHandle, descriptors []func() error) error {
+	err := handle.DestroyHandle()
+	for i := len(descriptors) - 1; i >= 0; i-- {
+		err = errors.Join(err, descriptors[i]())
+	}
+	return err
 }
 
 // JPEG convenience functions

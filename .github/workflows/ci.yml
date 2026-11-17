@@ -85,12 +85,23 @@ jobs:
         run: >-
           go test -tags cuda
           -exec "compute-sanitizer --tool memcheck --report-api-errors no --error-exitcode 99"
-          ./libraries -run 'TestNativeSolverNumericalResults|TestNativeSolverPseudoInverse|TestSolverContextConcurrentExecution|TestNativeLibrarySelectionOnEachDevice|TestNativeFFTDefaultStreamCompletesBeforeReturn|TestNativeRandomGenerator|TestFFTPlanConcurrentExecution|TestFFTContextConcurrentPlanCreation|TestSparseNumerics|TestSparseContextConcurrentSpMV|TestSparseContextConcurrentSpGEMM|TestSparseContextConcurrentConversions|TestNativeSparseStrictPolicyOnEachDevice' -count=1
+          ./libraries -run 'TestCuDNN|TestNativeBLAS|TestNVJPEGNativeDecodeOnEachDevice|TestNVJPEGNativeHybridDecode|TestNVJPEGNativeGrayscaleDecode|TestNVJPEGNativePendingCleanupRetry|TestNVJPEGDecodeAndInfo|TestNVJPEGDecoderLifecycle|TestNVJPEGConcurrentDecodeAndDestroy|TestNativeSolverNumericalResults|TestNativeSolverPseudoInverse|TestSolverContextConcurrentExecution|TestNativeLibrarySelectionOnEachDevice|TestNativeFFTDefaultStreamCompletesBeforeReturn|TestNativeRandomGenerator|TestFFT|TestDenseToCOOConversion|TestSparseCOOTriangularSolve|TestSparseSolveTranspose|TestSparseMixedFormatProduct|TestSparseScaledProduct|TestSparseDenseMultiplication|TestSparseMVTranspose|TestSparseMVZeroBeta|TestSparseNumerics|TestSparseContextConcurrentSpMV|TestSparseContextConcurrentSpSVTranspose|TestSparseContextConcurrentSpGEMM|TestSparseContextConcurrentScaledProduct|TestSparseContextConcurrentConversions|TestSparseContextConcurrentDenseMM|TestNativeSparseContextStream|TestNativeSparseDenseOnEachDevice|TestNativeSparseMVTransposeOnEachDevice|TestNativeSparseStrictPolicyOnEachDevice' -count=1
+      # nvJPEG initcheck reports inside its conversion/copy paths; see runtime boundaries.
       - name: Check native solver and FFT initialization
         run: >-
           go test -tags cuda
           -exec "compute-sanitizer --tool initcheck --report-api-errors no --error-exitcode 99"
-          ./libraries -run 'TestNativeSolverNumericalResults|TestNativeSolverPseudoInverse|TestSolverContextConcurrentExecution|TestNativeLibrarySelectionOnEachDevice|TestNativeFFTDefaultStreamCompletesBeforeReturn|TestNativeRandomGenerator|TestFFTPlanConcurrentExecution|TestFFTContextConcurrentPlanCreation|TestSparseNumerics|TestSparseContextConcurrentSpMV|TestSparseContextConcurrentSpGEMM|TestSparseContextConcurrentConversions|TestNativeSparseStrictPolicyOnEachDevice' -count=1
+          ./libraries -run 'TestCuDNN|TestNativeBLAS|TestNativeSolverNumericalResults|TestNativeSolverPseudoInverse|TestSolverContextConcurrentExecution|TestNativeLibrarySelectionOnEachDevice|TestNativeFFTDefaultStreamCompletesBeforeReturn|TestNativeRandomGenerator|TestFFT|TestDenseToCOOConversion|TestSparseCOOTriangularSolve|TestSparseSolveTranspose|TestSparseMixedFormatProduct|TestSparseScaledProduct|TestSparseDenseMultiplication|TestSparseMVTranspose|TestSparseMVZeroBeta|TestSparseNumerics|TestSparseContextConcurrentSpMV|TestSparseContextConcurrentSpSVTranspose|TestSparseContextConcurrentSpGEMM|TestSparseContextConcurrentScaledProduct|TestSparseContextConcurrentConversions|TestSparseContextConcurrentDenseMM|TestNativeSparseContextStream|TestNativeSparseDenseOnEachDevice|TestNativeSparseMVTransposeOnEachDevice|TestNativeSparseStrictPolicyOnEachDevice' -count=1
+      - name: Check cuDSS device memory
+        run: >-
+          go test -tags cuda
+          -exec "compute-sanitizer --tool memcheck --report-api-errors no --error-exitcode 99"
+          ./libraries -run TestCuDSS -count=1
+      - name: Check cuDSS initialization
+        run: >-
+          go test -tags cuda
+          -exec "compute-sanitizer --tool initcheck --report-api-errors no --error-exitcode 99"
+          ./libraries -run TestCuDSS -count=1
 
   multi-gpu:
     if: github.event_name == 'workflow_dispatch' && inputs.run_multi_gpu
@@ -109,5 +120,5 @@ jobs:
       - name: Test device affinity and peer copies
         run: >-
           go test -tags cuda ./tests ./libraries
-          -run 'TestHardwareStreamAllocationUsesStreamDevice|TestHardwareSetDeviceOnLockedThread|TestHardwareDeviceAffinity|TestMultiGPUP2PCopy|TestNativeLibrarySelectionOnEachDevice|TestNativeSparseStrictPolicyOnEachDevice'
+          -run 'TestHardwareStreamAllocationUsesStreamDevice|TestHardwareSetDeviceOnLockedThread|TestHardwareDeviceAffinity|TestMultiGPUP2PCopy|TestNativeLibrarySelectionOnEachDevice|TestNativeBLASStridedBatchedOnEachDevice|TestNVJPEGNativeDecodeOnEachDevice|TestFFTDoubleNativeStreamOnEachDevice|TestCuDNNNativeDoublePrecisionOnEachDevice|TestCuDNNNativeConcurrentExecutionOnEachDevice|TestCuDNNNativeStreamOrderingOnEachDevice|TestCuDSSNativeDeviceAffinityOnEachDevice|TestNativeSparseContextStreamOnEachDevice|TestNativeSparseDenseOnEachDevice|TestNativeSparseMVTransposeOnEachDevice|TestNativeSparseStrictPolicyOnEachDevice'
           -count=1

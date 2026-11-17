@@ -2,6 +2,13 @@
 
 **Target Audience:** Advanced developers ready to master cutting-edge GPU computing techniques
 
+> **Scope:** This guide describes learning goals, not verified GoCUDA
+> capabilities or performance guarantees. Its assessment contains placeholder
+> functions that return success and does not measure expertise or GPU use.
+> Some snippets are conceptual and are not runnable examples. See
+> [Library Runtime Boundaries](LIBRARY_RUNTIME_BOUNDARIES.md) for implemented
+> native paths, simulation behavior, and current validation limits.
+
 ---
 
 ## 📚 Prerequisites
@@ -35,7 +42,7 @@ This expert guide is organized into specialized, research-level modules:
 ### **Specialized Expert Modules:**
 5. **[GPU-Native Algorithms](TRAINING_EXPERT_5_ALGORITHMS.md)** - Designing algorithms specifically for GPU architecture
 6. **[Performance Engineering](TRAINING_EXPERT_6_PERFORMANCE.md)** - Advanced profiling, optimization, and debugging
-7. **[Integration & Architecture](TRAINING_EXPERT_7_ARCHITECTURE.md)** - Enterprise integration, cloud deployment, microservices
+7. **[Integration & Architecture](TRAINING_EXPERT_7_INTEGRATION.md)** - Enterprise integration, cloud deployment, microservices
 
 ### **Capstone Expert Module:**
 8. **[Research Project](TRAINING_EXPERT_8_RESEARCH.md)** - Original research contribution or production system

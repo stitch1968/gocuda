@@ -11,6 +11,39 @@ import (
 
 type sparseRows []map[int]float32
 
+func validateCSRIndices(offsets, columns []int32, rows, cols int, rejectDuplicates bool) error {
+	if rows <= 0 || cols <= 0 || rows == int(^uint(0)>>1) || len(offsets) != rows+1 {
+		return fmt.Errorf("invalid CSR dimensions or row offsets")
+	}
+	nnz := len(columns)
+	if offsets[0] != 0 || int64(offsets[rows]) != int64(nnz) {
+		return fmt.Errorf("CSR row offsets must start at zero and end at nnz")
+	}
+	for row := range rows {
+		start, end := int(offsets[row]), int(offsets[row+1])
+		if start < 0 || end < start || end > nnz {
+			return fmt.Errorf("invalid CSR row offsets at row %d", row)
+		}
+		var seen map[int32]struct{}
+		if rejectDuplicates {
+			seen = make(map[int32]struct{}, end-start)
+		}
+		for index := start; index < end; index++ {
+			column := columns[index]
+			if column < 0 || int64(column) >= int64(cols) {
+				return fmt.Errorf("sparse column %d out of range at entry %d", column, index)
+			}
+			if rejectDuplicates {
+				if _, exists := seen[column]; exists {
+					return fmt.Errorf("duplicate CSR entry at row %d column %d", row, column)
+				}
+				seen[column] = struct{}{}
+			}
+		}
+	}
+	return nil
+}
+
 func readSparseRows(matrix *SparseMatrix) (sparseRows, error) {
 	if matrix == nil || matrix.rows <= 0 || matrix.cols <= 0 || matrix.nnz < 0 ||
 		int64(matrix.rows) > math.MaxInt32 || int64(matrix.cols) > math.MaxInt32 || int64(matrix.nnz) > math.MaxInt32 {
@@ -49,14 +82,11 @@ func readSparseRows(matrix *SparseMatrix) (sparseRows, error) {
 		if err != nil {
 			return nil, fmt.Errorf("CSR row offsets: %w", err)
 		}
-		if offsets[0] != 0 || int64(offsets[matrix.rows]) != int64(matrix.nnz) {
-			return nil, fmt.Errorf("CSR row offsets must start at zero and end at nnz")
+		if err := validateCSRIndices(offsets, columns, matrix.rows, matrix.cols, false); err != nil {
+			return nil, err
 		}
 		for row := range matrix.rows {
 			start, end := int(offsets[row]), int(offsets[row+1])
-			if start < 0 || end < start || end > matrix.nnz {
-				return nil, fmt.Errorf("invalid CSR row offsets at row %d", row)
-			}
 			for index := start; index < end; index++ {
 				if err := add(row, index); err != nil {
 					return nil, err
@@ -127,23 +157,82 @@ func sparseSortedColumns(entries map[int]float32) []int {
 	return keys
 }
 
-func sparseMVHost(alpha float32, matrix *SparseMatrix, rows sparseRows, x *memory.Memory, beta float32, y *memory.Memory) error {
-	xValues, err := readMathFloat32Memory(x, matrix.cols)
+func transposeSparseRows(rows sparseRows, columns int) sparseRows {
+	transposed := make(sparseRows, columns)
+	for i := range transposed {
+		transposed[i] = make(map[int]float32)
+	}
+	for row, entries := range rows {
+		for col, value := range entries {
+			transposed[col][row] = value
+		}
+	}
+	return transposed
+}
+
+func sparseMVHost(alpha float32, rows sparseRows, x *memory.Memory, inputLength int, beta float32, y *memory.Memory) error {
+	xValues, err := readMathFloat32Memory(x, inputLength)
 	if err != nil {
 		return err
 	}
-	yValues, err := readMathFloat32Memory(y, matrix.rows)
-	if err != nil {
-		return err
+	yValues := make([]float32, len(rows))
+	if beta != 0 {
+		yValues, err = readMathFloat32Memory(y, len(rows))
+		if err != nil {
+			return err
+		}
 	}
 	for row, entries := range rows {
 		var sum float32
 		for _, col := range sparseSortedColumns(entries) {
 			sum += entries[col] * xValues[col]
 		}
-		yValues[row] = alpha*sum + beta*yValues[row]
+		if beta == 0 {
+			yValues[row] = alpha * sum
+		} else {
+			yValues[row] = alpha*sum + beta*yValues[row]
+		}
 	}
 	return writeMathFloat32Memory(y, yValues)
+}
+
+func sparseDenseMMHost(alpha float32, rows sparseRows, b *memory.Memory, beta float32, c *memory.Memory, batch sparseDenseBatch) error {
+	input, err := readMathFloat32Memory(b, batch.bElements)
+	if err != nil {
+		return err
+	}
+	if batch.opA == BLASOpT {
+		rows = transposeSparseRows(rows, batch.outputRows)
+	}
+	output := make([]float32, batch.cElements)
+	if beta != 0 || batch.ldc != batch.n || batch.strideC != batch.outputRows*batch.ldc {
+		output, err = readMathFloat32Memory(c, batch.cElements)
+		if err != nil {
+			return err
+		}
+	}
+	for row, entries := range rows {
+		columns := sparseSortedColumns(entries)
+		for i := range batch.count {
+			for col := range batch.n {
+				var sum float32
+				for _, inner := range columns {
+					index := i*batch.strideB + inner*batch.ldb + col
+					if batch.opB == BLASOpT {
+						index = i*batch.strideB + col*batch.ldb + inner
+					}
+					sum += entries[inner] * input[index]
+				}
+				index := i*batch.strideC + row*batch.ldc + col
+				if beta == 0 {
+					output[index] = alpha * sum
+				} else {
+					output[index] = alpha*sum + beta*output[index]
+				}
+			}
+		}
+	}
+	return writeMathFloat32Memory(c, output)
 }
 
 func sparseMultiplyRows(a, b sparseRows) sparseRows {

@@ -14,9 +14,11 @@ package libraries
 import "C"
 
 import (
+	"errors"
 	"fmt"
 	"unsafe"
 
+	"github.com/stitch1968/gocuda/internal"
 	"github.com/stitch1968/gocuda/memory"
 )
 
@@ -26,6 +28,41 @@ type cudssNativeBuffer struct {
 	values []float64
 	width  int
 	owns   bool
+}
+
+type cudssNativeSolveResources struct {
+	rhsMatrix      C.cudssMatrix_t
+	solutionMatrix C.cudssMatrix_t
+	b              *cudssNativeBuffer
+	x              *cudssNativeBuffer
+}
+
+func (resources *cudssNativeSolveResources) cleanup() error {
+	var errs []error
+	if resources.rhsMatrix != nil {
+		if status := C.cudssMatrixDestroy(resources.rhsMatrix); status != C.CUDSS_STATUS_SUCCESS {
+			errs = append(errs, cudssError("cudssMatrixDestroy(rhs)", status))
+		} else {
+			resources.rhsMatrix = nil
+		}
+	}
+	if resources.solutionMatrix != nil {
+		if status := C.cudssMatrixDestroy(resources.solutionMatrix); status != C.CUDSS_STATUS_SUCCESS {
+			errs = append(errs, cudssError("cudssMatrixDestroy(solution)", status))
+		} else {
+			resources.solutionMatrix = nil
+		}
+	}
+	if len(errs) != 0 {
+		return errors.Join(errs...)
+	}
+	if err := resources.b.release(); err != nil {
+		errs = append(errs, err)
+	}
+	if err := resources.x.release(); err != nil {
+		errs = append(errs, err)
+	}
+	return errors.Join(errs...)
 }
 
 func cudssHandleToUintptr(handle C.cudssHandle_t) uintptr {
@@ -141,11 +178,15 @@ func createNativeDSSMatrix(n, nnz int, rowPtr, colInd, values *memory.Memory, fo
 		}()
 	}
 
+	var ownedValues *memory.Memory
+	if nativeValues.owns {
+		ownedValues = nativeValues.mem
+	}
 	return &DSSMatrix{
 		rowPtr:       rowPtr,
 		colInd:       colInd,
 		values:       values,
-		nativeValues: nativeValues.mem,
+		nativeValues: ownedValues,
 		n:            n,
 		nnz:          nnz,
 		format:       format,
@@ -154,6 +195,17 @@ func createNativeDSSMatrix(n, nnz int, rowPtr, colInd, values *memory.Memory, fo
 		nativeType:   int(matrixType),
 		native:       true,
 	}, nil
+}
+
+func refreshNativeDSSValues(matrix *DSSMatrix) error {
+	if matrix.nativeValues == nil {
+		return nil
+	}
+	values, err := readDSSFloatValues(matrix.values, matrix.nnz)
+	if err != nil {
+		return err
+	}
+	return writeMathFloat64Memory(matrix.nativeValues, values)
 }
 
 func analyzeNativeDSS(handle *DSSHandle, matrix *DSSMatrix) error {
@@ -171,9 +223,6 @@ func analyzeNativeDSS(handle *DSSHandle, matrix *DSSMatrix) error {
 	); status != C.CUDSS_STATUS_SUCCESS {
 		return cudssError("cudssExecute(analysis)", status)
 	}
-	handle.n = matrix.n
-	handle.nnz = matrix.nnz
-	handle.matrix = matrix
 	return nil
 }
 
@@ -192,129 +241,88 @@ func factorNativeDSS(handle *DSSHandle, matrix *DSSMatrix) error {
 	); status != C.CUDSS_STATUS_SUCCESS {
 		return cudssError("cudssExecute(factorization)", status)
 	}
-	handle.matrix = matrix
 	return nil
 }
 
-func solveNativeDSS(handle *DSSHandle, b, x *memory.Memory, nrhs int) (*DSSSolutionInfo, error) {
+func solveNativeDSS(handle *DSSHandle, b, x *memory.Memory, nrhs int, retained []*memory.Retention) (info *DSSSolutionInfo, deferred bool, err error) {
 	if handle.matrix == nil || !handle.matrix.native {
-		return nil, errCUDSSUnsupported
+		return nil, false, errCUDSSUnsupported
 	}
 	if nrhs <= 0 {
-		return nil, fmt.Errorf("number of right-hand sides must be positive: %d", nrhs)
+		return nil, false, fmt.Errorf("number of right-hand sides must be positive: %d", nrhs)
 	}
+	resources := &cudssNativeSolveResources{}
+	defer func() {
+		if deferred {
+			return
+		}
+		if cleanupErr := resources.cleanup(); cleanupErr != nil {
+			handle.pendingOperations = append(handle.pendingOperations, dssPendingOperation{cleanup: resources.cleanup, retentions: retained})
+			deferred = true
+			info = nil
+			err = errors.Join(err, cleanupErr)
+		}
+	}()
 	elementCount := handle.n * nrhs
-	bNative, err := cudssPrepareFloat64Buffer(b, elementCount)
+	resources.b, err = cudssPrepareFloat64Buffer(b, elementCount)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	defer bNative.release()
-
-	xNative, err := cudssPrepareFloat64Buffer(x, elementCount)
+	resources.x, err = cudssPrepareFloat64Buffer(x, elementCount)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	defer xNative.release()
-
-	rhsMatrix, err := createNativeDSSDenseMatrix(handle.n, nrhs, bNative.mem)
+	resources.rhsMatrix, err = createNativeDSSDenseMatrix(handle.n, nrhs, resources.b.mem)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	defer C.cudssMatrixDestroy(rhsMatrix)
-
-	solutionMatrix, err := createNativeDSSDenseMatrix(handle.n, nrhs, xNative.mem)
+	resources.solutionMatrix, err = createNativeDSSDenseMatrix(handle.n, nrhs, resources.x.mem)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	defer C.cudssMatrixDestroy(solutionMatrix)
-
-	if status := C.cudssExecute(
+	status := C.cudssExecute(
 		cudssHandleFromUintptr(handle.nativeHandle),
 		C.int(C.CUDSS_PHASE_SOLVE),
 		cudssConfigFromUintptr(handle.nativeConfig),
 		cudssDataFromUintptr(handle.nativeData),
 		cudssMatrixFromUintptr(handle.matrix.nativeHandle),
-		solutionMatrix,
-		rhsMatrix,
-	); status != C.CUDSS_STATUS_SUCCESS {
-		return nil, cudssError("cudssExecute(solve)", status)
+		resources.solutionMatrix,
+		resources.rhsMatrix,
+	)
+	var executeErr error
+	if status != C.CUDSS_STATUS_SUCCESS {
+		executeErr = cudssError("cudssExecute(solve)", status)
+	}
+	if syncErr := internal.CudaDefaultStreamSynchronizeOnDevice(handle.deviceID); syncErr != nil {
+		handle.pendingOperations = append(handle.pendingOperations, dssPendingOperation{cleanup: resources.cleanup, retentions: retained})
+		return nil, true, errors.Join(executeErr, syncErr)
+	}
+	if executeErr != nil {
+		return nil, false, executeErr
 	}
 
-	xValues, err := readMathFloat64Memory(xNative.mem, elementCount)
+	xValues, err := readMathFloat64Memory(resources.x.mem, elementCount)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	if err := xNative.writeBack(xValues); err != nil {
-		return nil, err
+	if err := resources.x.writeBack(xValues); err != nil {
+		return nil, false, err
 	}
-	maxResidual := 0.0
+	if resources.x.width == 4 {
+		for i, value := range xValues {
+			xValues[i] = float64(float32(value))
+		}
+	}
 	for rhs := 0; rhs < nrhs; rhs++ {
-		solution := make([]float64, handle.n)
-		rhsValues := make([]float64, handle.n)
-		for index := 0; index < handle.n; index++ {
-			solution[index] = xValues[rhs*handle.n+index]
-			rhsValues[index] = bNative.values[rhs*handle.n+index]
-		}
-		residual := dssResidual(handle.dense, handle.n, solution, rhsValues)
-		if residual > maxResidual {
-			maxResidual = residual
-		}
-	}
-
-	return &DSSSolutionInfo{
-		Iterations:         1,
-		Residual:           maxResidual,
-		Error:              maxResidual,
-		Determinant:        handle.det,
-		PivotGrowth:        1.0,
-		ConditionNumber:    0,
-		BackwardError:      maxResidual,
-		ComponentwiseError: maxResidual,
-	}, nil
-}
-
-func refactorNativeDSS(handle *DSSHandle, matrix *DSSMatrix) error {
-	if handle.matrix == nil || !matrix.native {
-		return errCUDSSUnsupported
-	}
-	if matrix.nativeValues != nil {
-		updatedValues, err := cudssPrepareFloat64Buffer(matrix.values, matrix.nnz)
+		start := rhs * handle.n
+		current, err := dssSolutionDiagnostics(handle.dense, handle.n,
+			xValues[start:start+handle.n], resources.b.values[start:start+handle.n], handle.det)
 		if err != nil {
-			return err
+			return nil, false, err
 		}
-		if !updatedValues.owns {
-			matrix.nativeValues = nil
-		} else {
-			_ = matrix.nativeValues.Free()
-			matrix.nativeValues = updatedValues.mem
-		}
+		info = mergeDSSDiagnostics(info, current)
 	}
-	valuePtr := matrix.values.Ptr()
-	if matrix.nativeValues != nil {
-		valuePtr = matrix.nativeValues.Ptr()
-	}
-	if status := C.cudssMatrixSetCsrPointers(cudssMatrixFromUintptr(matrix.nativeHandle), matrix.rowPtr.Ptr(), nil, matrix.colInd.Ptr(), valuePtr); status != C.CUDSS_STATUS_SUCCESS {
-		return cudssError("cudssMatrixSetCsrPointers", status)
-	}
-	handle.matrix = matrix
-	dense, err := dssDenseFromMatrix(matrix)
-	if err != nil {
-		return err
-	}
-	handle.dense = dense
-	handle.det, _ = dssDeterminant(dense, matrix.n)
-	if status := C.cudssExecute(
-		cudssHandleFromUintptr(handle.nativeHandle),
-		C.int(C.CUDSS_PHASE_FACTORIZATION),
-		cudssConfigFromUintptr(handle.nativeConfig),
-		cudssDataFromUintptr(handle.nativeData),
-		cudssMatrixFromUintptr(matrix.nativeHandle),
-		nil,
-		nil,
-	); status != C.CUDSS_STATUS_SUCCESS {
-		return cudssError("cudssExecute(refactorization)", status)
-	}
-	return nil
+	return info, false, nil
 }
 
 func destroyNativeDSSHandle(handle *DSSHandle) error {
@@ -392,8 +400,7 @@ func cudssPrepareFloat64Buffer(mem *memory.Memory, length int) (*cudssNativeBuff
 			return nil, err
 		}
 		if err := writeMathFloat64Memory(nativeMem, values64); err != nil {
-			_ = nativeMem.Free()
-			return nil, err
+			return nil, errors.Join(err, nativeMem.Free())
 		}
 		return &cudssNativeBuffer{mem: nativeMem, target: mem, values: values64, width: 4, owns: true}, nil
 	case int64(length) * 8:
@@ -407,11 +414,14 @@ func cudssPrepareFloat64Buffer(mem *memory.Memory, length int) (*cudssNativeBuff
 	}
 }
 
-func (buffer *cudssNativeBuffer) release() {
+func (buffer *cudssNativeBuffer) release() error {
 	if buffer != nil && buffer.owns && buffer.mem != nil {
-		_ = buffer.mem.Free()
+		if err := buffer.mem.Free(); err != nil {
+			return err
+		}
 		buffer.mem = nil
 	}
+	return nil
 }
 
 func (buffer *cudssNativeBuffer) writeBack(values []float64) error {

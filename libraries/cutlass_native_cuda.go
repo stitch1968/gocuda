@@ -431,6 +431,28 @@ func nativeBLASDGEMMEx(handle unsafe.Pointer, a, b, c *memory.Memory, m, n, k, l
 	return cutlassCublasErrorIfFailed("cublasDgemm", status)
 }
 
+func nativeBLASSGEMMStridedBatched(handle unsafe.Pointer, a, b, c *memory.Memory, m, n, k, lda, ldb, ldc int, opA, opB BLASOperation,
+	strideA, strideB, strideC int64, batch int, alpha, beta float32) error {
+	alphaC, betaC := C.float(alpha), C.float(beta)
+	status := C.cublasSgemmStridedBatched((C.cublasHandle_t)(handle),
+		nativeBLASOperation(opB), nativeBLASOperation(opA), C.int(n), C.int(m), C.int(k),
+		&alphaC, (*C.float)(b.Ptr()), C.int(ldb), C.longlong(strideB),
+		(*C.float)(a.Ptr()), C.int(lda), C.longlong(strideA),
+		&betaC, (*C.float)(c.Ptr()), C.int(ldc), C.longlong(strideC), C.int(batch))
+	return cutlassCublasErrorIfFailed("cublasSgemmStridedBatched", status)
+}
+
+func nativeBLASDGEMMStridedBatched(handle unsafe.Pointer, a, b, c *memory.Memory, m, n, k, lda, ldb, ldc int, opA, opB BLASOperation,
+	strideA, strideB, strideC int64, batch int, alpha, beta float64) error {
+	alphaC, betaC := C.double(alpha), C.double(beta)
+	status := C.cublasDgemmStridedBatched((C.cublasHandle_t)(handle),
+		nativeBLASOperation(opB), nativeBLASOperation(opA), C.int(n), C.int(m), C.int(k),
+		&alphaC, (*C.double)(b.Ptr()), C.int(ldb), C.longlong(strideB),
+		(*C.double)(a.Ptr()), C.int(lda), C.longlong(strideA),
+		&betaC, (*C.double)(c.Ptr()), C.int(ldc), C.longlong(strideC), C.int(batch))
+	return cutlassCublasErrorIfFailed("cublasDgemmStridedBatched", status)
+}
+
 func nativeBLASOperation(op BLASOperation) C.cublasOperation_t {
 	if op == BLASOpT {
 		return C.CUBLAS_OP_T

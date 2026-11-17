@@ -4,6 +4,7 @@ package libraries
 
 import (
 	"fmt"
+	"unsafe"
 
 	"github.com/stitch1968/gocuda/memory"
 )
@@ -17,6 +18,10 @@ func createNativeDNNHandle() (*DNNHandle, error) {
 }
 
 func destroyNativeDNNHandle(handle *DNNHandle) error {
+	return fmt.Errorf("cuDNN native backend requires a CUDA-tagged build")
+}
+
+func setNativeDNNStream(handle *DNNHandle, stream unsafe.Pointer) error {
 	return fmt.Errorf("cuDNN native backend requires a CUDA-tagged build")
 }
 
@@ -92,8 +97,8 @@ func destroyNativeActivationDescriptor(desc *ActivationDescriptor) error {
 	return fmt.Errorf("cuDNN native backend requires a CUDA-tagged build")
 }
 
-func nativeConvolutionForward(handle *DNNHandle, alpha float32, inputDesc *TensorDescriptor, inputData *memory.Memory, filterDesc *FilterDescriptor, filterData *memory.Memory, convDesc *ConvolutionDescriptor, beta float32, outputDesc *TensorDescriptor, outputData *memory.Memory) error {
-	return fmt.Errorf("cuDNN native backend requires a CUDA-tagged build")
+func nativeConvolutionForward(handle *DNNHandle, alpha float32, inputDesc *TensorDescriptor, inputData *memory.Memory, filterDesc *FilterDescriptor, filterData *memory.Memory, convDesc *ConvolutionDescriptor, beta float32, outputDesc *TensorDescriptor, outputData *memory.Memory) (*memory.Memory, error) {
+	return nil, fmt.Errorf("cuDNN native backend requires a CUDA-tagged build")
 }
 
 func nativePoolingForward(handle *DNNHandle, poolingDesc *PoolingDescriptor, alpha float32, inputDesc *TensorDescriptor, inputData *memory.Memory, beta float32, outputDesc *TensorDescriptor, outputData *memory.Memory) error {

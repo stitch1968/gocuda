@@ -8,6 +8,61 @@ import (
 	"github.com/stitch1968/gocuda/memory"
 )
 
+func TestSparseContextConcurrentSpSVTranspose(t *testing.T) {
+	ctx, err := CreateSparseContext()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ctx.DestroyContext()
+	matrix, err := ctx.CreateCOOMatrix(2, 2, []int32{1, 0, 1}, []int32{1, 0, 0}, []float32{3, 2, 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer matrix.Destroy()
+	const workers = 4
+	inputs := make([]*memory.Memory, workers)
+	outputs := make([]*memory.Memory, workers)
+	for i := range workers {
+		rhs := []float32{2, 7}
+		if i%2 != 0 {
+			rhs = []float32{4, 6}
+		}
+		inputs[i] = solverTestBuffer(t, rhs)
+		outputs[i] = solverTestBuffer(t, []float32{0, 0})
+	}
+	var wg sync.WaitGroup
+	errs := make(chan error, workers)
+	for i := range workers {
+		wg.Add(1)
+		go func(index int) {
+			defer wg.Done()
+			op := BLASOpN
+			if index%2 != 0 {
+				op = BLASOpT
+			}
+			for range 3 {
+				if err := ctx.SpSVEx(matrix, inputs[index], outputs[index], op); err != nil {
+					errs <- err
+					return
+				}
+			}
+			got, err := readMathFloat32Memory(outputs[index], 2)
+			if err != nil {
+				errs <- err
+				return
+			}
+			if got[0] != 1 || got[1] != 2 {
+				errs <- fmt.Errorf("worker %d got transpose solve %v", index, got)
+			}
+		}(i)
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Error(err)
+	}
+}
+
 func TestSparseContextConcurrentSpMV(t *testing.T) {
 	ctx, err := CreateSparseContext()
 	if err != nil {
@@ -29,7 +84,11 @@ func TestSparseContextConcurrentSpMV(t *testing.T) {
 		go func(index int) {
 			defer wg.Done()
 			for range 4 {
-				if err := ctx.SpMV(1, matrices[index], inputs[index], 0, outputs[index]); err != nil {
+				op := BLASOpN
+				if index%2 != 0 {
+					op = BLASOpT
+				}
+				if err := ctx.SpMVEx(1, matrices[index], inputs[index], 0, outputs[index], op); err != nil {
 					errs <- err
 					return
 				}
@@ -39,7 +98,11 @@ func TestSparseContextConcurrentSpMV(t *testing.T) {
 				errs <- err
 				return
 			}
-			if values[0] != float32(2*(index+1)+2) || values[1] != 6 {
+			want := []float32{float32(2*(index+1) + 2), 6}
+			if index%2 != 0 {
+				want = []float32{float32(2 * (index + 1)), float32(index + 7)}
+			}
+			if values[0] != want[0] || values[1] != want[1] {
 				errs <- fmt.Errorf("worker %d got %v", index, values)
 			}
 		}(i)

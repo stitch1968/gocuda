@@ -23,6 +23,10 @@ static cufftResult createPlan3d(cufftHandle* plan, int nx, int ny, int nz, int f
 	return cufftPlan3d(plan, nx, ny, nz, (cufftType)fftType);
 }
 
+static cufftResult createPlanMany(cufftHandle* plan, int rank, int* dimensions, int fftType, int batch) {
+	return cufftPlanMany(plan, rank, dimensions, NULL, 1, 0, NULL, 1, 0, (cufftType)fftType, batch);
+}
+
 static cufftResult execC2C(cufftHandle plan, void* input, void* output, int direction) {
 	return cufftExecC2C(plan, (cufftComplex*)input, (cufftComplex*)output, direction);
 }
@@ -125,6 +129,35 @@ func createNativeFFTPlan3D(ctx *FFTContext, nx, ny, nz int, fftType FFTType) (*F
 		return nil, cufftError("cufftPlan3d", result)
 	}
 	return &FFTPlan{handle: uintptr(handle), fftType: fftType, nx: nx, ny: ny, nz: nz, batch: 1, native: true, deviceID: deviceID}, nil
+}
+
+func createNativeFFTPlanMany(dimensions []int, fftType FFTType, batch int) (*FFTPlan, error) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	deviceID, err := cuda.CurrentCudaDeviceID()
+	if err != nil {
+		return nil, err
+	}
+	cufftType, err := nativeCuFFTType(fftType)
+	if err != nil {
+		return nil, err
+	}
+	nativeDimensions := make([]C.int, len(dimensions))
+	for i, dimension := range dimensions {
+		nativeDimensions[i] = C.int(dimension)
+	}
+	var handle C.cufftHandle
+	if result := C.createPlanMany(&handle, C.int(len(nativeDimensions)), &nativeDimensions[0], C.int(cufftType), C.int(batch)); result != C.CUFFT_SUCCESS {
+		return nil, cufftError("cufftPlanMany", result)
+	}
+	plan := &FFTPlan{handle: uintptr(handle), fftType: fftType, nx: dimensions[0], batch: batch, native: true, deviceID: deviceID}
+	if len(dimensions) > 1 {
+		plan.ny = dimensions[1]
+	}
+	if len(dimensions) > 2 {
+		plan.nz = dimensions[2]
+	}
+	return plan, nil
 }
 
 func execNativeFFT(plan *FFTPlan, input, output *memory.Memory, direction FFTDirection) error {

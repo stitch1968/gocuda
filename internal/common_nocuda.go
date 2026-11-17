@@ -138,6 +138,11 @@ func CudaDefaultStreamSynchronizeOnDevice(deviceID int) error {
 	return fmt.Errorf("CUDA not available - using simulation mode")
 }
 
+// CudaStreamSynchronizeOnDevice is unavailable without CUDA.
+func CudaStreamSynchronizeOnDevice(deviceID int, stream unsafe.Pointer) error {
+	return fmt.Errorf("CUDA not available - using simulation mode")
+}
+
 // RunOnDevice executes fn within the selected device context (simulation pass-through).
 func RunOnDevice(deviceID int, fn func() error) error {
 	return fn()

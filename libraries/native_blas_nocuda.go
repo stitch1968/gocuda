@@ -21,6 +21,14 @@ func nativeBLASDGEMMEx(unsafe.Pointer, *memory.Memory, *memory.Memory, *memory.M
 	return streams.ErrNativeCUDAUnavailable
 }
 
+func nativeBLASSGEMMStridedBatched(unsafe.Pointer, *memory.Memory, *memory.Memory, *memory.Memory, int, int, int, int, int, int, BLASOperation, BLASOperation, int64, int64, int64, int, float32, float32) error {
+	return streams.ErrNativeCUDAUnavailable
+}
+
+func nativeBLASDGEMMStridedBatched(unsafe.Pointer, *memory.Memory, *memory.Memory, *memory.Memory, int, int, int, int, int, int, BLASOperation, BLASOperation, int64, int64, int64, int, float64, float64) error {
+	return streams.ErrNativeCUDAUnavailable
+}
+
 func destroyNativeBLAS(unsafe.Pointer) error {
 	return streams.ErrNativeCUDAUnavailable
 }

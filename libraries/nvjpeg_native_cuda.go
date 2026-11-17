@@ -16,6 +16,10 @@ static nvjpegStatus_t createNVJPEGHandle(nvjpegHandle_t* handle) {
 	return nvjpegCreateSimple(handle);
 }
 
+static nvjpegStatus_t createNVJPEGHandleWithBackend(nvjpegHandle_t* handle, nvjpegBackend_t backend) {
+	return nvjpegCreateEx(backend, NULL, NULL, 0, handle);
+}
+
 static nvjpegStatus_t createJpegStateWrapper(nvjpegHandle_t handle, nvjpegJpegState_t* state) {
 	return nvjpegJpegStateCreate(handle, state);
 }
@@ -85,9 +89,12 @@ static nvjpegStatus_t retrieveBitstreamWrapper(nvjpegHandle_t handle, nvjpegEnco
 import "C"
 
 import (
+	"errors"
 	"fmt"
+	"math"
 	"unsafe"
 
+	"github.com/stitch1968/gocuda/internal"
 	"github.com/stitch1968/gocuda/memory"
 )
 
@@ -128,15 +135,31 @@ func nvjpegNativeAvailable() bool {
 }
 
 func createNativeJpegDecoder(backend JpegBackend) (*JpegDecoderState, error) {
+	var nativeBackend C.nvjpegBackend_t
+	switch backend {
+	case JpegBackendDefault:
+		nativeBackend = C.NVJPEG_BACKEND_DEFAULT
+	case JpegBackendHybrid:
+		nativeBackend = C.NVJPEG_BACKEND_HYBRID
+	case JpegBackendGPUHybrid:
+		nativeBackend = C.NVJPEG_BACKEND_GPU_HYBRID
+	case JpegBackendHardware:
+		nativeBackend = C.NVJPEG_BACKEND_HARDWARE
+	default:
+		return nil, fmt.Errorf("invalid JPEG decoder backend %d", backend)
+	}
 	var handle C.nvjpegHandle_t
-	if status := C.createNVJPEGHandle(&handle); status != C.NVJPEG_STATUS_SUCCESS {
-		return nil, nvjpegError("nvjpegCreateSimple", status)
+	if status := C.createNVJPEGHandleWithBackend(&handle, nativeBackend); status != C.NVJPEG_STATUS_SUCCESS {
+		return nil, nvjpegError("nvjpegCreateEx", status)
 	}
 
 	var state C.nvjpegJpegState_t
 	if status := C.createJpegStateWrapper(handle, &state); status != C.NVJPEG_STATUS_SUCCESS {
-		_ = C.destroyNVJPEGHandle(handle)
-		return nil, nvjpegError("nvjpegJpegStateCreate", status)
+		err := nvjpegError("nvjpegJpegStateCreate", status)
+		if destroyStatus := C.destroyNVJPEGHandle(handle); destroyStatus != C.NVJPEG_STATUS_SUCCESS {
+			err = errors.Join(err, nvjpegError("nvjpegDestroy", destroyStatus))
+		}
+		return nil, err
 	}
 
 	return &JpegDecoderState{
@@ -207,26 +230,52 @@ func decodeNativeJpeg(decoder *JpegDecoderState, jpegData []byte, params JpegDec
 		return nil, 0, 0, err
 	}
 
-	output, err := memory.Alloc(int64(width * height * channels))
+	if width <= 0 || height <= 0 || uint64(width)*uint64(channels) > math.MaxUint32 ||
+		uint64(width)*uint64(height) > uint64(math.MaxInt64)/uint64(channels) {
+		return nil, 0, 0, fmt.Errorf("JPEG dimensions exceed supported output size")
+	}
+	outputSize := int64(uint64(width) * uint64(height) * uint64(channels))
+	output, err := memory.AllocOnDevice(outputSize, decoder.deviceID)
 	if err != nil {
 		return nil, 0, 0, fmt.Errorf("failed to allocate output memory: %v", err)
 	}
+	release := func(buffer *memory.Memory) error {
+		err := buffer.Free()
+		if err != nil {
+			decoder.pending = append(decoder.pending, buffer)
+		}
+		return err
+	}
+	bitstream, err := memory.AllocWithTypeAndStream(nil, int64(len(jpegData)), memory.TypePinned)
+	if err != nil {
+		return nil, 0, 0, errors.Join(err, release(output))
+	}
+	if err := memory.CopyHostToDevice(bitstream, jpegData); err != nil {
+		return nil, 0, 0, errors.Join(err, release(bitstream), release(output))
+	}
 
 	var image C.nvjpegImage_t
-	C.prepareInterleavedImage(&image, (*C.uchar)(output.Ptr()), C.uint(width*channels))
+	C.prepareInterleavedImage(&image, (*C.uchar)(output.Ptr()), C.uint(uint64(width)*uint64(channels)))
 	status := C.decodeJpegWrapper(
 		nvjpegHandleFromUintptr(decoder.nativeHandle),
 		nvjpegJpegStateFromUintptr(decoder.nativeState),
-		(*C.uchar)(unsafe.Pointer(&jpegData[0])),
+		(*C.uchar)(bitstream.Ptr()),
 		C.size_t(len(jpegData)),
 		C.int(nativeFormat),
 		&image,
 	)
+	var decodeErr error
 	if status != C.NVJPEG_STATUS_SUCCESS {
-		_ = output.Free()
-		return nil, 0, 0, nvjpegError("nvjpegDecode", status)
+		decodeErr = nvjpegError("nvjpegDecode", status)
 	}
-
+	if err := internal.CudaDefaultStreamSynchronizeOnDevice(decoder.deviceID); err != nil {
+		decoder.pending = append(decoder.pending, bitstream, output)
+		return nil, 0, 0, errors.Join(decodeErr, err)
+	}
+	bitstreamErr := release(bitstream)
+	if decodeErr != nil || bitstreamErr != nil {
+		return nil, 0, 0, errors.Join(decodeErr, bitstreamErr, release(output))
+	}
 	return output, width, height, nil
 }
 

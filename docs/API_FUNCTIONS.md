@@ -261,8 +261,8 @@ whether an operation runs on the GPU. See [runtime boundaries](LIBRARY_RUNTIME_B
 | github.com/stitch1968/gocuda/libraries | ComputeElementwise | ComputeElementwise performs elementwise operations on vectors |
 | github.com/stitch1968/gocuda/libraries | ComputeUnary | ComputeUnary performs unary operations on vectors |
 | github.com/stitch1968/gocuda/libraries | ConvolutionDescriptor.DestroyConvolutionDescriptor | DestroyConvolutionDescriptor destroys a convolution descriptor |
-| github.com/stitch1968/gocuda/libraries | ConvolutionDescriptor.GetConvolution2dForwardOutputDim | GetConvolution2dForwardOutputDim calculates output dimensions for convolution |
-| github.com/stitch1968/gocuda/libraries | ConvolutionDescriptor.SetConvolution2dDescriptor | SetConvolution2dDescriptor sets the convolution descriptor for 2D convolutions |
+| github.com/stitch1968/gocuda/libraries | ConvolutionDescriptor.GetConvolution2dForwardOutputDim | Calculates validated output dimensions for 2D convolution. |
+| github.com/stitch1968/gocuda/libraries | ConvolutionDescriptor.SetConvolution2dDescriptor | Sets validated 2D convolution padding, strides, dilation and mode. |
 | github.com/stitch1968/gocuda/libraries | ConvolutionForward | ConvolutionForward provides simplified convolution operation |
 | github.com/stitch1968/gocuda/libraries | CreateActivationDescriptor | CreateActivationDescriptor creates an activation descriptor |
 | github.com/stitch1968/gocuda/libraries | CreateAmgXHandle | CreateAmgXHandle creates a new AmgX solver handle |
@@ -275,8 +275,10 @@ whether an operation runs on the GPU. See [runtime boundaries](LIBRARY_RUNTIME_B
 | github.com/stitch1968/gocuda/libraries | CreateCutlassConv | CreateCutlassConv creates a CUTLASS convolution operation handle |
 | github.com/stitch1968/gocuda/libraries | CreateCutlassGemm | CreateCutlassGemm creates a CUTLASS GEMM operation handle |
 | github.com/stitch1968/gocuda/libraries | CreateDNNHandle | CreateDNNHandle creates a cuDNN library handle |
+| github.com/stitch1968/gocuda/libraries | CreateNativeDNNHandleOnDevice | Creates a device-bound native-only cuDNN handle. |
 | github.com/stitch1968/gocuda/libraries | CreateDSSHandle | CreateDSSHandle creates a new cuDSS solver handle |
 | github.com/stitch1968/gocuda/libraries | CreateDSSMatrix | CreateDSSMatrix creates a DSS matrix from sparse data |
+| github.com/stitch1968/gocuda/libraries | CreateNativeDSSHandleOnDevice | Creates a device-bound strict-native cuDSS handle. |
 | github.com/stitch1968/gocuda/libraries | CreateFFTContext | CreateFFTContext creates a new cuFFT context |
 | github.com/stitch1968/gocuda/libraries | CreateNativeFFTContextOnDevice | CreateNativeFFTContextOnDevice creates a device-bound native-only cuFFT context. |
 | github.com/stitch1968/gocuda/libraries | FFTContext.Backend | Backend reports whether the context uses native CUDA or Go simulation. |
@@ -303,7 +305,11 @@ whether an operation runs on the GPU. See [runtime boundaries](LIBRARY_RUNTIME_B
 | github.com/stitch1968/gocuda/libraries | CreateNativeSparseContextOnDevice | CreateNativeSparseContextOnDevice creates a device-bound native-only sparse context. |
 | github.com/stitch1968/gocuda/libraries | SparseContext.CreateCSRMatrix | CreateCSRMatrix creates a validated CSR matrix. |
 | github.com/stitch1968/gocuda/libraries | SparseContext.CreateCOOMatrix | CreateCOOMatrix creates a validated COO matrix. |
+| github.com/stitch1968/gocuda/libraries | SparseContext.SetStream | SetStream attaches a native stream to a sparse context; operations remain synchronous. |
+| github.com/stitch1968/gocuda/libraries | SparseContext.Synchronize | Synchronize waits for the context stream and retries pending cleanup. |
 | github.com/stitch1968/gocuda/libraries | SparseContext.SpMVBackend | SpMVBackend reports the backend for a sparse matrix format. |
+| github.com/stitch1968/gocuda/libraries | SparseContext.SpMMDenseBackend | SpMMDenseBackend reports the backend for sparse-dense multiplication. |
+| github.com/stitch1968/gocuda/libraries | SparseContext.SpMMBackend | SpMMBackend reports the backend for scaled sparse-sparse multiplication. |
 | github.com/stitch1968/gocuda/libraries | SparseContext.SpSVBackend | SpSVBackend reports the backend for a triangular sparse matrix format. |
 | github.com/stitch1968/gocuda/libraries | SparseContext.SpGEMMBackend | SpGEMMBackend reports the backend for sparse matrix multiplication. |
 | github.com/stitch1968/gocuda/libraries | SparseContext.DenseToSparseBackend | DenseToSparseBackend reports the backend for a dense-to-sparse format. |
@@ -331,19 +337,26 @@ whether an operation runs on the GPU. See [runtime boundaries](LIBRARY_RUNTIME_B
 | github.com/stitch1968/gocuda/libraries | CutlassRank2k | CutlassRank2k performs rank-2k update: C = alpha*A*B^T + alpha*B*A^T + beta*C |
 | github.com/stitch1968/gocuda/libraries | CutlassSpmm | CutlassSpmm performs Sparse Matrix-Dense Matrix Multiplication |
 | github.com/stitch1968/gocuda/libraries | CutlassTrmm | CutlassTrmm performs Triangular Matrix Multiplication |
-| github.com/stitch1968/gocuda/libraries | DNNHandle.ActivationForward | ActivationForward performs forward activation |
-| github.com/stitch1968/gocuda/libraries | DNNHandle.BatchNormalizationForwardInference | BatchNormalizationForwardInference performs batch normalization inference |
-| github.com/stitch1968/gocuda/libraries | DNNHandle.ConvolutionForward | ConvolutionForward performs forward convolution |
+| github.com/stitch1968/gocuda/libraries | DNNHandle.ActivationForward | Performs forward activation; float32 simulation honors positive N-dimensional strides. |
+| github.com/stitch1968/gocuda/libraries | DNNHandle.Backend | Reports whether the handle uses native cuDNN or Go simulation. |
+| github.com/stitch1968/gocuda/libraries | DNNHandle.BatchNormalizationForwardInference | Performs inference; float32 simulation honors positive 4D tensor and parameter strides. |
+| github.com/stitch1968/gocuda/libraries | DNNHandle.ConvolutionForward | Performs forward convolution after validating the output shape. |
 | github.com/stitch1968/gocuda/libraries | DNNHandle.DestroyHandle | DestroyHandle destroys the cuDNN handle |
-| github.com/stitch1968/gocuda/libraries | DNNHandle.PoolingForward | PoolingForward performs forward pooling |
+| github.com/stitch1968/gocuda/libraries | DNNHandle.PoolingForward | Performs forward pooling; float32 simulation honors positive 4D strides and padding. |
+| github.com/stitch1968/gocuda/libraries | DNNHandle.SetStream | Attaches a native CUDA stream; operations remain synchronous. |
+| github.com/stitch1968/gocuda/libraries | DNNHandle.Synchronize | Waits for the handle stream and retries pending cleanup. |
+| github.com/stitch1968/gocuda/libraries | ErrDNNDescriptorInUse | Indicates that active work retains a cuDNN descriptor. |
 | github.com/stitch1968/gocuda/libraries | DSSHandle.Analyze | Analyze performs symbolic analysis of the sparse matrix |
+| github.com/stitch1968/gocuda/libraries | DSSHandle.Backend | Reports the cuDSS handle backend. |
 | github.com/stitch1968/gocuda/libraries | DSSHandle.Destroy | Destroy cleans up DSS handle resources |
 | github.com/stitch1968/gocuda/libraries | DSSHandle.Factor | Factor performs numerical factorization |
 | github.com/stitch1968/gocuda/libraries | DSSHandle.GetDeterminant | GetDeterminant computes the determinant of the factored matrix |
-| github.com/stitch1968/gocuda/libraries | DSSHandle.GetInertia | GetInertia computes the inertia of the factored matrix |
+| github.com/stitch1968/gocuda/libraries | DSSHandle.GetInertia | Returns ErrDSSInertiaUnavailable for supported factorization modes. |
 | github.com/stitch1968/gocuda/libraries | DSSHandle.Refactor | Refactor updates the numerical factorization with new values |
 | github.com/stitch1968/gocuda/libraries | DSSHandle.Solve | Solve solves the linear system Ax = b |
-| github.com/stitch1968/gocuda/libraries | DSSHandle.SolveMultiple | SolveMultiple solves multiple linear systems with the same matrix |
+| github.com/stitch1968/gocuda/libraries | DSSHandle.SolveMultiple | Solves multiple right-hand sides and reports diagnostics per solution. |
+| github.com/stitch1968/gocuda/libraries | ErrDSSInertiaUnavailable | Indicates that cuDSS inertia is not measured by this wrapper. |
+| github.com/stitch1968/gocuda/libraries | ErrDSSNativeOperationUnsupported | Indicates that strict-native cuDSS cannot execute a requested operation or configuration. |
 | github.com/stitch1968/gocuda/libraries | DSSMatrix.Destroy | Destroy cleans up DSS matrix resources |
 | github.com/stitch1968/gocuda/libraries | DecodeJpeg2000Image | DecodeJpeg2000Image provides a simple interface for JPEG2000 decoding |
 | github.com/stitch1968/gocuda/libraries | DecodeJpeg2000Quick | DecodeJpeg2000Quick provides a simple interface for JPEG2000 decoding |
@@ -357,19 +370,23 @@ whether an operation runs on the GPU. See [runtime boundaries](LIBRARY_RUNTIME_B
 | github.com/stitch1968/gocuda/libraries | ExperimentalHelpersEnabled | ExperimentalHelpersEnabled reports whether helper-backed library execution is explicitly allowed in CUDA mode. |
 | github.com/stitch1968/gocuda/libraries | FFT1D | FFT1D provides simplified 1D FFT computation |
 | github.com/stitch1968/gocuda/libraries | FFTContext.CreatePlan1D | CreatePlan1D creates a 1D FFT plan |
+| github.com/stitch1968/gocuda/libraries | FFTContext.CreatePlanMany | Creates a contiguous batched FFT plan with one to three dimensions. |
 | github.com/stitch1968/gocuda/libraries | FFTContext.CreatePlan2D | CreatePlan2D creates a 2D FFT plan |
 | github.com/stitch1968/gocuda/libraries | FFTContext.CreatePlan3D | CreatePlan3D creates a 3D FFT plan |
 | github.com/stitch1968/gocuda/libraries | FFTContext.DestroyContext | DestroyContext destroys the cuFFT context |
 | github.com/stitch1968/gocuda/libraries | FFTContext.EstimateMemory | EstimateMemory estimates memory requirements for FFT operations |
 | github.com/stitch1968/gocuda/libraries | FFTContext.ExecC2C | ExecC2C executes a complex-to-complex FFT |
 | github.com/stitch1968/gocuda/libraries | FFTContext.ExecC2R | ExecC2R executes a complex-to-real FFT |
+| github.com/stitch1968/gocuda/libraries | FFTContext.ExecD2Z | Executes an out-of-place double real-to-complex FFT. |
 | github.com/stitch1968/gocuda/libraries | FFTContext.ExecR2C | ExecR2C executes a real-to-complex FFT |
+| github.com/stitch1968/gocuda/libraries | FFTContext.ExecZ2D | Executes an out-of-place double complex-to-real inverse FFT. |
+| github.com/stitch1968/gocuda/libraries | FFTContext.ExecZ2Z | Executes a double-precision complex FFT. |
 | github.com/stitch1968/gocuda/libraries | FFTPlan.DestroyPlan | DestroyPlan destroys an FFT plan |
 | github.com/stitch1968/gocuda/libraries | FFTPlan.SetStream | SetStream sets the CUDA stream for the plan |
 | github.com/stitch1968/gocuda/libraries | FastMathOperations | FastMathOperations provides optimized math operations with reduced precision |
 | github.com/stitch1968/gocuda/libraries | FilterDescriptor.DestroyFilterDescriptor | DestroyFilterDescriptor destroys a filter descriptor |
-| github.com/stitch1968/gocuda/libraries | FilterDescriptor.SetFilter4dDescriptor | SetFilter4dDescriptor sets the filter descriptor for 4D filters |
-| github.com/stitch1968/gocuda/libraries | FilterDescriptor.SetFilterNdDescriptor | SetFilterNdDescriptor sets the filter descriptor for N-dimensional filters |
+| github.com/stitch1968/gocuda/libraries | FilterDescriptor.SetFilter4dDescriptor | Sets validated 4D filter dimensions. |
+| github.com/stitch1968/gocuda/libraries | FilterDescriptor.SetFilterNdDescriptor | Sets N-dimensional filter dimensions with 32-bit range checks. |
 | github.com/stitch1968/gocuda/libraries | GemmOperation | GemmOperation performs a simple GEMM operation using CUTLASS |
 | github.com/stitch1968/gocuda/libraries | GetCutlassVersion | GetCutlassVersion returns the simulated CUTLASS version |
 | github.com/stitch1968/gocuda/libraries | GetFFTSize | GetFFTSize returns the optimal FFT size for a given input size |
@@ -389,6 +406,7 @@ whether an operation runs on the GPU. See [runtime boundaries](LIBRARY_RUNTIME_B
 | github.com/stitch1968/gocuda/libraries | JpegDecoderState.DecodeJpeg | DecodeJpeg decodes a JPEG image from byte data |
 | github.com/stitch1968/gocuda/libraries | JpegDecoderState.DecodeJpegBatch | DecodeJpegBatch decodes multiple JPEG images in batch |
 | github.com/stitch1968/gocuda/libraries | JpegDecoderState.Destroy | Destroy cleans up decoder resources |
+| github.com/stitch1968/gocuda/libraries | JpegDecoderState.Synchronize | Retries cleanup after failed native decode synchronization. |
 | github.com/stitch1968/gocuda/libraries | JpegEncoderState.Destroy | Destroy cleans up encoder resources |
 | github.com/stitch1968/gocuda/libraries | JpegEncoderState.EncodeJpeg | EncodeJpeg encodes image data to JPEG format |
 | github.com/stitch1968/gocuda/libraries | JpegEncoderState.SetQuality | SetQuality sets the JPEG encoding quality (0-100) |
@@ -397,8 +415,10 @@ whether an operation runs on the GPU. See [runtime boundaries](LIBRARY_RUNTIME_B
 | github.com/stitch1968/gocuda/libraries | NewNativeBLAS | NewNativeBLAS creates a cuBLAS handle on a native stream. |
 | github.com/stitch1968/gocuda/libraries | NativeBLAS.SGEMM | SGEMM enqueues row-major float32 matrix multiplication using cuBLAS. |
 | github.com/stitch1968/gocuda/libraries | NativeBLAS.SGEMMEx | SGEMMEx enqueues float32 GEMM with transpose and row-stride options. |
+| github.com/stitch1968/gocuda/libraries | NativeBLAS.SGEMMStridedBatched | Enqueues strided-batched row-major float32 GEMM. |
 | github.com/stitch1968/gocuda/libraries | NativeBLAS.DGEMM | DGEMM enqueues row-major float64 matrix multiplication using cuBLAS. |
 | github.com/stitch1968/gocuda/libraries | NativeBLAS.DGEMMEx | DGEMMEx enqueues float64 GEMM with transpose and row-stride options. |
+| github.com/stitch1968/gocuda/libraries | NativeBLAS.DGEMMStridedBatched | Enqueues strided-batched row-major float64 GEMM. |
 | github.com/stitch1968/gocuda/libraries | NativeBLAS.Close | Close destroys the cuBLAS handle. |
 | github.com/stitch1968/gocuda/libraries | MathContext.BatchVectorOps | BatchVectorOps performs multiple vector operations in parallel |
 | github.com/stitch1968/gocuda/libraries | MathContext.Destroy | Destroy cleans up math context resources |
@@ -455,21 +475,26 @@ whether an operation runs on the GPU. See [runtime boundaries](LIBRARY_RUNTIME_B
 | github.com/stitch1968/gocuda/libraries | SolverContext.SolveLinearSystem | SolveLinearSystem solves Ax = b using LU factorization |
 | github.com/stitch1968/gocuda/libraries | SortArray | SortArray provides simplified array sorting using Thrust |
 | github.com/stitch1968/gocuda/libraries | SparseContext.CreateSparseMatrix | CreateSparseMatrix creates a sparse matrix |
-| github.com/stitch1968/gocuda/libraries | SparseContext.DenseToSparse | DenseToSparse converts a dense matrix to sparse format |
+| github.com/stitch1968/gocuda/libraries | SparseContext.DenseToSparse | DenseToSparse converts row-major dense data to CSR or COO; CUDA output indices are not guaranteed sorted. |
 | github.com/stitch1968/gocuda/libraries | SparseContext.DestroyContext | DestroyContext destroys the cuSPARSE context |
-| github.com/stitch1968/gocuda/libraries | SparseContext.SpGEMM | SpGEMM performs general sparse matrix-matrix multiplication |
+| github.com/stitch1968/gocuda/libraries | SparseContext.SpGEMM | SpGEMM multiplies CSR or COO matrices; CUDA execution canonicalizes both inputs to CSR on the host. |
 | github.com/stitch1968/gocuda/libraries | SparseContext.SpLU | SpLU performs sparse LU factorization |
-| github.com/stitch1968/gocuda/libraries | SparseContext.SpMM | SpMM performs sparse matrix-matrix multiplication: C = alpha*A*B + beta*C |
+| github.com/stitch1968/gocuda/libraries | SparseContext.SpMM | SpMM computes sparse-sparse C = alpha*A*B + beta*C using native cuSPARSE product and addition in CUDA mode, with host preprocessing and output pruning. |
+| github.com/stitch1968/gocuda/libraries | SparseContext.SpMMDense | SpMMDense computes sparse-dense C = alpha*A*B + beta*C with contiguous row-major float32 B and C. |
+| github.com/stitch1968/gocuda/libraries | SparseContext.SpMMDenseEx | SpMMDenseEx supports transposes and padded row-major float32 dense matrices. |
+| github.com/stitch1968/gocuda/libraries | SparseContext.SpMMDenseBatched | SpMMDenseBatched multiplies one CSR/COO matrix by strided batches of row-major dense matrices. |
 | github.com/stitch1968/gocuda/libraries | SparseContext.SpMV | SpMV performs sparse matrix-vector multiplication: y = alpha*A*x + beta*y |
-| github.com/stitch1968/gocuda/libraries | SparseContext.SpSV | SpSV solves sparse triangular system: A*x = b |
+| github.com/stitch1968/gocuda/libraries | SparseContext.SpMVEx | SpMVEx supports CSR/COO matrix-vector multiplication with optional transpose. |
+| github.com/stitch1968/gocuda/libraries | SparseContext.SpSV | SpSV solves a CSR or COO triangular system; CUDA execution validates and canonicalizes indices on the host. |
+| github.com/stitch1968/gocuda/libraries | SparseContext.SpSVEx | SpSVEx solves CSR or COO triangular systems with optional transpose. |
 | github.com/stitch1968/gocuda/libraries | SparseContext.SparseToDense | SparseToDense converts a sparse matrix to dense format |
 | github.com/stitch1968/gocuda/libraries | SparseMatrix.Destroy | Destroy cleans up the sparse matrix |
 | github.com/stitch1968/gocuda/libraries | SparseMatrix.GetMatrixInfo | GetMatrixInfo returns information about the sparse matrix |
 | github.com/stitch1968/gocuda/libraries | SparseMatrixMultiply | SparseMatrixMultiply provides simplified sparse matrix multiplication |
 | github.com/stitch1968/gocuda/libraries | TensorContract | TensorContract performs tensor contraction operations |
 | github.com/stitch1968/gocuda/libraries | TensorDescriptor.DestroyTensorDescriptor | DestroyTensorDescriptor destroys a tensor descriptor |
-| github.com/stitch1968/gocuda/libraries | TensorDescriptor.SetTensor4dDescriptor | SetTensor4dDescriptor sets the tensor descriptor for 4D tensors |
-| github.com/stitch1968/gocuda/libraries | TensorDescriptor.SetTensorNdDescriptor | SetTensorNdDescriptor sets the tensor descriptor for N-dimensional tensors |
+| github.com/stitch1968/gocuda/libraries | TensorDescriptor.SetTensor4dDescriptor | Sets validated 4D tensor dimensions and packed strides. |
+| github.com/stitch1968/gocuda/libraries | TensorDescriptor.SetTensorNdDescriptor | Sets N-dimensional tensor dimensions and strides with 32-bit range checks. |
 | github.com/stitch1968/gocuda/libraries | TensorElementwiseOp | TensorElementwiseOp performs element-wise operations on tensors |
 | github.com/stitch1968/gocuda/libraries | TensorMatMul | TensorMatMul performs matrix multiplication using tensor operations |
 | github.com/stitch1968/gocuda/libraries | TensorPlan.Destroy | Destroy destroys a tensor plan and frees its resources |

@@ -24,6 +24,10 @@ func createNativeFFTPlan3D(ctx *FFTContext, nx, ny, nz int, fftType FFTType) (*F
 	return nil, fmt.Errorf("cuFFT native backend requires a CUDA-tagged build")
 }
 
+func createNativeFFTPlanMany(dimensions []int, fftType FFTType, batch int) (*FFTPlan, error) {
+	return nil, fmt.Errorf("cuFFT native backend requires a CUDA-tagged build")
+}
+
 func execNativeFFT(plan *FFTPlan, input, output *memory.Memory, direction FFTDirection) error {
 	return fmt.Errorf("cuFFT native backend requires a CUDA-tagged build")
 }

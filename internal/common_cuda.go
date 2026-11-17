@@ -78,6 +78,10 @@ cudaError_t cudaDefaultStreamSynchronize_Internal() {
 	return cudaStreamSynchronize((cudaStream_t)0);
 }
 
+cudaError_t cudaStreamSynchronize_Internal(void* stream) {
+	return cudaStreamSynchronize((cudaStream_t)stream);
+}
+
 cudaError_t cudaSetDevice_Internal(int device) {
 	return cudaSetDevice(device);
 }
@@ -440,6 +444,20 @@ func CudaDefaultStreamSynchronizeOnDevice(deviceID int) error {
 	}
 	return RunOnDevice(deviceID, func() error {
 		status := C.cudaDefaultStreamSynchronize_Internal()
+		if status != C.cudaSuccess {
+			return fmt.Errorf("cudaStreamSynchronize failed with error code %d", status)
+		}
+		return nil
+	})
+}
+
+// CudaStreamSynchronizeOnDevice waits for a live CUDA stream on its device.
+func CudaStreamSynchronizeOnDevice(deviceID int, stream unsafe.Pointer) error {
+	if !ShouldUseCuda() || stream == nil {
+		return fmt.Errorf("CUDA stream is unavailable")
+	}
+	return RunOnDevice(deviceID, func() error {
+		status := C.cudaStreamSynchronize_Internal(stream)
 		if status != C.cudaSuccess {
 			return fmt.Errorf("cudaStreamSynchronize failed with error code %d", status)
 		}

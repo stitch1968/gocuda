@@ -161,6 +161,9 @@ func (ctx *FFTContext) CreatePlan1D(nx int, fftType FFTType, batch int) (*FFTPla
 	if nx <= 0 || batch <= 0 {
 		return nil, fmt.Errorf("invalid plan parameters: nx=%d, batch=%d", nx, batch)
 	}
+	if fftType < FFTTypeC2C || fftType > FFTTypeZ2Z {
+		return nil, fmt.Errorf("unsupported FFT type %v", fftType)
+	}
 
 	if _, err := fftElementCounts(nx, 0, 0, batch); err != nil {
 		return nil, err
@@ -205,6 +208,9 @@ func (ctx *FFTContext) CreatePlan2D(nx, ny int, fftType FFTType) (*FFTPlan, erro
 	}
 	if nx <= 0 || ny <= 0 {
 		return nil, fmt.Errorf("invalid plan parameters: nx=%d, ny=%d", nx, ny)
+	}
+	if fftType < FFTTypeC2C || fftType > FFTTypeZ2Z {
+		return nil, fmt.Errorf("unsupported FFT type %v", fftType)
 	}
 	if _, err := fftElementCounts(nx, ny, 0, 1); err != nil {
 		return nil, err
@@ -251,6 +257,9 @@ func (ctx *FFTContext) CreatePlan3D(nx, ny, nz int, fftType FFTType) (*FFTPlan, 
 	if nx <= 0 || ny <= 0 || nz <= 0 {
 		return nil, fmt.Errorf("invalid plan parameters: nx=%d, ny=%d, nz=%d", nx, ny, nz)
 	}
+	if fftType < FFTTypeC2C || fftType > FFTTypeZ2Z {
+		return nil, fmt.Errorf("unsupported FFT type %v", fftType)
+	}
 	if _, err := fftElementCounts(nx, ny, nz, 1); err != nil {
 		return nil, err
 	}
@@ -284,10 +293,94 @@ func (ctx *FFTContext) CreatePlan3D(nx, ny, nz int, fftType FFTType) (*FFTPlan, 
 	return plan, nil
 }
 
+// CreatePlanMany creates a contiguous batched FFT plan with one to three
+// dimensions. For real transforms, the last dimension uses cuFFT's packed
+// Hermitian layout. Advanced strides and embedded layouts are not supported.
+func (ctx *FFTContext) CreatePlanMany(dimensions []int, fftType FFTType, batch int) (*FFTPlan, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("nil FFT context")
+	}
+	ctx.mu.Lock()
+	defer ctx.mu.Unlock()
+	if ctx.destroyed {
+		return nil, fmt.Errorf("FFT context has been destroyed")
+	}
+	if len(dimensions) < 1 || len(dimensions) > 3 || batch <= 0 {
+		return nil, fmt.Errorf("FFT plans require one to three dimensions and a positive batch count")
+	}
+	if fftType < FFTTypeC2C || fftType > FFTTypeZ2Z {
+		return nil, fmt.Errorf("unsupported FFT type %v", fftType)
+	}
+	for _, dimension := range dimensions {
+		if dimension <= 0 {
+			return nil, fmt.Errorf("FFT dimensions must be positive")
+		}
+	}
+	nx, ny, nz := dimensions[0], 0, 0
+	if len(dimensions) > 1 {
+		ny = dimensions[1]
+	}
+	if len(dimensions) > 2 {
+		nz = dimensions[2]
+	}
+	total, err := fftElementCounts(nx, ny, nz, batch)
+	if err != nil {
+		return nil, err
+	}
+	if ctx.native {
+		plan, err := ctx.createNativePlan(func() (*FFTPlan, error) {
+			return createNativeFFTPlanMany(dimensions, fftType, batch)
+		})
+		if err != nil {
+			return nil, err
+		}
+		ctx.plans = append(ctx.plans, plan)
+		return plan, nil
+	}
+	plan := &FFTPlan{handle: uintptr(time.Now().UnixNano()), fftType: fftType, nx: nx, ny: ny, nz: nz, batch: batch}
+	if err := simulateKernelExecution("cufftPlanMany", total, len(dimensions)+1); err != nil {
+		return nil, err
+	}
+	ctx.plans = append(ctx.plans, plan)
+	return plan, nil
+}
+
 // ExecC2C executes a complex-to-complex FFT. Like cuFFT, inverse transforms
 // are not normalized. Native execution is synchronous on the default stream
 // and asynchronous when a NativeStream is attached.
 func (ctx *FFTContext) ExecC2C(plan *FFTPlan, input, output *memory.Memory, direction FFTDirection) error {
+	return ctx.execFFT(plan, input, output, direction, FFTTypeC2C)
+}
+
+// ExecR2C executes an out-of-place real-to-complex FFT using cuFFT's packed
+// Hermitian layout.
+func (ctx *FFTContext) ExecR2C(plan *FFTPlan, input, output *memory.Memory) error {
+	return ctx.execFFT(plan, input, output, FFTForward, FFTTypeR2C)
+}
+
+// ExecC2R executes an out-of-place, unnormalized complex-to-real FFT.
+func (ctx *FFTContext) ExecC2R(plan *FFTPlan, input, output *memory.Memory) error {
+	return ctx.execFFT(plan, input, output, FFTInverse, FFTTypeC2R)
+}
+
+// ExecZ2Z executes a double-precision complex FFT. Inverse transforms are
+// unnormalized, as in cuFFT. In-place execution is supported.
+func (ctx *FFTContext) ExecZ2Z(plan *FFTPlan, input, output *memory.Memory, direction FFTDirection) error {
+	return ctx.execFFT(plan, input, output, direction, FFTTypeZ2Z)
+}
+
+// ExecD2Z executes an out-of-place double-precision real-to-complex FFT using
+// cuFFT's packed Hermitian layout.
+func (ctx *FFTContext) ExecD2Z(plan *FFTPlan, input, output *memory.Memory) error {
+	return ctx.execFFT(plan, input, output, FFTForward, FFTTypeD2Z)
+}
+
+// ExecZ2D executes an out-of-place, unnormalized double-precision inverse FFT.
+func (ctx *FFTContext) ExecZ2D(plan *FFTPlan, input, output *memory.Memory) error {
+	return ctx.execFFT(plan, input, output, FFTInverse, FFTTypeZ2D)
+}
+
+func (ctx *FFTContext) execFFT(plan *FFTPlan, input, output *memory.Memory, direction FFTDirection, kind FFTType) error {
 	if plan == nil {
 		return fmt.Errorf("invalid or destroyed plan")
 	}
@@ -296,8 +389,8 @@ func (ctx *FFTContext) ExecC2C(plan *FFTPlan, input, output *memory.Memory, dire
 	if plan.destroyed {
 		return fmt.Errorf("invalid or destroyed plan")
 	}
-	if plan.fftType != FFTTypeC2C {
-		return fmt.Errorf("plan type mismatch: expected C2C, got %v", plan.fftType)
+	if plan.fftType != kind {
+		return fmt.Errorf("plan type mismatch: expected %v, got %v", kind, plan.fftType)
 	}
 	if direction != FFTForward && direction != FFTInverse {
 		return fmt.Errorf("invalid FFT direction: %d", direction)
@@ -305,76 +398,41 @@ func (ctx *FFTContext) ExecC2C(plan *FFTPlan, input, output *memory.Memory, dire
 	if err := ctx.validateFFTBuffers(plan, input, output); err != nil {
 		return err
 	}
+	if kind != FFTTypeC2C && kind != FFTTypeZ2Z && input.Ptr() == output.Ptr() {
+		return fmt.Errorf("in-place real FFTs are not supported")
+	}
 	if plan.native {
 		return execNativeFFT(plan, input, output, direction)
 	}
 
-	if err := performComplexFFT(plan, input, output, direction); err != nil {
+	var err error
+	var operation string
+	switch kind {
+	case FFTTypeC2C:
+		operation = "cufftExecC2C"
+		err = performComplexFFT(plan, input, output, direction)
+	case FFTTypeR2C:
+		operation = "cufftExecR2C"
+		err = performRealToComplexFFT(plan, input, output)
+	case FFTTypeC2R:
+		operation = "cufftExecC2R"
+		err = performComplexToRealFFT(plan, input, output)
+	case FFTTypeZ2Z:
+		operation = "cufftExecZ2Z"
+		err = performComplexFFTDouble(plan, input, output, direction)
+	case FFTTypeD2Z:
+		operation = "cufftExecD2Z"
+		err = performRealToComplexFFTDouble(plan, input, output)
+	case FFTTypeZ2D:
+		operation = "cufftExecZ2D"
+		err = performComplexToRealFFTDouble(plan, input, output)
+	default:
+		return fmt.Errorf("unsupported FFT type %v", kind)
+	}
+	if err != nil {
 		return err
 	}
-
-	return simulateKernelExecution("cufftExecC2C", plan.elementCount(), 3)
-}
-
-// ExecR2C executes an out-of-place real-to-complex FFT using cuFFT's packed
-// Hermitian layout.
-func (ctx *FFTContext) ExecR2C(plan *FFTPlan, input, output *memory.Memory) error {
-	if plan == nil {
-		return fmt.Errorf("invalid or destroyed plan")
-	}
-	plan.mu.Lock()
-	defer plan.mu.Unlock()
-	if plan.destroyed {
-		return fmt.Errorf("invalid or destroyed plan")
-	}
-	if plan.fftType != FFTTypeR2C {
-		return fmt.Errorf("plan type mismatch: expected R2C, got %v", plan.fftType)
-	}
-	if err := ctx.validateFFTBuffers(plan, input, output); err != nil {
-		return err
-	}
-	if input.Ptr() == output.Ptr() {
-		return fmt.Errorf("in-place real FFTs are not supported")
-	}
-	if plan.native {
-		return execNativeFFT(plan, input, output, FFTForward)
-	}
-
-	if err := performRealToComplexFFT(plan, input, output); err != nil {
-		return err
-	}
-
-	return simulateKernelExecution("cufftExecR2C", plan.elementCount(), 3)
-}
-
-// ExecC2R executes an out-of-place, unnormalized complex-to-real FFT.
-func (ctx *FFTContext) ExecC2R(plan *FFTPlan, input, output *memory.Memory) error {
-	if plan == nil {
-		return fmt.Errorf("invalid or destroyed plan")
-	}
-	plan.mu.Lock()
-	defer plan.mu.Unlock()
-	if plan.destroyed {
-		return fmt.Errorf("invalid or destroyed plan")
-	}
-	if plan.fftType != FFTTypeC2R {
-		return fmt.Errorf("plan type mismatch: expected C2R, got %v", plan.fftType)
-	}
-	if err := ctx.validateFFTBuffers(plan, input, output); err != nil {
-		return err
-	}
-	if input.Ptr() == output.Ptr() {
-		return fmt.Errorf("in-place real FFTs are not supported")
-	}
-	if plan.native {
-		return execNativeFFT(plan, input, output, FFTInverse)
-	}
-
-	if err := performComplexToRealFFT(plan, input, output); err != nil {
-		return err
-	}
-
-	return simulateKernelExecution("cufftExecC2R", plan.elementCount(), 3)
+	return simulateKernelExecution(operation, plan.elementCount(), 3)
 }
 
 // SetStream sets the CUDA stream for the plan, synchronizing its prior native
@@ -563,20 +621,16 @@ func performRealToComplexFFT(plan *FFTPlan, input, output *memory.Memory) error 
 	if err != nil {
 		return err
 	}
-	outputData := make([]Complex64, plan.packedCount())
 	data := make([]complex64, size)
 	for i, value := range inputData {
 		data[i] = complex(value, 0)
 	}
 	dims := plan.dimensions()
 	transformFFT(data, dims, plan.batch, true)
-	last := dims[len(dims)-1]
-	packedLast := last/2 + 1
-	for row := range size / last {
-		for x := range packedLast {
-			value := data[row*last+x]
-			outputData[row*packedLast+x] = Complex64{Real: real(value), Imag: imag(value)}
-		}
+	packed := packFFTHermitian(data, dims)
+	outputData := make([]Complex64, len(packed))
+	for i, value := range packed {
+		outputData[i] = Complex64{Real: real(value), Imag: imag(value)}
 	}
 	return writeMathTypedMemory(output, outputData)
 }
@@ -587,14 +641,91 @@ func performComplexToRealFFT(plan *FFTPlan, input, output *memory.Memory) error 
 	if err != nil {
 		return err
 	}
-	outputData := make([]float32, size)
 	dims := plan.dimensions()
+	packed := make([]complex64, len(inputData))
+	for i, value := range inputData {
+		packed[i] = complex(value.Real, value.Imag)
+	}
+	data := unpackFFTHermitian(packed, dims, plan.batch, size)
+	transformFFT(data, dims, plan.batch, false)
+	outputData := make([]float32, size)
+	for i, value := range data {
+		outputData[i] = real(value)
+	}
+	return writeMathTypedMemory(output, outputData)
+}
+
+func performComplexFFTDouble(plan *FFTPlan, input, output *memory.Memory, direction FFTDirection) error {
+	inputData, err := readMathTypedMemory[Complex128](input, plan.elementCount())
+	if err != nil {
+		return err
+	}
+	data := make([]complex128, len(inputData))
+	for i, value := range inputData {
+		data[i] = complex(value.Real, value.Imag)
+	}
+	transformFFT(data, plan.dimensions(), plan.batch, direction == FFTForward)
+	for i, value := range data {
+		inputData[i] = Complex128{Real: real(value), Imag: imag(value)}
+	}
+	return writeMathTypedMemory(output, inputData)
+}
+
+func performRealToComplexFFTDouble(plan *FFTPlan, input, output *memory.Memory) error {
+	inputData, err := readMathTypedMemory[float64](input, plan.elementCount())
+	if err != nil {
+		return err
+	}
+	data := make([]complex128, len(inputData))
+	for i, value := range inputData {
+		data[i] = complex(value, 0)
+	}
+	dims := plan.dimensions()
+	transformFFT(data, dims, plan.batch, true)
+	packed := packFFTHermitian(data, dims)
+	outputData := make([]Complex128, len(packed))
+	for i, value := range packed {
+		outputData[i] = Complex128{Real: real(value), Imag: imag(value)}
+	}
+	return writeMathTypedMemory(output, outputData)
+}
+
+func performComplexToRealFFTDouble(plan *FFTPlan, input, output *memory.Memory) error {
+	inputData, err := readMathTypedMemory[Complex128](input, plan.packedCount())
+	if err != nil {
+		return err
+	}
+	packed := make([]complex128, len(inputData))
+	for i, value := range inputData {
+		packed[i] = complex(value.Real, value.Imag)
+	}
+	dims := plan.dimensions()
+	data := unpackFFTHermitian(packed, dims, plan.batch, plan.elementCount())
+	transformFFT(data, dims, plan.batch, false)
+	outputData := make([]float64, len(data))
+	for i, value := range data {
+		outputData[i] = real(value)
+	}
+	return writeMathTypedMemory(output, outputData)
+}
+
+func packFFTHermitian[T complex64 | complex128](data []T, dims []int) []T {
 	last := dims[len(dims)-1]
 	packedLast := last/2 + 1
-	perBatch := size / plan.batch
+	packed := make([]T, len(data)/last*packedLast)
+	for row := range len(data) / last {
+		copy(packed[row*packedLast:(row+1)*packedLast], data[row*last:row*last+packedLast])
+	}
+	return packed
+}
+
+func unpackFFTHermitian[T complex64 | complex128](packed []T, dims []int, batch, size int) []T {
+	last := dims[len(dims)-1]
+	packedLast := last/2 + 1
+	perBatch := size / batch
 	rows := perBatch / last
-	data := make([]complex64, size)
-	for b := range plan.batch {
+	data := make([]T, size)
+	for b := range batch {
 		for row := range rows {
 			for x := range last {
 				sourceRow, sourceX := row, x
@@ -610,23 +741,19 @@ func performComplexToRealFFT(plan *FFTPlan, input, output *memory.Memory) error 
 						stride *= dims[axis]
 					}
 				}
-				value := inputData[(b*rows+sourceRow)*packedLast+sourceX]
-				imaginary := value.Imag
+				value := packed[(b*rows+sourceRow)*packedLast+sourceX]
 				if conjugate {
-					imaginary = -imaginary
+					z := complex128(value)
+					value = T(complex(real(z), -imag(z)))
 				}
-				data[b*perBatch+row*last+x] = complex(value.Real, imaginary)
+				data[b*perBatch+row*last+x] = value
 			}
 		}
 	}
-	transformFFT(data, dims, plan.batch, false)
-	for i, value := range data {
-		outputData[i] = real(value)
-	}
-	return writeMathTypedMemory(output, outputData)
+	return data
 }
 
-func transformFFT(data []complex64, dims []int, batch int, forward bool) {
+func transformFFT[T complex64 | complex128](data []T, dims []int, batch int, forward bool) {
 	perBatch := len(data) / batch
 	for b := range batch {
 		stride := 1
@@ -634,7 +761,7 @@ func transformFFT(data []complex64, dims []int, batch int, forward bool) {
 			n := dims[axis]
 			for base := 0; base < perBatch; base += n * stride {
 				for offset := range stride {
-					line := make([]complex64, n)
+					line := make([]T, n)
 					for i := range n {
 						line[i] = data[b*perBatch+base+offset+i*stride]
 					}
@@ -650,13 +777,13 @@ func transformFFT(data []complex64, dims []int, batch int, forward bool) {
 }
 
 // DFT implementations using Cooley-Tukey algorithm
-func performDFT1D(data []complex64, forward bool) []complex64 {
+func performDFT1D[T complex64 | complex128](data []T, forward bool) []T {
 	n := len(data)
 	if n <= 1 {
 		return data
 	}
 	if !isPowerOfTwo(n) {
-		result := make([]complex64, n)
+		result := make([]T, n)
 		sign := -1.0
 		if !forward {
 			sign = 1
@@ -664,14 +791,14 @@ func performDFT1D(data []complex64, forward bool) []complex64 {
 		for k := range n {
 			for j, value := range data {
 				angle := sign * 2 * math.Pi * float64(k) * float64(j) / float64(n)
-				result[k] += value * complex(float32(math.Cos(angle)), float32(math.Sin(angle)))
+				result[k] += value * T(complex(math.Cos(angle), math.Sin(angle)))
 			}
 		}
 		return result
 	}
 
 	// Bit-reverse the data
-	result := make([]complex64, n)
+	result := make([]T, n)
 	copy(result, data)
 	bitReverse(result)
 
@@ -681,16 +808,16 @@ func performDFT1D(data []complex64, forward bool) []complex64 {
 		if !forward {
 			angle = -angle
 		}
-		wlen := complex(float32(math.Cos(angle)), float32(math.Sin(angle)))
+		wlen := T(complex(math.Cos(angle), math.Sin(angle)))
 
 		for i := 0; i < n; i += length {
-			w := complex64(1)
+			w := T(1)
 			for j := 0; j < length/2; j++ {
 				u := result[i+j]
 				v := result[i+j+length/2] * w
 				result[i+j] = u + v
 				result[i+j+length/2] = u - v
-				w *= complex64(wlen)
+				w *= wlen
 			}
 		}
 	}
@@ -698,7 +825,7 @@ func performDFT1D(data []complex64, forward bool) []complex64 {
 	return result
 }
 
-func bitReverse(data []complex64) {
+func bitReverse[T complex64 | complex128](data []T) {
 	n := len(data)
 	j := 0
 	for i := 1; i < n; i++ {

@@ -81,6 +81,30 @@ func (blas *NativeBLAS) DGEMMEx(a, b, c *memory.Memory, m, n, k, lda, ldb, ldc i
 	})
 }
 
+// SGEMMStridedBatched enqueues row-major float32 GEMMs. Batch strides are
+// positive element offsets; output matrices must not overlap.
+func (blas *NativeBLAS) SGEMMStridedBatched(a, b, c *memory.Memory, m, n, k, lda, ldb, ldc int, opA, opB BLASOperation,
+	strideA, strideB, strideC int64, batch int, alpha, beta float32) error {
+	if err := blas.validateGEMMBatched(a, b, c, m, n, k, lda, ldb, ldc, opA, opB, strideA, strideB, strideC, batch, 4); err != nil {
+		return err
+	}
+	return blas.withHandle([]*memory.Memory{a, b, c}, func(handle unsafe.Pointer) error {
+		return nativeBLASSGEMMStridedBatched(handle, a, b, c, m, n, k, lda, ldb, ldc, opA, opB, strideA, strideB, strideC, batch, alpha, beta)
+	})
+}
+
+// DGEMMStridedBatched enqueues row-major float64 GEMMs. Batch strides are
+// positive element offsets; output matrices must not overlap.
+func (blas *NativeBLAS) DGEMMStridedBatched(a, b, c *memory.Memory, m, n, k, lda, ldb, ldc int, opA, opB BLASOperation,
+	strideA, strideB, strideC int64, batch int, alpha, beta float64) error {
+	if err := blas.validateGEMMBatched(a, b, c, m, n, k, lda, ldb, ldc, opA, opB, strideA, strideB, strideC, batch, 8); err != nil {
+		return err
+	}
+	return blas.withHandle([]*memory.Memory{a, b, c}, func(handle unsafe.Pointer) error {
+		return nativeBLASDGEMMStridedBatched(handle, a, b, c, m, n, k, lda, ldb, ldc, opA, opB, strideA, strideB, strideC, batch, alpha, beta)
+	})
+}
+
 func (blas *NativeBLAS) validateGEMM(a, b, c *memory.Memory, m, n, k, lda, ldb, ldc int, opA, opB BLASOperation, elementSize int) error {
 	if blas == nil {
 		return fmt.Errorf("nil cuBLAS handle")
@@ -127,6 +151,48 @@ func (blas *NativeBLAS) validateGEMM(a, b, c *memory.Memory, m, n, k, lda, ldb, 
 	}
 	if c.Ptr() == a.Ptr() || c.Ptr() == b.Ptr() {
 		return fmt.Errorf("output matrix cannot alias an input")
+	}
+	return nil
+}
+
+func (blas *NativeBLAS) validateGEMMBatched(a, b, c *memory.Memory, m, n, k, lda, ldb, ldc int, opA, opB BLASOperation,
+	strideA, strideB, strideC int64, batch, elementSize int) error {
+	if err := blas.validateGEMM(a, b, c, m, n, k, lda, ldb, ldc, opA, opB, elementSize); err != nil {
+		return err
+	}
+	if batch <= 0 || int64(batch) > math.MaxInt32 {
+		return fmt.Errorf("batch count must be a positive 32-bit value")
+	}
+	aRows, aCols, bRows, bCols := m, k, k, n
+	if opA == BLASOpT {
+		aRows, aCols = k, m
+	}
+	if opB == BLASOpT {
+		bRows, bCols = n, k
+	}
+	for _, entry := range []struct {
+		name          string
+		mem           *memory.Memory
+		rows, cols    int
+		rowStride     int
+		batchStride   int64
+		disjointBatch bool
+	}{
+		{"A", a, aRows, aCols, lda, strideA, false},
+		{"B", b, bRows, bCols, ldb, strideB, false},
+		{"C", c, m, n, ldc, strideC, true},
+	} {
+		if entry.batchStride <= 0 {
+			return fmt.Errorf("matrix %s batch stride must be positive", entry.name)
+		}
+		footprint := uint64(entry.rows-1)*uint64(entry.rowStride) + uint64(entry.cols)
+		if batch > 1 && entry.disjointBatch && uint64(entry.batchStride) < footprint {
+			return fmt.Errorf("output batches must not overlap")
+		}
+		capacity := uint64(entry.mem.Size()) / uint64(elementSize)
+		if batch > 1 && uint64(entry.batchStride) > (capacity-footprint)/uint64(batch-1) {
+			return fmt.Errorf("matrix %s buffer is too small for the batch", entry.name)
+		}
 	}
 	return nil
 }

@@ -5,6 +5,8 @@ import (
 	"image"
 	"image/color"
 	"image/jpeg"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stitch1968/gocuda/memory"
@@ -65,6 +67,7 @@ func TestNVJPEGEncode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateJpegEncoder failed: %v", err)
 	}
+
 	defer encoder.Destroy()
 
 	imgData, err := memory.Alloc(2 * 2 * 3)
@@ -91,5 +94,95 @@ func TestNVJPEGEncode(t *testing.T) {
 	}
 	if _, err := jpeg.Decode(bytes.NewReader(encoded)); err != nil {
 		t.Fatalf("encoded JPEG is invalid: %v", err)
+	}
+}
+
+func TestNVJPEGDecoderLifecycle(t *testing.T) {
+	if _, err := CreateJpegDecoder(JpegBackend(-1)); err == nil {
+		t.Fatal("expected invalid decoder backend to fail")
+	}
+	var nilDecoder *JpegDecoderState
+	if _, _, _, err := nilDecoder.DecodeJpeg(nil, JpegDecodeParams{}); err == nil {
+		t.Fatal("expected nil decoder to fail")
+	}
+	if err := nilDecoder.Synchronize(); err == nil {
+		t.Fatal("expected nil decoder synchronization to fail")
+	}
+	decoder, err := CreateJpegDecoder(JpegBackendDefault)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := decoder.Synchronize(); err != nil {
+		t.Fatal(err)
+	}
+	if err := decoder.Destroy(); err != nil {
+		t.Fatal(err)
+	}
+	if err := decoder.Destroy(); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := decoder.DecodeJpeg(nil, JpegDecodeParams{}); err == nil {
+		t.Fatal("expected destroyed decoder to reject decoding")
+	}
+	if err := decoder.Synchronize(); err == nil {
+		t.Fatal("expected destroyed decoder synchronization to fail")
+	}
+}
+
+func TestNVJPEGConcurrentDecodeAndDestroy(t *testing.T) {
+	var encoded bytes.Buffer
+	if err := jpeg.Encode(&encoded, image.NewRGBA(image.Rect(0, 0, 2, 2)), nil); err != nil {
+		t.Fatal(err)
+	}
+	decoder, err := CreateJpegDecoder(JpegBackendDefault)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := decoder.Destroy(); err != nil {
+			t.Error(err)
+		}
+	})
+	output, _, _, err := decoder.DecodeJpeg(encoded.Bytes(), JpegDecodeParams{OutputFormat: JpegFormatRGB})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := output.Free(); err != nil {
+		t.Fatal(err)
+	}
+	const workers = 4
+	start := make(chan struct{})
+	errs := make(chan error, workers+1)
+	var wg sync.WaitGroup
+	for range workers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			output, _, _, err := decoder.DecodeJpeg(encoded.Bytes(), JpegDecodeParams{OutputFormat: JpegFormatRGB})
+			if err != nil {
+				if !strings.Contains(err.Error(), "JPEG decoder has been destroyed") {
+					errs <- err
+				}
+				return
+			}
+			if err := output.Free(); err != nil {
+				errs <- err
+			}
+		}()
+	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		<-start
+		if err := decoder.Destroy(); err != nil {
+			errs <- err
+		}
+	}()
+	close(start)
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Error(err)
 	}
 }

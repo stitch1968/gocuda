@@ -67,6 +67,14 @@ func createNativeSparseContext() (*SparseContext, error) {
 	return &SparseContext{handle: unsafe.Pointer(handle), native: true, deviceID: deviceID}, nil
 }
 
+func setNativeSparseStream(ctx *SparseContext, stream unsafe.Pointer) error {
+	status := C.cusparseSetStream(C.cusparseHandle_t(ctx.handle), C.cudaStream_t(stream))
+	if status != C.CUSPARSE_STATUS_SUCCESS {
+		return cusparseError("cusparseSetStream", status)
+	}
+	return nil
+}
+
 func createNativeSparseMatrixDescriptor(A *SparseMatrix) (C.cusparseSpMatDescr_t, error) {
 	var matA C.cusparseSpMatDescr_t
 	var status C.cusparseStatus_t
@@ -134,7 +142,7 @@ func (ctx *SparseContext) finishNativeResource(operationErr *error, cleanup func
 	}
 }
 
-func nativeSpMV(ctx *SparseContext, alpha float32, A *SparseMatrix, x *memory.Memory, beta float32, y *memory.Memory) (err error) {
+func nativeSpMV(ctx *SparseContext, alpha float32, A *SparseMatrix, x *memory.Memory, beta float32, y *memory.Memory, opA BLASOperation) (err error) {
 	matA, err := createNativeSparseMatrixDescriptor(A)
 	if err != nil {
 		return err
@@ -148,8 +156,14 @@ func nativeSpMV(ctx *SparseContext, alpha float32, A *SparseMatrix, x *memory.Me
 		})
 	}()
 
+	inputLength, outputLength := A.cols, A.rows
+	operation := C.cusparseOperation_t(C.CUSPARSE_OPERATION_NON_TRANSPOSE)
+	if opA == BLASOpT {
+		inputLength, outputLength = A.rows, A.cols
+		operation = C.cusparseOperation_t(C.CUSPARSE_OPERATION_TRANSPOSE)
+	}
 	var vecX C.cusparseDnVecDescr_t
-	status := C.cusparseCreateDnVec(&vecX, C.int64_t(A.cols), x.Ptr(), C.CUDA_R_32F)
+	status := C.cusparseCreateDnVec(&vecX, C.int64_t(inputLength), x.Ptr(), C.CUDA_R_32F)
 	if status != C.CUSPARSE_STATUS_SUCCESS {
 		return cusparseError("cusparseCreateDnVec(x)", status)
 	}
@@ -163,7 +177,7 @@ func nativeSpMV(ctx *SparseContext, alpha float32, A *SparseMatrix, x *memory.Me
 	}()
 
 	var vecY C.cusparseDnVecDescr_t
-	status = C.cusparseCreateDnVec(&vecY, C.int64_t(A.rows), y.Ptr(), C.CUDA_R_32F)
+	status = C.cusparseCreateDnVec(&vecY, C.int64_t(outputLength), y.Ptr(), C.CUDA_R_32F)
 	if status != C.CUSPARSE_STATUS_SUCCESS {
 		return cusparseError("cusparseCreateDnVec(y)", status)
 	}
@@ -181,7 +195,7 @@ func nativeSpMV(ctx *SparseContext, alpha float32, A *SparseMatrix, x *memory.Me
 	var bufferSize C.size_t
 	status = C.cusparseSpMV_bufferSize(
 		C.cusparseHandle_t(ctx.handle),
-		C.CUSPARSE_OPERATION_NON_TRANSPOSE,
+		operation,
 		unsafePointer(&alphaValue),
 		matA,
 		vecX,
@@ -203,7 +217,7 @@ func nativeSpMV(ctx *SparseContext, alpha float32, A *SparseMatrix, x *memory.Me
 
 	status = C.cusparseSpMV(
 		C.cusparseHandle_t(ctx.handle),
-		C.CUSPARSE_OPERATION_NON_TRANSPOSE,
+		operation,
 		unsafePointer(&alphaValue),
 		matA,
 		vecX,
@@ -216,10 +230,106 @@ func nativeSpMV(ctx *SparseContext, alpha float32, A *SparseMatrix, x *memory.Me
 	if status != C.CUSPARSE_STATUS_SUCCESS {
 		return cusparseError("cusparseSpMV", status)
 	}
-	return internal.CudaDefaultStreamSynchronizeOnDevice(ctx.deviceID)
+	return ctx.synchronizeOperation()
 }
 
-func nativeSpSVCSR(ctx *SparseContext, A *SparseMatrix, b, x *memory.Memory, lower bool) (err error) {
+func nativeSpMMDense(ctx *SparseContext, alpha float32, A *SparseMatrix, B *memory.Memory, beta float32, output *memory.Memory, batch sparseDenseBatch) (err error) {
+	matA, err := createNativeSparseMatrixDescriptor(A)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		ctx.finishNativeResource(&err, func() error {
+			if status := C.cusparseDestroySpMat(matA); status != C.CUSPARSE_STATUS_SUCCESS {
+				return cusparseError("cusparseDestroySpMat", status)
+			}
+			return nil
+		})
+	}()
+	outputRows, inner := A.rows, A.cols
+	operationA, operationB := C.CUSPARSE_OPERATION_NON_TRANSPOSE, C.CUSPARSE_OPERATION_NON_TRANSPOSE
+	if batch.opA == BLASOpT {
+		outputRows, inner = A.cols, A.rows
+		operationA = C.CUSPARSE_OPERATION_TRANSPOSE
+	}
+	bRows, bCols := inner, batch.n
+	if batch.opB == BLASOpT {
+		bRows, bCols = batch.n, inner
+		operationB = C.CUSPARSE_OPERATION_TRANSPOSE
+	}
+	var matB C.cusparseDnMatDescr_t
+	status := C.cusparseCreateDnMat(&matB, C.int64_t(bRows), C.int64_t(bCols), C.int64_t(batch.ldb), B.Ptr(), C.CUDA_R_32F, C.CUSPARSE_ORDER_ROW)
+	if status != C.CUSPARSE_STATUS_SUCCESS {
+		return cusparseError("cusparseCreateDnMat(B)", status)
+	}
+	defer func() {
+		ctx.finishNativeResource(&err, func() error {
+			if status := C.cusparseDestroyDnMat(matB); status != C.CUSPARSE_STATUS_SUCCESS {
+				return cusparseError("cusparseDestroyDnMat(B)", status)
+			}
+			return nil
+		})
+	}()
+	var matC C.cusparseDnMatDescr_t
+	status = C.cusparseCreateDnMat(&matC, C.int64_t(outputRows), C.int64_t(batch.n), C.int64_t(batch.ldc), output.Ptr(), C.CUDA_R_32F, C.CUSPARSE_ORDER_ROW)
+	if status != C.CUSPARSE_STATUS_SUCCESS {
+		return cusparseError("cusparseCreateDnMat(C)", status)
+	}
+	defer func() {
+		ctx.finishNativeResource(&err, func() error {
+			if status := C.cusparseDestroyDnMat(matC); status != C.CUSPARSE_STATUS_SUCCESS {
+				return cusparseError("cusparseDestroyDnMat(C)", status)
+			}
+			return nil
+		})
+	}()
+	algorithm := C.cusparseSpMMAlg_t(C.CUSPARSE_SPMM_ALG_DEFAULT)
+	if batch.count > 1 {
+		switch A.format {
+		case MatrixFormatCSR:
+			status = C.cusparseCsrSetStridedBatch(matA, C.int(batch.count), 0, 0)
+			algorithm = C.cusparseSpMMAlg_t(C.CUSPARSE_SPMM_CSR_ALG2)
+		case MatrixFormatCOO:
+			status = C.cusparseCooSetStridedBatch(matA, C.int(batch.count), 0)
+			algorithm = C.cusparseSpMMAlg_t(C.CUSPARSE_SPMM_COO_ALG4)
+		default:
+			return fmt.Errorf("unsupported native sparse batch format %d", A.format)
+		}
+		if status != C.CUSPARSE_STATUS_SUCCESS {
+			return cusparseError("set sparse broadcast batch", status)
+		}
+		status = C.cusparseDnMatSetStridedBatch(matB, C.int(batch.count), C.int64_t(batch.strideB))
+		if status != C.CUSPARSE_STATUS_SUCCESS {
+			return cusparseError("cusparseDnMatSetStridedBatch(B)", status)
+		}
+		status = C.cusparseDnMatSetStridedBatch(matC, C.int(batch.count), C.int64_t(batch.strideC))
+		if status != C.CUSPARSE_STATUS_SUCCESS {
+			return cusparseError("cusparseDnMatSetStridedBatch(C)", status)
+		}
+	}
+	alphaValue, betaValue := C.float(alpha), C.float(beta)
+	var bufferSize C.size_t
+	status = C.cusparseSpMM_bufferSize(C.cusparseHandle_t(ctx.handle), C.cusparseOperation_t(operationA),
+		C.cusparseOperation_t(operationB), unsafePointer(&alphaValue), matA, matB,
+		unsafePointer(&betaValue), matC, C.CUDA_R_32F, algorithm, &bufferSize)
+	if status != C.CUSPARSE_STATUS_SUCCESS {
+		return cusparseError("cusparseSpMM_bufferSize", status)
+	}
+	workspace, err := allocateNativeSparseWorkspace(bufferSize)
+	if err != nil {
+		return err
+	}
+	defer func() { ctx.finishWorkspace(workspace, &err) }()
+	status = C.cusparseSpMM(C.cusparseHandle_t(ctx.handle), C.cusparseOperation_t(operationA),
+		C.cusparseOperation_t(operationB), unsafePointer(&alphaValue), matA, matB,
+		unsafePointer(&betaValue), matC, C.CUDA_R_32F, algorithm, memoryPtrOrNil(workspace))
+	if status != C.CUSPARSE_STATUS_SUCCESS {
+		return cusparseError("cusparseSpMM", status)
+	}
+	return ctx.synchronizeOperation()
+}
+
+func nativeSpSV(ctx *SparseContext, A *SparseMatrix, b, x *memory.Memory, lower bool, opA BLASOperation) (err error) {
 	matA, err := createNativeSparseMatrixDescriptor(A)
 	if err != nil {
 		return err
@@ -279,8 +389,12 @@ func nativeSpSVCSR(ctx *SparseContext, A *SparseMatrix, b, x *memory.Memory, low
 		})
 	}()
 	alpha := C.float(1)
+	operation := C.cusparseOperation_t(C.CUSPARSE_OPERATION_NON_TRANSPOSE)
+	if opA == BLASOpT {
+		operation = C.cusparseOperation_t(C.CUSPARSE_OPERATION_TRANSPOSE)
+	}
 	var bufferSize C.size_t
-	status = C.cusparseSpSV_bufferSize(C.cusparseHandle_t(ctx.handle), C.CUSPARSE_OPERATION_NON_TRANSPOSE,
+	status = C.cusparseSpSV_bufferSize(C.cusparseHandle_t(ctx.handle), operation,
 		unsafePointer(&alpha), matA, vecB, vecX, C.CUDA_R_32F, C.CUSPARSE_SPSV_ALG_DEFAULT, descriptor, &bufferSize)
 	if status != C.CUSPARSE_STATUS_SUCCESS {
 		return cusparseError("cusparseSpSV_bufferSize", status)
@@ -290,17 +404,17 @@ func nativeSpSVCSR(ctx *SparseContext, A *SparseMatrix, b, x *memory.Memory, low
 		return err
 	}
 	defer func() { ctx.finishWorkspace(buffer, &err) }()
-	status = C.cusparseSpSV_analysis(C.cusparseHandle_t(ctx.handle), C.CUSPARSE_OPERATION_NON_TRANSPOSE,
+	status = C.cusparseSpSV_analysis(C.cusparseHandle_t(ctx.handle), operation,
 		unsafePointer(&alpha), matA, vecB, vecX, C.CUDA_R_32F, C.CUSPARSE_SPSV_ALG_DEFAULT, descriptor, memoryPtrOrNil(buffer))
 	if status != C.CUSPARSE_STATUS_SUCCESS {
 		return cusparseError("cusparseSpSV_analysis", status)
 	}
-	status = C.cusparseSpSV_solve(C.cusparseHandle_t(ctx.handle), C.CUSPARSE_OPERATION_NON_TRANSPOSE,
+	status = C.cusparseSpSV_solve(C.cusparseHandle_t(ctx.handle), operation,
 		unsafePointer(&alpha), matA, vecB, vecX, C.CUDA_R_32F, C.CUSPARSE_SPSV_ALG_DEFAULT, descriptor)
 	if status != C.CUSPARSE_STATUS_SUCCESS {
 		return cusparseError("cusparseSpSV_solve", status)
 	}
-	return internal.CudaDefaultStreamSynchronizeOnDevice(ctx.deviceID)
+	return ctx.synchronizeOperation()
 }
 
 func nativeSpGEMMCSR(ctx *SparseContext, A, B *SparseMatrix) (output *SparseMatrix, err error) {
@@ -420,7 +534,88 @@ func nativeSpGEMMCSR(ctx *SparseContext, A, B *SparseMatrix) (output *SparseMatr
 	if status != C.CUSPARSE_STATUS_SUCCESS {
 		return output, cusparseError("cusparseSpGEMM_copy", status)
 	}
-	if err := internal.CudaDefaultStreamSynchronizeOnDevice(ctx.deviceID); err != nil {
+	if err := ctx.synchronizeOperation(); err != nil {
+		return output, err
+	}
+	return output, nil
+}
+
+func nativeSparseAdd(ctx *SparseContext, alpha float32, A *SparseMatrix, beta float32, B *SparseMatrix) (output *SparseMatrix, err error) {
+	var analysis *SparseMatrix
+	defer func() {
+		if err == nil && analysis != nil {
+			if cleanupErr := analysis.Destroy(); cleanupErr != nil {
+				err = cleanupErr
+			} else {
+				analysis = nil
+			}
+		}
+		if err != nil {
+			if analysis != nil {
+				ctx.pendingMatrices = append(ctx.pendingMatrices, analysis)
+			}
+			if output != nil {
+				ctx.pendingMatrices = append(ctx.pendingMatrices, output)
+				output = nil
+			}
+		}
+	}()
+	analysis, err = allocateSparseMatrix(A.rows, A.cols, 0, MatrixFormatCSR)
+	if err != nil {
+		return nil, err
+	}
+	var descriptor C.cusparseMatDescr_t
+	status := C.cusparseCreateMatDescr(&descriptor)
+	if status != C.CUSPARSE_STATUS_SUCCESS {
+		return nil, cusparseError("cusparseCreateMatDescr", status)
+	}
+	defer func() {
+		ctx.finishNativeResource(&err, func() error {
+			if status := C.cusparseDestroyMatDescr(descriptor); status != C.CUSPARSE_STATUS_SUCCESS {
+				return cusparseError("cusparseDestroyMatDescr", status)
+			}
+			return nil
+		})
+	}()
+	alphaValue, betaValue := C.float(alpha), C.float(beta)
+	var bufferSize C.size_t
+	status = C.cusparseScsrgeam2_bufferSizeExt(C.cusparseHandle_t(ctx.handle), C.int(A.rows), C.int(A.cols),
+		&alphaValue, descriptor, C.int(A.nnz), (*C.float)(A.values.Ptr()), (*C.int)(A.rowPtrs.Ptr()), (*C.int)(A.colInds.Ptr()),
+		&betaValue, descriptor, C.int(B.nnz), (*C.float)(B.values.Ptr()), (*C.int)(B.rowPtrs.Ptr()), (*C.int)(B.colInds.Ptr()),
+		descriptor, nil, (*C.int)(analysis.rowPtrs.Ptr()), nil, &bufferSize)
+	if status != C.CUSPARSE_STATUS_SUCCESS {
+		return nil, cusparseError("cusparseScsrgeam2_bufferSizeExt", status)
+	}
+	workspace, err := allocateNativeSparseWorkspace(bufferSize)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { ctx.finishWorkspace(workspace, &err) }()
+	var nnz C.int
+	status = C.cusparseXcsrgeam2Nnz(C.cusparseHandle_t(ctx.handle), C.int(A.rows), C.int(A.cols),
+		descriptor, C.int(A.nnz), (*C.int)(A.rowPtrs.Ptr()), (*C.int)(A.colInds.Ptr()),
+		descriptor, C.int(B.nnz), (*C.int)(B.rowPtrs.Ptr()), (*C.int)(B.colInds.Ptr()),
+		descriptor, (*C.int)(analysis.rowPtrs.Ptr()), &nnz, memoryPtrOrNil(workspace))
+	if status != C.CUSPARSE_STATUS_SUCCESS {
+		return nil, cusparseError("cusparseXcsrgeam2Nnz", status)
+	}
+	if nnz < 0 {
+		return nil, fmt.Errorf("cuSPARSE returned invalid sparse addition nonzero count")
+	}
+	output, err = allocateSparseMatrix(A.rows, A.cols, int(nnz), MatrixFormatCSR)
+	if err != nil {
+		return nil, err
+	}
+	analysis.rowPtrs, output.rowPtrs = output.rowPtrs, analysis.rowPtrs
+	status = C.cusparseScsrgeam2(C.cusparseHandle_t(ctx.handle), C.int(A.rows), C.int(A.cols),
+		&alphaValue, descriptor, C.int(A.nnz), (*C.float)(A.values.Ptr()), (*C.int)(A.rowPtrs.Ptr()), (*C.int)(A.colInds.Ptr()),
+		&betaValue, descriptor, C.int(B.nnz), (*C.float)(B.values.Ptr()), (*C.int)(B.rowPtrs.Ptr()), (*C.int)(B.colInds.Ptr()),
+		descriptor, (*C.float)(output.values.Ptr()), (*C.int)(output.rowPtrs.Ptr()), (*C.int)(output.colInds.Ptr()),
+		memoryPtrOrNil(workspace))
+	if status != C.CUSPARSE_STATUS_SUCCESS {
+		return output, cusparseError("cusparseScsrgeam2", status)
+	}
+	if err := ctx.synchronizeOperation(); err != nil {
 		return output, err
 	}
 	return output, nil
@@ -473,13 +668,13 @@ func nativeSparseToDense(ctx *SparseContext, matrix *SparseMatrix) (output *memo
 	if status != C.CUSPARSE_STATUS_SUCCESS {
 		return output, cusparseError("cusparseSparseToDense", status)
 	}
-	if err := internal.CudaDefaultStreamSynchronizeOnDevice(ctx.deviceID); err != nil {
+	if err := ctx.synchronizeOperation(); err != nil {
 		return output, err
 	}
 	return output, nil
 }
 
-func nativeDenseToSparseCSR(ctx *SparseContext, input *memory.Memory, rows, cols int) (output *SparseMatrix, err error) {
+func nativeDenseToSparse(ctx *SparseContext, input *memory.Memory, rows, cols int, format MatrixFormat) (output *SparseMatrix, err error) {
 	var analysis *SparseMatrix
 	defer func() {
 		if err == nil && analysis != nil {
@@ -499,9 +694,11 @@ func nativeDenseToSparseCSR(ctx *SparseContext, input *memory.Memory, rows, cols
 			}
 		}
 	}()
-	analysis, err = allocateSparseMatrix(rows, cols, 0, MatrixFormatCSR)
-	if err != nil {
-		return nil, err
+	if format == MatrixFormatCSR {
+		analysis, err = allocateSparseMatrix(rows, cols, 0, MatrixFormatCSR)
+		if err != nil {
+			return nil, err
+		}
 	}
 	var dense C.cusparseDnMatDescr_t
 	status := C.cusparseCreateDnMat(&dense, C.int64_t(rows), C.int64_t(cols), C.int64_t(cols),
@@ -518,11 +715,22 @@ func nativeDenseToSparseCSR(ctx *SparseContext, input *memory.Memory, rows, cols
 		})
 	}()
 	var sparse C.cusparseSpMatDescr_t
-	status = C.cusparseCreateCsr(&sparse, C.int64_t(rows), C.int64_t(cols), 0,
-		analysis.rowPtrs.Ptr(), nil, nil, C.CUSPARSE_INDEX_32I, C.CUSPARSE_INDEX_32I,
-		C.CUSPARSE_INDEX_BASE_ZERO, C.CUDA_R_32F)
+	var descriptorName string
+	switch format {
+	case MatrixFormatCSR:
+		descriptorName = "cusparseCreateCsr"
+		status = C.cusparseCreateCsr(&sparse, C.int64_t(rows), C.int64_t(cols), 0,
+			analysis.rowPtrs.Ptr(), nil, nil, C.CUSPARSE_INDEX_32I, C.CUSPARSE_INDEX_32I,
+			C.CUSPARSE_INDEX_BASE_ZERO, C.CUDA_R_32F)
+	case MatrixFormatCOO:
+		descriptorName = "cusparseCreateCoo"
+		status = C.cusparseCreateCoo(&sparse, C.int64_t(rows), C.int64_t(cols), 0,
+			nil, nil, nil, C.CUSPARSE_INDEX_32I, C.CUSPARSE_INDEX_BASE_ZERO, C.CUDA_R_32F)
+	default:
+		return nil, fmt.Errorf("unsupported native dense-to-sparse format %d", format)
+	}
 	if status != C.CUSPARSE_STATUS_SUCCESS {
-		return nil, cusparseError("cusparseCreateCsr", status)
+		return nil, cusparseError(descriptorName, status)
 	}
 	defer func() {
 		ctx.finishNativeResource(&err, func() error {
@@ -556,21 +764,28 @@ func nativeDenseToSparseCSR(ctx *SparseContext, input *memory.Memory, rows, cols
 	if int64(outputRows) != int64(rows) || int64(outputCols) != int64(cols) || nnz < 0 || int64(nnz) > int64(^uint32(0)>>1) {
 		return nil, fmt.Errorf("cuSPARSE returned invalid dense-to-sparse dimensions or nonzero count")
 	}
-	output, err = allocateSparseMatrix(rows, cols, int(nnz), MatrixFormatCSR)
+	output, err = allocateSparseMatrix(rows, cols, int(nnz), format)
 	if err != nil {
 		return nil, err
 	}
-	analysis.rowPtrs, output.rowPtrs = output.rowPtrs, analysis.rowPtrs
-	status = C.cusparseCsrSetPointers(sparse, output.rowPtrs.Ptr(), output.colInds.Ptr(), output.values.Ptr())
+	var setterName string
+	if format == MatrixFormatCSR {
+		analysis.rowPtrs, output.rowPtrs = output.rowPtrs, analysis.rowPtrs
+		setterName = "cusparseCsrSetPointers"
+		status = C.cusparseCsrSetPointers(sparse, output.rowPtrs.Ptr(), output.colInds.Ptr(), output.values.Ptr())
+	} else {
+		setterName = "cusparseCooSetPointers"
+		status = C.cusparseCooSetPointers(sparse, output.rowPtrs.Ptr(), output.colInds.Ptr(), output.values.Ptr())
+	}
 	if status != C.CUSPARSE_STATUS_SUCCESS {
-		return output, cusparseError("cusparseCsrSetPointers", status)
+		return output, cusparseError(setterName, status)
 	}
 	status = C.cusparseDenseToSparse_convert(C.cusparseHandle_t(ctx.handle), dense, sparse,
 		C.CUSPARSE_DENSETOSPARSE_ALG_DEFAULT, memoryPtrOrNil(workspace))
 	if status != C.CUSPARSE_STATUS_SUCCESS {
 		return output, cusparseError("cusparseDenseToSparse_convert", status)
 	}
-	if err := internal.CudaDefaultStreamSynchronizeOnDevice(ctx.deviceID); err != nil {
+	if err := ctx.synchronizeOperation(); err != nil {
 		return output, err
 	}
 	return output, nil

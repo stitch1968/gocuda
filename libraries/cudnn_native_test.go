@@ -3,11 +3,175 @@
 package libraries
 
 import (
+	"reflect"
 	"testing"
 
 	cuda "github.com/stitch1968/gocuda"
 	"github.com/stitch1968/gocuda/memory"
 )
+
+func TestCuDNNNativeNDimDescriptors(t *testing.T) {
+	if err := cuda.Initialize(); err != nil {
+		t.Fatal(err)
+	}
+	if !cuda.ShouldUseCuda() || !cudnnNativeAvailable() {
+		t.Skip("native cuDNN unavailable")
+	}
+	input, err := CreateTensorDescriptor()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer input.DestroyTensorDescriptor()
+	filter, err := CreateFilterDescriptor()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer filter.DestroyFilterDescriptor()
+	conv, err := CreateConvolutionDescriptor()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conv.DestroyConvolutionDescriptor()
+	if err := input.SetTensorNdDescriptor(DNNDataFloat, []int{2, 3, 7, 9}, []int{189, 63, 9, 1}); err != nil {
+		t.Fatal(err)
+	}
+	if err := filter.SetFilterNdDescriptor(DNNDataFloat, DNNTensorNCHW, []int{4, 3, 3, 2}); err != nil {
+		t.Fatal(err)
+	}
+	if err := filter.SetFilterNdDescriptor(DNNDataFloat, DNNTensorNCHW, []int{1, 1, 1, 1, 1, 1, 1, 1, 1}); err == nil {
+		t.Fatal("expected cuDNN to reject an unsupported filter rank")
+	}
+	if !reflect.DeepEqual(filter.dimensions, []int{4, 3, 3, 2}) {
+		t.Fatalf("failed native filter update changed metadata: %v", filter.dimensions)
+	}
+	if err := conv.SetConvolution2dDescriptor(1, 0, 2, 2, 1, 1, DNNCrossCorrelation, DNNDataFloat); err != nil {
+		t.Fatal(err)
+	}
+	n, c, h, w, err := conv.GetConvolution2dForwardOutputDim(input, filter)
+	if err != nil || n != 2 || c != 4 || h != 4 || w != 4 {
+		t.Fatalf("native N-dimensional output shape = %d,%d,%d,%d, error = %v", n, c, h, w, err)
+	}
+}
+
+func TestCuDNNNativeNDimTensorStrides(t *testing.T) {
+	if err := cuda.Initialize(); err != nil {
+		t.Fatal(err)
+	}
+	if !cuda.ShouldUseCuda() || !cudnnNativeAvailable() {
+		t.Skip("native cuDNN unavailable")
+	}
+	handle, err := CreateDNNHandle()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer handle.DestroyHandle()
+	tensor, err := CreateTensorDescriptor()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tensor.DestroyTensorDescriptor()
+	activation, err := CreateActivationDescriptor()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer activation.DestroyActivationDescriptor()
+	if err := tensor.SetTensorNdDescriptor(DNNDataFloat, []int{1, 1, 2, 2}, []int{8, 8, 4, 1}); err != nil {
+		t.Fatal(err)
+	}
+	if err := tensor.SetTensorNdDescriptor(DNNDataFloat, []int{2}, []int{1}); err == nil {
+		t.Fatal("expected cuDNN to reject an unsupported tensor rank")
+	}
+	if !reflect.DeepEqual(tensor.dimensions, []int{1, 1, 2, 2}) || !reflect.DeepEqual(tensor.strides, []int{8, 8, 4, 1}) {
+		t.Fatalf("failed native tensor update changed metadata: %v/%v", tensor.dimensions, tensor.strides)
+	}
+	if err := activation.SetActivationDescriptor(DNNActivationRelu, DNNPropagateNaN, 0); err != nil {
+		t.Fatal(err)
+	}
+	input, err := memory.Alloc(32)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer input.Free()
+	output, err := memory.Alloc(32)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer output.Free()
+	if err := writeMathFloat32Memory(input, []float32{1, -2, 99, 99, -3, 4, 99, 99}); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeMathFloat32Memory(output, []float32{-7, -7, -7, -7, -7, -7, -7, -7}); err != nil {
+		t.Fatal(err)
+	}
+	if err := handle.ActivationForward(activation, 1, tensor, input, 0, tensor, output); err != nil {
+		t.Fatal(err)
+	}
+	got, err := readMathFloat32Memory(output, 8)
+	want := []float32{1, 0, -7, -7, 0, 4, -7, -7}
+	if err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("native strided activation = %v, error = %v, want %v", got, err, want)
+	}
+}
+
+func TestCuDNNNativeFiveDimensionalActivation(t *testing.T) {
+	if err := cuda.Initialize(); err != nil {
+		t.Fatal(err)
+	}
+	if !cuda.ShouldUseCuda() || !cudnnNativeAvailable() {
+		t.Skip("native cuDNN unavailable")
+	}
+	handle, err := CreateDNNHandle()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer handle.DestroyHandle()
+	inputDesc, err := CreateTensorDescriptor()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer inputDesc.DestroyTensorDescriptor()
+	outputDesc, err := CreateTensorDescriptor()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer outputDesc.DestroyTensorDescriptor()
+	activation, err := CreateActivationDescriptor()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer activation.DestroyActivationDescriptor()
+	dims := []int{1, 1, 2, 2, 2}
+	if err := inputDesc.SetTensorNdDescriptor(DNNDataFloat, dims, []int{20, 20, 10, 3, 1}); err != nil {
+		t.Fatal(err)
+	}
+	if err := outputDesc.SetTensorNdDescriptor(DNNDataFloat, dims, []int{20, 20, 10, 4, 1}); err != nil {
+		t.Fatal(err)
+	}
+	if err := activation.SetActivationDescriptor(DNNActivationRelu, DNNPropagateNaN, 0); err != nil {
+		t.Fatal(err)
+	}
+	inputValues := make([]float32, 20)
+	for i, index := range []int{0, 1, 3, 4, 10, 11, 13, 14} {
+		inputValues[index] = []float32{-1, 2, -3, 4, -5, 6, -7, 8}[i]
+	}
+	outputValues := make([]float32, 20)
+	want := make([]float32, 20)
+	for i := range outputValues {
+		outputValues[i], want[i] = -7, -7
+	}
+	for i, index := range []int{0, 1, 4, 5, 10, 11, 14, 15} {
+		want[index] = []float32{7, 11, 7, 15, 7, 19, 7, 23}[i]
+	}
+	input := solverTestBuffer(t, inputValues)
+	output := solverTestBuffer(t, outputValues)
+	if err := handle.ActivationForward(activation, 2, inputDesc, input, -1, outputDesc, output); err != nil {
+		t.Fatal(err)
+	}
+	got, err := readMathFloat32Memory(output, len(want))
+	if err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("native 5D activation = %v, error = %v, want %v", got, err, want)
+	}
+}
 
 func TestCuDNNNativeBackendSelection(t *testing.T) {
 	if err := cuda.Initialize(); err != nil {

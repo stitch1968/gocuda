@@ -3,28 +3,80 @@ package libraries
 import (
 	"errors"
 	"fmt"
+	"math"
 
 	"github.com/stitch1968/gocuda/internal"
 	"github.com/stitch1968/gocuda/memory"
 )
 
-func retainSparseBuffers(buffers ...*memory.Memory) ([]*memory.Retention, error) {
-	retentions := make([]*memory.Retention, 0, len(buffers))
-	for _, buffer := range buffers {
-		retention, err := buffer.Retain()
-		if err != nil {
-			releaseSparseBuffers(retentions)
-			return nil, err
+func (ctx *SparseContext) nativeSparseMM(alpha float32, A, B *SparseMatrix, beta float32, C *SparseMatrix) (err error) {
+	retentions, err := retainLibraryBuffers(A.values, A.rowPtrs, A.colInds, B.values, B.rowPtrs, B.colInds, C.values, C.rowPtrs, C.colInds)
+	if err != nil {
+		return err
+	}
+	defer func() { releaseLibraryBuffers(retentions) }()
+	if err := ctx.validateNativeMemory(A.values, A.rowPtrs, A.colInds, B.values, B.rowPtrs, B.colInds, C.values, C.rowPtrs, C.colInds); err != nil {
+		return err
+	}
+	cRows, err := readSparseRows(C)
+	if err != nil {
+		return err
+	}
+	canonical, err := runSparseOnDevice(ctx, func() (*SparseMatrix, error) {
+		return sparseMatrixFromRows(cRows, C.cols, MatrixFormatCSR)
+	}, func(matrix *SparseMatrix) error { return matrix.Destroy() })
+	if err != nil {
+		return err
+	}
+	var product, sum, output *SparseMatrix
+	defer func() {
+		for _, matrix := range []*SparseMatrix{canonical, product, sum, output} {
+			if matrix == nil {
+				continue
+			}
+			if cleanupErr := matrix.Destroy(); cleanupErr != nil {
+				ctx.pendingMatrices = append(ctx.pendingMatrices, matrix)
+				err = errors.Join(err, cleanupErr)
+			}
 		}
-		retentions = append(retentions, retention)
+	}()
+	product, err = ctx.nativeSparseProduct(A, B)
+	if err != nil {
+		return err
 	}
-	return retentions, nil
-}
-
-func releaseSparseBuffers(retentions []*memory.Retention) {
-	for _, held := range retentions {
-		held.Release()
+	if int64(product.nnz)+int64(canonical.nnz) > math.MaxInt32 {
+		return fmt.Errorf("sparse addition may exceed 32-bit index capacity")
 	}
+	err = internal.RunOnDevice(ctx.deviceID, func() error {
+		var runErr error
+		sum, runErr = nativeSparseAdd(ctx, alpha, product, beta, canonical)
+		return runErr
+	})
+	if err != nil {
+		ctx.pending = append(ctx.pending, retentions...)
+		retentions = nil
+		ctx.pendingMatrices = append(ctx.pendingMatrices, canonical, product)
+		canonical, product = nil, nil
+		if sum != nil {
+			ctx.pendingMatrices = append(ctx.pendingMatrices, sum)
+			sum = nil
+		}
+		return err
+	}
+	if err := ctx.releasePending(); err != nil {
+		return err
+	}
+	resultRows, err := readSparseRows(sum)
+	if err != nil {
+		return err
+	}
+	output, err = runSparseOnDevice(ctx, func() (*SparseMatrix, error) {
+		return sparseMatrixFromRows(resultRows, C.cols, C.format)
+	}, func(matrix *SparseMatrix) error { return matrix.Destroy() })
+	if err != nil {
+		return err
+	}
+	return copySparseMatrixData(C, output)
 }
 
 func (ctx *SparseContext) validateNativeBuffers(matrix *SparseMatrix, input, output *memory.Memory) error {
@@ -53,11 +105,11 @@ func (ctx *SparseContext) validateNativeMemory(buffers ...*memory.Memory) error 
 }
 
 func (ctx *SparseContext) nativeSparseProduct(A, B *SparseMatrix) (*SparseMatrix, error) {
-	retentions, err := retainSparseBuffers(A.values, A.rowPtrs, A.colInds, B.values, B.rowPtrs, B.colInds)
+	retentions, err := retainLibraryBuffers(A.values, A.rowPtrs, A.colInds, B.values, B.rowPtrs, B.colInds)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { releaseSparseBuffers(retentions) }()
+	defer func() { releaseLibraryBuffers(retentions) }()
 	if err := ctx.validateNativeMemory(A.values, A.rowPtrs, A.colInds, B.values, B.rowPtrs, B.colInds); err != nil {
 		return nil, err
 	}
@@ -121,11 +173,11 @@ func (ctx *SparseContext) nativeSparseProduct(A, B *SparseMatrix) (*SparseMatrix
 }
 
 func (ctx *SparseContext) nativeSparseToDense(matrix *SparseMatrix) (*memory.Memory, error) {
-	retentions, err := retainSparseBuffers(matrix.values, matrix.rowPtrs, matrix.colInds)
+	retentions, err := retainLibraryBuffers(matrix.values, matrix.rowPtrs, matrix.colInds)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { releaseSparseBuffers(retentions) }()
+	defer func() { releaseLibraryBuffers(retentions) }()
 	if err := ctx.validateNativeMemory(matrix.values, matrix.rowPtrs, matrix.colInds); err != nil {
 		return nil, err
 	}
@@ -164,12 +216,12 @@ func (ctx *SparseContext) nativeSparseToDense(matrix *SparseMatrix) (*memory.Mem
 	return result, nil
 }
 
-func (ctx *SparseContext) nativeDenseToSparse(dense *memory.Memory, rows, cols int) (*SparseMatrix, error) {
-	retentions, err := retainSparseBuffers(dense)
+func (ctx *SparseContext) nativeDenseToSparse(dense *memory.Memory, rows, cols int, format MatrixFormat) (*SparseMatrix, error) {
+	retentions, err := retainLibraryBuffers(dense)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { releaseSparseBuffers(retentions) }()
+	defer func() { releaseLibraryBuffers(retentions) }()
 	if err := ctx.validateNativeMemory(dense); err != nil {
 		return nil, err
 	}
@@ -178,12 +230,12 @@ func (ctx *SparseContext) nativeDenseToSparse(dense *memory.Memory, rows, cols i
 		return nil, fmt.Errorf("dense matrix dimensions are invalid or exceed its buffer")
 	}
 	if uint64(rows)*uint64(cols) > uint64(^uint32(0)>>1) {
-		return nil, fmt.Errorf("native dense-to-CSR matrix may exceed 32-bit nonzero capacity")
+		return nil, fmt.Errorf("native dense-to-sparse matrix may exceed 32-bit nonzero capacity")
 	}
 	var result *SparseMatrix
 	err = internal.RunOnDevice(ctx.deviceID, func() error {
 		var runErr error
-		result, runErr = nativeDenseToSparseCSR(ctx, dense, rows, cols)
+		result, runErr = nativeDenseToSparse(ctx, dense, rows, cols, format)
 		return runErr
 	})
 	if err != nil {

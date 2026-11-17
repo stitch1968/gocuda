@@ -18,7 +18,7 @@ See [runtime boundaries](docs/LIBRARY_RUNTIME_BOUNDARIES.md).
 
 ### ✅ CUDA Runtime Libraries
 - **🎲 cuRAND** - Native cuRAND backend in CUDA mode with simulation fallback in non-CUDA runtime mode
-- **🕸️ cuSPARSE** - Native CSR/COO SpMV and sparse-to-dense conversion, CSR triangular solve, sparse multiplication and dense-to-CSR conversion; other sparse operations currently execute on the host
+- **🕸️ cuSPARSE** - Native CSR/COO SpMV, single and batched sparse-dense multiplication, triangular solve, dense conversions and sparse multiplication; other sparse operations currently execute on the host
 - **🔧 cuSOLVER** - Native cuSOLVER backend and CPU numerical decompositions for simulation
 - **⚡ Thrust** - Algorithm wrapper with selected native paths and Go fallbacks
 - **🌊 cuFFT** - Native cuFFT backend in CUDA mode with simulation fallback in non-CUDA runtime mode
@@ -633,7 +633,8 @@ func testTensorCores() {
 
 ## 🔥 CUDA Runtime Libraries
 
-GoCUDA provides **complete implementations** of all major CUDA runtime libraries:
+GoCUDA exposes selected operations from several CUDA libraries; coverage and
+execution backends vary by operation. See [runtime boundaries](docs/LIBRARY_RUNTIME_BOUNDARIES.md).
 
 ### 🎲 cuRAND - Random Number Generation
 ```go
@@ -664,7 +665,7 @@ ctx.SpMV(alpha, matrix, x, beta, y)     // y = alpha*matrix*x + beta*y
 product, _ := ctx.SpGEMM(matrix, B)     // sparse matrix product
 defer product.Destroy()
 
-// CSR and COO can be converted to dense; dense-to-CSR is also native in CUDA mode.
+// CSR and COO conversions in both directions use cuSPARSE in CUDA mode.
 dense, _ := ctx.SparseToDense(matrix)
 defer dense.Free()
 ```
@@ -1172,7 +1173,7 @@ gocuda/
 │   └── kernels/             # Built-in kernel operations
 │       └── operations.go    # Kernel implementations
 │
-├── 📁 CUDA Runtime Libraries (13 Complete Libraries)
+├── 📁 CUDA Runtime Library Wrappers (selected operations)
 │   ├── libraries/curand.go   # Random number generation (XORWOW, MRG32K3A, MTGP32, PHILOX)
 │   ├── libraries/cusparse.go # Sparse matrix operations (SpMV, SpMM, SpGEMM, factorizations)
 │   ├── libraries/cusolver.go # Linear algebra solvers (QR, SVD, LU, eigenvalues, Cholesky)

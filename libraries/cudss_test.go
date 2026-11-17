@@ -28,6 +28,7 @@ func TestCuDSSSolveAndDeterminant(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateDSSMatrix failed: %v", err)
 	}
+
 	defer matrix.Destroy()
 	handle, err := CreateDSSHandle(DSSConfig{MatrixFormat: DSSMatrixFormatCSR, Factorization: DSSFactorizationLU})
 	if err != nil {
@@ -61,5 +62,115 @@ func TestCuDSSSolveAndDeterminant(t *testing.T) {
 	}
 	if math.Abs(det-10) > 1e-6 {
 		t.Fatalf("unexpected determinant: got %v want 10", det)
+	}
+}
+
+func TestCuDSSRejectsMalformedCSR(t *testing.T) {
+	allocate := func(size int64) *memory.Memory {
+		t.Helper()
+		buffer, err := memory.Alloc(size)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			if err := buffer.Free(); err != nil {
+				t.Error(err)
+			}
+		})
+		return buffer
+	}
+	rows, columns, values := allocate(12), allocate(16), allocate(16)
+	validRows, validColumns := []int32{0, 2, 4}, []int32{0, 1, 0, 1}
+	if err := writeInt32Memory(rows, validRows, 3); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeInt32Memory(columns, validColumns, 4); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeMathFloat32Memory(values, []float32{4, 1, 2, 3}); err != nil {
+		t.Fatal(err)
+	}
+	matrix, err := CreateDSSMatrix(2, 4, rows, columns, values, DSSMatrixFormatCSR, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := matrix.Destroy(); err != nil {
+			t.Error(err)
+		}
+	})
+	handle, err := CreateDSSHandle(DSSConfig{MatrixFormat: DSSMatrixFormatCSR, Factorization: DSSFactorizationLU})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := handle.Destroy(); err != nil {
+			t.Error(err)
+		}
+	})
+	for _, tc := range []struct {
+		name          string
+		rows, columns []int32
+	}{
+		{"nonzero start", []int32{1, 2, 4}, validColumns},
+		{"decreasing offsets", []int32{0, 3, 2}, validColumns},
+		{"negative offset", []int32{0, -1, 4}, validColumns},
+		{"offset past end", []int32{0, 5, 4}, validColumns},
+		{"negative column", validRows, []int32{-1, 1, 0, 1}},
+		{"column out of range", validRows, []int32{0, 2, 0, 1}},
+		{"duplicate column", validRows, []int32{0, 0, 0, 1}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := writeInt32Memory(rows, tc.rows, 3); err != nil {
+				t.Fatal(err)
+			}
+			if err := writeInt32Memory(columns, tc.columns, 4); err != nil {
+				t.Fatal(err)
+			}
+			if err := handle.Analyze(matrix); err == nil {
+				t.Fatal("expected invalid CSR analysis to fail")
+			}
+			if err := handle.Factor(matrix); err == nil {
+				t.Fatal("expected invalid CSR factorization to fail")
+			}
+		})
+	}
+	short := &DSSMatrix{n: 2, nnz: 4, rowPtr: allocate(8), colInd: columns, values: values, format: DSSMatrixFormatCSR}
+	if _, _, err := readDSSCSRIndices(short); err == nil {
+		t.Fatal("expected short row offset buffer to fail")
+	}
+	var nilHandle *DSSHandle
+	if err := nilHandle.Analyze(matrix); err == nil {
+		t.Fatal("expected nil handle analysis to fail")
+	}
+	if err := nilHandle.Factor(matrix); err == nil {
+		t.Fatal("expected nil handle factorization to fail")
+	}
+	if err := nilHandle.Refactor(matrix); err == nil {
+		t.Fatal("expected nil handle refactorization to fail")
+	}
+	if err := writeInt32Memory(rows, validRows, 3); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeInt32Memory(columns, []int32{1, 0, 1, 0}, 4); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := readDSSCSRIndices(matrix); err != nil {
+		t.Fatalf("unsorted CSR columns should be accepted: %v", err)
+	}
+	if err := writeInt32Memory(columns, validColumns, 4); err != nil {
+		t.Fatal(err)
+	}
+	if err := handle.Analyze(matrix); err != nil {
+		t.Fatal(err)
+	}
+	if err := handle.Factor(matrix); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeInt32Memory(columns, []int32{0, 2, 0, 1}, 4); err != nil {
+		t.Fatal(err)
+	}
+	if err := handle.Refactor(matrix); err == nil {
+		t.Fatal("expected invalid CSR refactorization to fail")
 	}
 }

@@ -28,12 +28,12 @@ func factorNativeDSS(handle *DSSHandle, matrix *DSSMatrix) error {
 	return fmt.Errorf("native cuDSS backend requires a CUDA-tagged build")
 }
 
-func solveNativeDSS(handle *DSSHandle, b, x *memory.Memory, nrhs int) (*DSSSolutionInfo, error) {
-	return nil, fmt.Errorf("native cuDSS backend requires a CUDA-tagged build")
+func refreshNativeDSSValues(matrix *DSSMatrix) error {
+	return fmt.Errorf("native cuDSS backend requires a CUDA-tagged build")
 }
 
-func refactorNativeDSS(handle *DSSHandle, matrix *DSSMatrix) error {
-	return fmt.Errorf("native cuDSS backend requires a CUDA-tagged build")
+func solveNativeDSS(handle *DSSHandle, b, x *memory.Memory, nrhs int, retained []*memory.Retention) (*DSSSolutionInfo, bool, error) {
+	return nil, false, fmt.Errorf("native cuDSS backend requires a CUDA-tagged build")
 }
 
 func destroyNativeDSSHandle(handle *DSSHandle) error {
